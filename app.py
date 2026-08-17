@@ -108,12 +108,12 @@ def check_login_system():
         return True
 
     admin_master_pw = "yp1311!"
-    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "1234"]
+    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "1234", "danwol360!", "yp1311!"]
 
     st.markdown("""
-    <div style="text-align: center; padding: 30px 20px 10px 20px;">
+    <div style="text-align: center; padding: 20px 20px 10px 20px;">
         <div style="font-size: 44px;">💧</div>
-        <h1 style="font-size: 28px; font-weight: 900; color: #0F172A;">DANWOL AI-WaterOps 360</h1>
+        <h1 style="font-size: 28px; font-weight: 900; color: #0F172A; margin: 5px 0;">DANWOL AI-WaterOps 360</h1>
         <p style="font-size: 14.5px; color: #64748B; font-weight: 600;">단월 공공하수처리시설 지능형 통합 자율운전 & 디지털 트윈 관제 플랫폼</p>
     </div>
     """, unsafe_allow_html=True)
@@ -122,11 +122,11 @@ def check_login_system():
     with col_l2:
         tab_login, tab_request = st.tabs(["🔒 시스템 로그인", "📝 신규 사용자 승인 요청"])
         with tab_login:
-            login_type = st.radio("접속 유형 선택", ["일반 사용자 (승인 계정 / 접속 코드)", "시스템 관리자 (승인 대시보드)"], horizontal=True)
+            login_type = st.radio("접속 유형 선택", ["일반 사용자 (승인 접속 코드 / 계정)", "시스템 관리자 (승인 대시보드)"], horizontal=True)
             if login_type == "시스템 관리자 (승인 대시보드)":
                 admin_pw = st.text_input("관리자 마스터 비밀번호", type="password", key="admin_pw_input")
                 if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True):
-                    if admin_pw == admin_master_pw or admin_pw == "danwol360!" or admin_pw == "1234":
+                    if admin_pw in [admin_master_pw, "danwol360!", "1234"]:
                         st.session_state.logged_in = True
                         st.session_state.user_role = "admin"
                         st.session_state.user_name = "최고관리자"
@@ -134,33 +134,15 @@ def check_login_system():
                     else:
                         st.error("관리자 비밀번호가 일치하지 않습니다.")
             else:
-                auth_method = st.selectbox("인증 방식", ["승인 접속 코드 입력", "승인된 계정으로 로그인"])
-                if auth_method == "승인 접속 코드 입력":
-                    passcode = st.text_input("부여받은 승인 접속 코드 (기본: DW-PASS-2026)", type="password", key="passcode_input")
-                    if st.button("🚀 인증 코드로 접속", type="primary", use_container_width=True):
-                        if passcode in whitelist_codes or passcode == admin_master_pw:
-                            st.session_state.logged_in = True
-                            st.session_state.user_role = "user"
-                            st.session_state.user_name = "인증 사용자"
-                            st.rerun()
-                        else:
-                            st.error("유효하지 않은 승인 접속 코드입니다.")
-                else:
-                    user_id = st.text_input("사번 또는 아이디", key="user_id_input")
-                    user_pw = st.text_input("비밀번호", type="password", key="user_pw_input")
-                    if st.button("🚀 로그인", type="primary", use_container_width=True):
-                        auth_db = load_auth_db()
-                        users = auth_db.get("users", {})
-                        if user_id in users and users[user_id].get("password") == user_pw:
-                            if users[user_id].get("status") == "approved":
-                                st.session_state.logged_in = True
-                                st.session_state.user_role = "user"
-                                st.session_state.user_name = users[user_id].get("name", user_id)
-                                st.rerun()
-                            else:
-                                st.warning("현재 관리자 승인 대기 중인 계정입니다.")
-                        else:
-                            st.error("계정 정보가 올바르지 않습니다.")
+                passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="yp1311!")
+                if st.button("🚀 접속하기", type="primary", use_container_width=True):
+                    if passcode in whitelist_codes:
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "user"
+                        st.session_state.user_name = "인증 사용자"
+                        st.rerun()
+                    else:
+                        st.error("유효하지 않은 승인 접속 코드입니다.")
         with tab_request:
             req_id = st.text_input("신청 사번/아이디")
             req_name = st.text_input("신청자 성명")
@@ -326,7 +308,7 @@ def calculate_ai_process_parameters(flow_m3, bod_mg, tn_mg, tp_mg, facility_name
         "송풍기가동대수": blowers, "권장염화제이철_L": round(opt_fe, 1), "종침전PAC주입량_L": round(opt_pac, 1)
     }
 
-# 6. 파서 & 템플릿 엔진
+# 6. 파서 & 서식 생성
 def universal_main_plant_parser(file_list):
     records = {}
     if not file_list: return pd.DataFrame()
@@ -484,22 +466,6 @@ def fill_exact_small_template(df_data, fac_name):
     wb.save(buf)
     return buf.getvalue()
 
-def fill_small_annual_workbook(small_dict, year=2026):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws['A1'] = f"소규모 수질현황({year})"
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
-
-def fill_private_annual_workbook(priv_dict, year=2026):
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws['A1'] = f"개인하수 수질대장({year})"
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
-
 def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, solar_data, task_text, year=2026):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w') as zf:
@@ -536,7 +502,7 @@ def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is
     return "".join(parts)
 
 # -------------------------------------------------------------
-# 인증 검증 및 메인 실행
+# 로그인 검증 및 메인 실행
 # -------------------------------------------------------------
 if not check_login_system():
     st.stop()
@@ -579,7 +545,6 @@ menu = st.sidebar.radio(
 # 1. 엑셀 변환 작업대
 if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 자동 완성":
     st.title("📑 운영일지 및 실험실 데이터 업로드 ➜ 하수도정보시스템 공인 양식 자동 완성")
-    st.caption("🔒 운영일지(1월~8월) 1:1 완벽 직결 · 소규모/개인 12개 탭 대장 완성 · 유량/수온/수질 12인자 정밀 매핑")
     tab_work, tab_archive, tab_accum = st.tabs(["🚀 엑셀 변환 및 다운로드 작업대", "🗂️ 월별 공인 엑셀 보관함", "📊 누적 엑셀 일괄 생성"])
     
     with tab_work:
@@ -618,7 +583,6 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                 s_dict = st.session_state["s_dict_parsed"]
                 st.success("✅ 소규모 6개소 데이터 파싱 완료!")
                 
-                # 일괄 저장 버튼
                 if st.button("💾 ⚡ [소규모 6개소 전체 데이터 마스터 DB 및 보관함 일괄 저장]", type="primary", use_container_width=True, key="btn_save_small_all_master"):
                     saved_count = 0
                     for fac_k, df_item in s_dict.items():
