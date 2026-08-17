@@ -1,0 +1,10 @@
+*.xlsx
+*.xls
+*.csv
+*.hwpx
+*.json
+*.bat
+google_key.json
+monthly_khas_records/
+tbm_records/
+hwpx_records/
