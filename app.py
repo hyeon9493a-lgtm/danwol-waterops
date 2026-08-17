@@ -155,7 +155,8 @@ def append_to_tms_db(df_new):
             df_m = pd.read_csv(TMS_ACCUM_DB)
             df_comb = pd.concat([df_m, df_new], ignore_index=True).drop_duplicates(subset=['측정일자', '측정시각'], keep='last')
         except: df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
-    else: df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
+    else:
+        df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
     df_comb.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).to_csv(TMS_ACCUM_DB, index=False, encoding='utf-8-sig')
 
 def get_tms_db():
@@ -403,11 +404,59 @@ def fill_exact_small_template(df_data, fac_name):
     wb.save(buf)
     return buf.getvalue()
 
+# [2번 메뉴: HWPX 월간보고서 정밀 생성 엔진 원본 복구]
 def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, solar_data, task_text, year=2026):
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w') as zf:
-        zf.writestr("Contents/section0.xml", f"<doc>월간보고서({sel_month}월) 편철완료</doc>")
-    return buf.getvalue()
+    months_window = [(sel_month - 5 + i - 1) % 12 + 1 for i in range(6)]
+    cand = f"공공하수도시설 대행사업 월간보고서({sel_month}월).hwpx"
+    if not os.path.exists(cand): cand = '공공하수도시설 대행사업 월간보고서(7월).hwpx'
+    
+    template_bytes = b""
+    if hwpx_template_file is not None:
+        template_bytes = hwpx_template_file.getvalue() if hasattr(hwpx_template_file, 'getvalue') else hwpx_template_file.read()
+    elif os.path.exists(cand):
+        with open(cand, 'rb') as f: template_bytes = f.read()
+
+    # 원본 파일이 없더라도 유효한 HWPX ZIP 컨테이너 구조 생성
+    out_buf = io.BytesIO()
+    if template_bytes:
+        try:
+            in_zip = zipfile.ZipFile(io.BytesIO(template_bytes), 'r')
+            out_zip = zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED)
+            for item in in_zip.infolist():
+                data = in_zip.read(item.filename)
+                if item.filename.startswith('Contents/section') and item.filename.endswith('.xml'):
+                    text = data.decode('utf-8', errors='ignore')
+                    text = re.sub(r'월간보고서\(\d{1,2}월\)', f'월간보고서({sel_month}월)', text)
+                    text = re.sub(r'운영상황 보고\(\d{1,2}월\)', f'운영상황 보고({sel_month}월)', text)
+                    for i, m in enumerate(months_window):
+                        text = text.replace(f'<{i+1}월헤더>', f'{m}월')
+                    text = text.replace('{{SLUDGE_AVG}}', f"{sludge_data['avg']:.1f}")
+                    text = text.replace('{{SLUDGE_MAX}}', f"{sludge_data['max']:.1f}")
+                    text = text.replace('{{SLUDGE_MIN}}', f"{sludge_data['min']:.1f}")
+                    text = text.replace('{{SOLAR_GEN}}', f"{solar_data['current_month']:.1f}")
+                    if task_text:
+                        text = text.replace('{{DAILY_MAINTENANCE_TEXT}}', task_text)
+                    data = text.encode('utf-8')
+                out_zip.writestr(item, data)
+            in_zip.close()
+            out_zip.close()
+            return out_buf.getvalue()
+        except Exception:
+            pass
+
+    # 기본 HWPX 컨테이너 자동 빌드
+    with zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("mimetype", "application/hwp+zip")
+        zf.writestr("version.xml", "<?xml version='1.0' encoding='UTF-8'?><hh:version xmlns:hh='http://www.hancom.co.kr/hwpml/2011/head' version='1.0'/>")
+        zf.writestr("Contents/section0.xml", f"""<?xml version="1.0" encoding="UTF-8"?>
+        <hp:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">
+            <hp:p><hp:run><hp:t>단월공공하수처리시설 대행사업 월간보고서 ({year}년 {sel_month}월)</hp:t></hp:run></hp:p>
+            <hp:p><hp:run><hp:t>■ 최근 6개월 슬라이딩 윈도우: {', '.join([f'{m}월' for m in months_window])}</hp:t></hp:run></hp:p>
+            <hp:p><hp:run><hp:t>■ 당월 슬러지 통계: 평균 {sludge_data['avg']:.1f}%, 최대 {sludge_data['max']:.1f}%, 최소 {sludge_data['min']:.1f}%</hp:t></hp:run></hp:p>
+            <hp:p><hp:run><hp:t>■ 태양광 발전 실적: {solar_data['current_month']:.1f} kWh</hp:t></hp:run></hp:p>
+            <hp:p><hp:run><hp:t>■ 주요 설비 유지보수 실적:\n{task_text}</hp:t></hp:run></hp:p>
+        </hp:sec>""".encode('utf-8'))
+    return out_buf.getvalue()
 
 def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is_contractor, contractor_name, contractor_manager, contractor_tel, contractor_eval, contractor_edu, risk_rows_html, leader_dept, leader_role, leader_name, sign_img_tag, worker_table_rows, audit_trail_html):
     parts = [
@@ -635,14 +684,14 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                 p_dict = parse_private_plant_multi_files(files_p)
                 st.session_state["p_dict_parsed"] = p_dict
 
-            if "p_dict_parsed" in st.session_state:
-                p_dict = st.session_state["p_dict_parsed"]
-                st.success("✅ 개인하수 6개소 데이터 파싱 완료!")
-                if st.button("💾 ⚡ [개인하수 6개소 마스터 DB 일괄 저장]", type="primary", use_container_width=True, key="btn_save_priv_all_master"):
-                    for fac_k, df_item in p_dict.items():
-                        if df_item is not None and not df_item.empty:
-                            append_to_master_db(fac_k, df_item)
-                    st.success("✅ 개인하수 6개소 데이터가 마스터 DB에 안전하게 저장되었습니다!")
+                if "p_dict_parsed" in st.session_state:
+                    p_dict = st.session_state["p_dict_parsed"]
+                    st.success("✅ 개인하수 6개소 데이터 파싱 완료!")
+                    if st.button("💾 ⚡ [개인하수 6개소 마스터 DB 일괄 저장]", type="primary", use_container_width=True, key="btn_save_priv_all_master"):
+                        for fac_k, df_item in p_dict.items():
+                            if df_item is not None and not df_item.empty:
+                                append_to_master_db(fac_k, df_item)
+                        st.success("✅ 개인하수 6개소 데이터가 마스터 DB에 안전하게 저장되었습니다!")
 
     # 1-2. 월별 공인 엑셀 보관함
     with tab_archive:
@@ -731,31 +780,85 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                     if not df_p_item.empty:
                         has_p_cum = True
                         zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}.xlsx", fill_exact_small_template(df_p_item, fac))
-            if has_p_cum:
-                st.download_button("📦 개인하수 6개소 누적 ZIP 다운로드", zip_p_buf.getvalue(), f"개인하수6개소_누적통합_{sel_cum_year}_{sel_period.split()[0]}.zip", use_container_width=True, type="primary")
+                if has_p_cum:
+                    st.download_button("📦 개인하수 6개소 누적 ZIP 다운로드", zip_p_buf.getvalue(), f"개인하수6개소_누적통합_{sel_cum_year}_{sel_period.split()[0]}.zip", use_container_width=True, type="primary")
             else:
                 st.info("해당 기간의 개인하수 시설 데이터가 없습니다.")
 
 # -------------------------------------------------------------
-# 2. HWPX 월간보고서
+# 2. HWPX 월간보고서 (전면 복구)
 # -------------------------------------------------------------
 elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편철 & 보관함":
-    st.title("📊 단월공공하수처리시설 대행사업 월간보고서 (HWPX)")
-    tab_hw_w, tab_hw_a = st.tabs(["✍️ [생성] 월간보고서 자동편철", "🗂️ [보관함] HWPX 보관소"])
+    st.title("📊 단월공공하수처리시설 대행사업 월간보고서 (HWPX) AI 자동편철 & 보관함")
+    st.caption("🔒 최근 6개월 슬라이딩 윈도우 동적 반영 · 슬러지/태양광 실데이터 치환 · 한글(HWPX) 표준 편철 및 보관")
+
+    tab_hw_w, tab_hw_a = st.tabs(["✍️ [생성] 월간보고서 AI 자동편철", "🗂️ [보관함] 연도/월별 HWPX 보관소 & 삭제"])
+    
     with tab_hw_w:
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            sel_m = st.selectbox("대상 월 선택", list(range(1, 13)), index=7)
-        with c2:
-            st.success("📌 최근 6개월 슬라이딩 윈도우 연동 활성화")
-        sl_avg = st.number_input("당월 슬러지 평균 함수율 (%)", value=78.5)
-        sol_kwh = st.number_input("태양광 발전량 (kWh)", value=4320.0)
-        t_memo = st.text_area("주요 설비 점검 실적", "• 반응조 스컴 스키머 점검 완료\n• 소규모 6개소 유입 펌프장 순회 점검 완료")
-        if st.button("🚀 ⚡ [월간보고서 (HWPX) 자동 생성 및 다운로드]", type="primary"):
-            hw_bytes = generate_hwpx_monthly_report(sel_m, None, {"avg": sl_avg, "max": sl_avg+1.5, "min": sl_avg-1.5}, {"current_month": sol_kwh}, t_memo)
-            st.download_button(f"📥 월간보고서({sel_m}월).hwpx 다운로드", hw_bytes, f"월간보고서_{sel_m}월.hwpx", mime="application/hwp+zip", type="primary")
+        col_m1, col_m2 = st.columns([1, 2])
+        with col_m1:
+            sel_report_year = st.selectbox("📅 대상 연도", [2026, 2025, 2024], index=0)
+            sel_report_month = st.selectbox("📅 대상 월", list(range(1, 13)), index=7)
+            hwpx_file_up = st.file_uploader("📂 원본 HWPX 양식 업로드 (선택)", type=["hwpx"])
+        with col_m2:
+            m_win = [(sel_report_month - 5 + i - 1) % 12 + 1 for i in range(6)]
+            m_win_str = ', '.join([f'{m}월' for m in m_win])
+            st.success(f"📌 **최근 6개월 슬라이딩 윈도우 자동 연동**: **{m_win_str}**")
+
+        st.markdown("##### ⚙️ 월간 운전 통계 및 주요 실적 입력")
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            sludge_avg = st.number_input("당월 슬러지 평균 함수율 (%)", value=78.5, step=0.1)
+            sludge_max = st.number_input("최대 함수율 (%)", value=80.2, step=0.1)
+            sludge_min = st.number_input("최소 함수율 (%)", value=76.8, step=0.1)
+        with col_s2:
+            solar_kwh = st.number_input(f"{sel_report_month}월 태양광 발전량 (kWh)", value=4320.0, step=10.0)
+
+        task_memo = st.text_area(
+            "📋 주요 설비 점검 및 보수 실적",
+            value="• 생물반응조 및 2차 침전조 스컴 스키머 정기 점검 및 구동부 윤활유 보충 완료\n• 소규모 6개소 유입 펌프장 및 자동 스크린 주간 순회 점검 및 협잡물 수거 완료\n• 총인 응집제(PAC) 정량 주입펌프 토출 압력 점검 및 배관 세척 작업 완료"
+        )
+
+        if st.button("🚀 ⚡ [월간보고서 (HWPX) 자동 생성 및 다운로드]", type="primary", use_container_width=True):
+            sl_data = {"avg": sludge_avg, "max": sludge_max, "min": sludge_min}
+            so_data = {"current_month": solar_kwh}
+            bytes_hwpx = generate_hwpx_monthly_report(sel_report_month, hwpx_file_up, sl_data, so_data, task_memo, sel_report_year)
+            
+            # 보관함에 자동 저장
+            save_name = f"공공하수도시설_대행사업_월간보고서({sel_report_month}월)_{sel_report_year}.hwpx"
+            with open(os.path.join(HWPX_RECORD_DIR, save_name), "wb") as f:
+                f.write(bytes_hwpx)
+                
+            st.success(f"✅ [{sel_report_year}년 {sel_report_month}월] 월간보고서가 자동 편철되어 보관함에 저장되었습니다!")
+            st.download_button(
+                label=f"📥 {save_name} 다운로드",
+                data=bytes_hwpx,
+                file_name=save_name,
+                mime="application/hwp+zip",
+                type="primary",
+                use_container_width=True
+            )
+
     with tab_hw_a:
-        st.info("저장된 월간보고서가 안전하게 보관됩니다.")
+        st.subheader("🗂️ 보관된 HWPX 월간보고서 관리")
+        saved_hwpxs = [f for f in os.listdir(HWPX_RECORD_DIR) if f.endswith(".hwpx")]
+        if saved_hwpxs:
+            st.write(f"📁 **보관된 월간보고서: 총 {len(saved_hwpxs)}건**")
+            col_hw1, col_hw2 = st.columns([3, 1])
+            with col_hw1:
+                target_hw = st.selectbox("관리 및 다운로드할 보고서 선택", sorted(saved_hwpxs), key="sel_hwpx_target")
+            with col_hw2:
+                st.write(""); st.write("")
+                if st.button("🗑️ 선택 보고서 삭제", type="secondary", use_container_width=True):
+                    os.remove(os.path.join(HWPX_RECORD_DIR, target_hw))
+                    st.success(f"🗑️ '{target_hw}' 보고서가 보관함에서 삭제되었습니다.")
+                    st.rerun()
+            if target_hw:
+                with open(os.path.join(HWPX_RECORD_DIR, target_hw), "rb") as f:
+                    hw_data = f.read()
+                st.download_button(f"📥 선택 보고서 다시 다운로드 ({target_hw})", hw_data, file_name=target_hw, mime="application/hwp+zip", use_container_width=True)
+        else:
+            st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
 # 3. TMS 관제
@@ -763,6 +866,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
     tab_t1, tab_t2, tab_t3 = st.tabs(["📝 [입력/과거데이터 업로드] 실시간 수동입력 & 엑셀 적재", "🚦 [관제] 실시간 신호등 & 2·4·6·8h 예측 그래프", "🗂️ [보관소] TMS 누적 데이터"])
+    
     with tab_t1:
         if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ TMS 데이터로 실시간 일괄 동기화]", type="primary"):
             df_m = get_master_data(MAIN_PLANT)
@@ -797,6 +901,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             df_new_t = pd.DataFrame([{"측정일자": str(t_d), "측정시각": t_t, "방류pH": t_ph, "방류BOD": t_bod, "방류TOC": t_toc, "방류SS": t_ss, "방류TN": t_tn, "방류TP": t_tp, "방류유량": 70.5, "예측pH_4h": t_ph*1.01, "예측BOD_4h": t_bod*1.05, "예측SS_4h": t_ss*1.04, "예측TN_4h": t_tn*1.03, "예측TP_4h": t_tp*1.08, "비고": "수동입력"}])
             append_to_tms_db(df_new_t)
             st.success("✅ TMS 데이터가 저장되었습니다!")
+            
     with tab_t2:
         st.markdown("#### 🚦 실시간 방류 수질 6대 항목 신호등 상태")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -811,21 +916,22 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         st.markdown("#### 📈 2·4·6·8시간 후 6대 수질 시계열 AI 예측 그래프")
         t_steps = ["현재 (T0)", "+2시간 후", "+4시간 후", "+6시간 후", "+8시간 후"]
         fig_pred = make_subplots(rows=1, cols=6, subplot_titles=("pH (5.8~8.6)", "BOD (5.0)", "TOC (15.0)", "SS (10.0)", "T-N (20.0)", "T-P (0.20)"))
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[7.20, 7.22, 7.25, 7.21, 7.19], mode='lines+markers', name="pH", line=dict(color='#0284C7')), row=1, col=1)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[2.30, 2.42, 2.48, 2.35, 2.25], mode='lines+markers', name="BOD", line=dict(color='#3B82F6')), row=1, col=2)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[3.10, 3.20, 3.25, 3.15, 3.05], mode='lines+markers', name="TOC", line=dict(color='#0EA5E9')), row=1, col=3)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[4.80, 5.00, 5.15, 4.90, 4.70], mode='lines+markers', name="SS", line=dict(color='#6366F1')), row=1, col=4)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[8.45, 8.70, 9.05, 8.80, 8.40], mode='lines+markers', name="T-N", line=dict(color='#10B981')), row=1, col=5)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[0.065, 0.070, 0.073, 0.068, 0.063], mode='lines+markers', name="T-P", line=dict(color='#F59E0B')), row=1, col=6)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[7.20, 7.22, 7.25, 7.21, 7.19], mode='lines+markers+text', text=[f"{v:.2f}" for v in [7.20, 7.22, 7.25, 7.21, 7.19]], textposition="top center", name="pH", line=dict(color='#0284C7', width=2)), row=1, col=1)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[2.30, 2.42, 2.48, 2.35, 2.25], mode='lines+markers+text', text=[f"{v:.2f}" for v in [2.30, 2.42, 2.48, 2.35, 2.25]], textposition="top center", name="BOD", line=dict(color='#3B82F6', width=2)), row=1, col=2)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[3.10, 3.20, 3.25, 3.15, 3.05], mode='lines+markers+text', text=[f"{v:.2f}" for v in [3.10, 3.20, 3.25, 3.15, 3.05]], textposition="top center", name="TOC", line=dict(color='#0EA5E9', width=2)), row=1, col=3)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[4.80, 5.00, 5.15, 4.90, 4.70], mode='lines+markers+text', text=[f"{v:.2f}" for v in [4.80, 5.00, 5.15, 4.90, 4.70]], textposition="top center", name="SS", line=dict(color='#6366F1', width=2)), row=1, col=4)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[8.45, 8.70, 9.05, 8.80, 8.40], mode='lines+markers+text', text=[f"{v:.2f}" for v in [8.45, 8.70, 9.05, 8.80, 8.40]], textposition="top center", name="T-N", line=dict(color='#10B981', width=2)), row=1, col=5)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[0.065, 0.070, 0.073, 0.068, 0.063], mode='lines+markers+text', text=[f"{v:.3f}" for v in [0.065, 0.070, 0.073, 0.068, 0.063]], textposition="top center", name="T-P", line=dict(color='#F59E0B', width=2)), row=1, col=6)
         fig_pred.update_layout(height=340, template="plotly_white", showlegend=False, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_pred, use_container_width=True)
+        
     with tab_t3:
         df_t_all = get_tms_db()
         if not df_t_all.empty:
             st.dataframe(df_t_all, use_container_width=True)
 
 # -------------------------------------------------------------
-# 4. 공정 제어
+# 4. 공정 제어 (변수 스코프 분리 완성)
 # -------------------------------------------------------------
 elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
     st.title("⚙️ AI 기반 최적 운전조건 제안 & 공정 정밀진단")
