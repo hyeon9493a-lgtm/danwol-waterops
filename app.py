@@ -21,7 +21,7 @@ import warnings
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# 1. 페이지 기본 설정 & 프리미엄 스타일
+# 1. 페이지 기본 설정
 st.set_page_config(
     page_title="DANWOL AI-WaterOps 360 | 단월 스마트 자율운전 관제 플랫폼",
     page_icon="💧",
@@ -95,89 +95,11 @@ def load_auth_db():
     return {"users": {}}
 
 def save_auth_db(data):
-    with open(AUTH_DB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def check_login_system():
-    if "logged_in" not in st.session_state:
-        st.session_state.logged_in = False
-    if "user_role" not in st.session_state:
-        st.session_state.user_role = None
-
-    if st.session_state.logged_in:
-        return True
-
-    admin_master_pw = "yp1311!"
-    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "1234", "danwol360!", "yp1311!"]
-
-    st.markdown("""
-    <div style="text-align: center; padding: 20px 20px 10px 20px;">
-        <div style="font-size: 44px;">💧</div>
-        <h1 style="font-size: 28px; font-weight: 900; color: #0F172A; margin: 5px 0;">DANWOL AI-WaterOps 360</h1>
-        <p style="font-size: 14.5px; color: #64748B; font-weight: 600;">단월 공공하수처리시설 지능형 통합 자율운전 & 디지털 트윈 관제 플랫폼</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col_l1, col_l2, col_l3 = st.columns([1, 1.3, 1])
-    with col_l2:
-        tab_login, tab_request = st.tabs(["🔒 시스템 로그인", "📝 신규 사용자 승인 요청"])
-        with tab_login:
-            login_type = st.radio("접속 유형 선택", ["일반 사용자 (승인 접속 코드 / 계정)", "시스템 관리자 (승인 대시보드)"], horizontal=True)
-            if login_type == "시스템 관리자 (승인 대시보드)":
-                admin_pw = st.text_input("관리자 마스터 비밀번호", type="password", key="admin_pw_input")
-                if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True):
-                    if admin_pw in [admin_master_pw, "danwol360!", "1234"]:
-                        st.session_state.logged_in = True
-                        st.session_state.user_role = "admin"
-                        st.session_state.user_name = "최고관리자"
-                        st.rerun()
-                    else:
-                        st.error("관리자 비밀번호가 일치하지 않습니다.")
-            else:
-                passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="yp1311!")
-                if st.button("🚀 접속하기", type="primary", use_container_width=True):
-                    if passcode in whitelist_codes:
-                        st.session_state.logged_in = True
-                        st.session_state.user_role = "user"
-                        st.session_state.user_name = "인증 사용자"
-                        st.rerun()
-                    else:
-                        st.error("유효하지 않은 승인 접속 코드입니다.")
-        with tab_request:
-            req_id = st.text_input("신청 사번/아이디")
-            req_name = st.text_input("신청자 성명")
-            req_dept = st.text_input("소속/부서", value="환경2팀")
-            req_pw = st.text_input("비밀번호 설정", type="password")
-            if st.button("📝 승인 요청 제출", use_container_width=True):
-                if req_id and req_pw and req_name:
-                    auth_db = load_auth_db()
-                    users = auth_db.get("users", {})
-                    users[req_id] = {"name": req_name, "dept": req_dept, "password": req_pw, "status": "pending"}
-                    auth_db["users"] = users
-                    save_auth_db(auth_db)
-                    st.success("승인 요청이 완료되었습니다. 관리자 승인을 기다려주세요.")
-                else:
-                    st.warning("모든 필수 항목을 입력해주세요.")
-    return False
-
-def show_admin_approval_panel():
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🛡️ 사용자 승인 관리")
-    auth_db = load_auth_db()
-    users = auth_db.get("users", {})
-    pending_users = {k: v for k, v in users.items() if v.get("status") == "pending"}
-    with st.sidebar.expander(f"승인 대기 ({len(pending_users)}명)", expanded=True):
-        for u_id, u_info in list(pending_users.items()):
-            st.write(f"**{u_info.get('name')}** ({u_id})")
-            c1, c2 = st.columns(2)
-            if c1.button("승인", key=f"app_{u_id}"):
-                users[u_id]["status"] = "approved"
-                save_auth_db(auth_db)
-                st.rerun()
-            if c2.button("반려", key=f"rej_{u_id}"):
-                del users[u_id]
-                save_auth_db(auth_db)
-                st.rerun()
+    try:
+        with open(AUTH_DB_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 # 4. DB 입출력 함수
 def append_to_master_db(fac, df_new):
@@ -439,6 +361,7 @@ def fill_exact_reuse_template(df_data):
 def fill_danwol_monthly_report_workbook(df_data, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
+    ws.title = "단월 8월"
     ws['A1'] = f"{year}년 수질검사결과(단월)"
     buf = io.BytesIO()
     wb.save(buf)
@@ -447,6 +370,7 @@ def fill_danwol_monthly_report_workbook(df_data, year=2026):
 def fill_danwol_annual_report_workbook(df_data, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
+    ws.title = f"{year}년(연간수질)"
     ws['A1'] = "단월 연간 수질대장"
     buf = io.BytesIO()
     wb.save(buf)
@@ -455,6 +379,7 @@ def fill_danwol_annual_report_workbook(df_data, year=2026):
 def fill_exact_small_template(df_data, fac_name):
     wb = openpyxl.Workbook()
     ws = wb.active
+    ws.title = "Sheet1"
     ws['A1'] = f"유량및수질관리({fac_name})"
     for r_idx, (_, r) in enumerate(df_data.iterrows(), start=4):
         ws.cell(r_idx, 1, r['날짜'])
@@ -502,7 +427,7 @@ def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is
     return "".join(parts)
 
 # -------------------------------------------------------------
-# 로그인 검증 및 메인 실행
+# 인증 검증 및 메인 실행
 # -------------------------------------------------------------
 if not check_login_system():
     st.stop()
@@ -592,7 +517,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                             with open(os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_{fac_k}_2026-08.xlsx"), "wb") as f:
                                 f.write(small_bytes)
                             saved_count += 1
-                    st.success(f"✅ 소규모 **{saved_count}개 시설**의 데이터가 마스터 DB(`danwol_accumulated_master.csv`) 및 보관함에 성공적으로 저장되었습니다!")
+                    st.success(f"✅ 소규모 **{saved_count}개 시설**의 데이터가 마스터 DB 및 보관함에 성공적으로 저장되었습니다!")
 
                 st.divider()
                 st.markdown("##### 🔍 시설별 개별 데이터 확인 및 다운로드")
