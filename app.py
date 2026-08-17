@@ -21,7 +21,7 @@ import warnings
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# 1. 페이지 기본 설정
+# 1. 페이지 설정 및 프리미엄 블루 테마 CSS
 st.set_page_config(
     page_title="DANWOL AI-WaterOps 360 | 단월 스마트 자율운전 관제 플랫폼",
     page_icon="💧",
@@ -37,6 +37,8 @@ st.markdown("""
         letter-spacing: -0.3px;
     }
     .block-container { padding-top: 1.5rem; padding-bottom: 3rem; }
+    
+    /* 상단 헤더 배너 */
     .hero-banner {
         background: linear-gradient(135deg, #0B132B 0%, #1C2541 45%, #0A4F80 80%, #0077B6 100%);
         border-radius: 16px; padding: 22px 30px; color: white; margin-bottom: 20px;
@@ -53,10 +55,38 @@ st.markdown("""
         color: #34D399; border: 1px solid rgba(52, 211, 153, 0.4); padding: 5px 14px; border-radius: 30px;
         font-size: 12px; font-weight: 700;
     }
+
+    /* 버튼 스타일 전면 블루 고정 (빨간색 기본 테마 덮어쓰기) */
+    .stButton > button {
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        padding: 8px 18px !important;
+        transition: all 0.25s ease !important;
+    }
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3) !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background: linear-gradient(135deg, #0369A1 0%, #075985 100%) !important;
+        box-shadow: 0 6px 18px rgba(2, 132, 199, 0.45) !important;
+    }
+    .stButton > button[kind="secondary"] {
+        background-color: #F8FAFC !important;
+        border: 1px solid #CBD5E1 !important;
+        color: #334155 !important;
+    }
+    .stButton > button[kind="secondary"]:hover {
+        background-color: #F1F5F9 !important;
+        border-color: #94A3B8 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. 시설 목록 및 사양
+# 2. 시설 목록 및 사양 정의
 MAIN_PLANT = "단월공공하수처리시설(본장)"
 SMALL_PLANTS = ["산음", "삼가리", "진목", "몰운", "단월마을", "당의"]
 PRIVATE_PLANTS = ["석산리", "음지", "양지", "복지회관", "인이피", "돌고개"]
@@ -230,7 +260,7 @@ def calculate_ai_process_parameters(flow_m3, bod_mg, tn_mg, tp_mg, facility_name
         "송풍기가동대수": blowers, "권장염화제이철_L": round(opt_fe, 1), "종침전PAC주입량_L": round(opt_pac, 1)
     }
 
-# 6. 파서 & 공인 서식 채우기 함수
+# 6. 파서 & 24열 공인 서식 생성
 def universal_main_plant_parser(file_list):
     records = {}
     if not file_list: return pd.DataFrame()
@@ -375,7 +405,7 @@ def fill_danwol_annual_report_workbook(df_data, year=2026):
     wb.save(buf)
     return buf.getvalue()
 
-# [소규모 6개소 24열 공인 서식 완벽 채우기]
+# [소규모 6개소 24열 공인 서식 채우기]
 def fill_exact_small_template(df_data, fac_name):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -539,7 +569,22 @@ else:
     # 메인 관제 대시보드
     # -------------------------------------------------------------
     if st.session_state.get("user_role") == "admin":
-        show_admin_approval_panel()
+        auth_db = load_auth_db()
+        users = auth_db.get("users", {})
+        pending_users = {k: v for k, v in users.items() if v.get("status") == "pending"}
+        st.sidebar.markdown("---")
+        with st.sidebar.expander(f"🛡️ 승인 대기 ({len(pending_users)}명)", expanded=True):
+            for u_id, u_info in list(pending_users.items()):
+                st.write(f"**{u_info.get('name')}** ({u_id})")
+                c1, c2 = st.columns(2)
+                if c1.button("승인", key=f"app_{u_id}"):
+                    users[u_id]["status"] = "approved"
+                    save_auth_db(auth_db)
+                    st.rerun()
+                if c2.button("반려", key=f"rej_{u_id}"):
+                    del users[u_id]
+                    save_auth_db(auth_db)
+                    st.rerun()
 
     st.markdown("""
     <div class="hero-banner">
@@ -623,7 +668,7 @@ else:
                                 with open(os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_{fac_k}_2026-08.xlsx"), "wb") as f:
                                     f.write(small_bytes)
                                 saved_count += 1
-                        st.success(f"✅ 소규모 **{saved_count}개 시설**의 데이터가 마스터 DB(`danwol_accumulated_master.csv`) 및 보관함에 성공적으로 저장되었습니다!")
+                        st.success(f"✅ 소규모 **{saved_count}개 시설**의 데이터가 마스터 DB 및 보관함에 성공적으로 저장되었습니다!")
 
                     st.divider()
                     st.markdown("##### 🔍 시설별 24열 공인 서식 확인 및 개별 다운로드")
