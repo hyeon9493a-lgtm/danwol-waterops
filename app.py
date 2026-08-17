@@ -204,7 +204,7 @@ PLANT_DESIGN_SPECS = {
     "당의": {"cap": 45.0, "method": "IC-SBR", "blower_cap": 2.0, "has_chem": False, "chem_type": "무약품", "desc": "간헐 포기 회분식 고도처리 (무약품 생물학적 처리)"}
 }
 
-# 3. 보관 디렉토리 및 누적 마스터 DB 파일 경로
+# 3. 보관 디렉토리 및 마스터 DB 경로
 KHAS_RECORD_DIR = "monthly_khas_records"
 TBM_RECORD_DIR = "tbm_records"
 HWPX_RECORD_DIR = "hwpx_records"
@@ -2365,11 +2365,11 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
         st.session_state.messages.append({"role": "assistant", "content": response_text})
 
 # -------------------------------------------------------------
-# 7. TBM 표준 회의록 모듈 (위험요인/감소대책 실시간 직접 수정 및 즉시 반영)
+# 7. TBM 표준 회의록 모듈 (AI 자동완성 + 실시간 직접 수정 및 즉시 반영)
 # -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
-    st.caption("🔒 자체직원/외주인력 통합배치 · 유해위험요인 및 감소대책 실시간 직접 수정 · 초단위 감사추적 타임스탬프 탑재")
+    st.caption("🔒 작업명 입력 시 세부내용/3대 위험요인·감소대책 AI 자동완성 · 실시간 직접 수정 및 즉시 반영 · 초단위 감사추적 타임스탬프 탑재")
 
     record_dir = TBM_RECORD_DIR
     if not os.path.exists(record_dir): os.makedirs(record_dir)
@@ -2412,38 +2412,68 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     is_weekly = st.checkbox("📅 **[별지1] 작업내용이 동일하여 1주일 단위로 작성하고자 할 경우 체크**", value=False)
     c1, c2 = st.columns([1, 1])
     with c1:
-        st.subheader("1️⃣ 작업 기본정보 & 유해·위험요인 직접 편집")
+        st.subheader("1️⃣ 작업 기본정보 & AI 맞춤 시나리오")
         tbm_date = st.date_input("TBM 일자", datetime.date(2026, 8, 20))
         tbm_time = st.text_input("TBM 시간", "09:00 ~ 09:30 (30분간)")
+        
         selected_job = st.selectbox("금일 작업명 선택 (또는 직접 입력)", list(ai_risk_db.keys()) + ["직접 입력"])
         
+        # --- AI 작업명 분석 및 자동 생성 엔진 ---
         if selected_job == "직접 입력":
             custom_job = st.text_input("직접 작업명 입력", "탈수기 점검")
-            job_desc = st.text_area("작업 세부 내용", "탈수기 전기판넬 점검 및 청소")
-            tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"], index=0)
-            def_r1, def_s1 = "탈수기 전기판넬 내부 점검 중 감전 및 아크 발생 위험", "작업 전 메인 차단기 LOTO 잠금 실시 및 절연장갑 착용"
-            def_r2, def_s2 = "탈수기 롤러 및 구동부 회전체 말림 끼임 위험", "정비 중 연동 운전 정지 확인 및 비상정지 스위치 테스트"
-            def_r3, def_s3 = "바닥 잔류 슬러지 및 세척수로 인한 미끄러짐 전도", "미끄럼 방지 안전화 착용 및 작업 구역 사전 드레인"
+            tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"], index=1)
+            
+            # 작업명 키워드 기반 AI 지능형 시나리오 매칭
+            if any(k in custom_job for k in ["탈수기", "탈수", "여과포", "스크류"]):
+                def_desc = "원심탈수기 전기판넬 점검, 롤러 및 스크류 컨베이어 구동 상태 확인 및 세척"
+                def_r1, def_s1 = "회전체(롤러/스크류) 점검 중 신체 말림 및 끼임 위험", "LOTO 잠금 및 전원 차단 표지 부착, 비상정지장치 사전 점검"
+                def_r2, def_s2 = "고압 세척 시 바닥 슬러지로 인한 미끄러짐 전도 위험", "미끄럼방지 안전장화 착용 및 작업 구역 사전 세척/건조"
+                def_r3, def_s3 = "탈수기동 내부 슬러지 부패에 따른 유해가스(H2S) 위험", "작업 전 송풍기 30분 이상 가동 및 복합가스농도 연속 측정"
+            elif any(k in custom_job for k in ["전기", "판넬", "MCC", "모터", "변전"]):
+                def_desc = "MCC 판넬 절연저항 측정, 접촉 단자 조임 상태 점검 및 내부 분진 청소"
+                def_r1, def_s1 = "충전부 접촉에 의한 감전 및 아크 폭발 화상 위험", "작업 전 주전원 차단(LOTO) 및 검전기를 통한 잔류 전압 확인"
+                def_r2, def_s2 = "전동기 기동 중 구동부 접촉으로 인한 협착 위험", "절연보호구(안전모, 절연장갑) 착용 및 연동회로 차단"
+                def_r3, def_s3 = "판넬 내부 분진 및 먼지 흡입에 의한 호흡기 질환", "방진마스크 및 보호안경 착용 후 무전원 상태에서 분진 제거"
+            elif any(k in custom_job for k in ["약품", "PAC", "염화제이철", "가성소다", "응집제", "탱크"]):
+                def_desc = "약품 저장탱크 레벨계 점검, 정량 주입펌프 토출배관 세척 및 누액 점검"
+                def_r1, def_s1 = "배관 해체 시 잔류 산성/알칼리 약품 비산 화학화상", "내화학 보호의, 안면보호구(보안면), 내산 고무장갑 필수 착용"
+                def_r2, def_s2 = "약품 주입배관 내 잔류 압력에 의한 약품 폭출", "인입 밸브 차단 확인 및 드레인 밸브 개방 후 잔압 배출"
+                def_r3, def_s3 = "약품실 바닥 누액으로 인한 미끄러짐 및 전도", "작업 전 바닥 물세척 실시 및 중화제(소화기) 비치 상태 확인"
+            elif any(k in custom_job for k in ["반응조", "집수조", "침전조", "밀폐", "맨홀"]):
+                def_desc = "수조 내부 수중 교반기/산기장치 점검 및 바닥 침전물 상태 육안 확인"
+                def_r1, def_s1 = "수조 상부 통로 점검 중 실족에 의한 익사 및 추락 위험", "안전대 및 구명조끼 착용, 안전난간 안전고리 체결 철저"
+                def_r2, def_s2 = "밀폐공간 내부 산소결핍 및 유해가스 질식 위험", "작업 전 복합가스 측정(산소 18% 이상) 및 환기팬 연속 가동"
+                def_r3, def_s3 = "인양 설비(체인블록) 체결 불량에 따른 낙하 협착", "샤클 체결 상태 및 와이어 손상 여부 사전 확인, 하부 통제"
+            else:
+                def_desc = f"{custom_job} 관련 설비 구동 상태 점검 및 현장 안전 정비 작업"
+                def_r1, def_s1 = "설비 점검 및 정비 작업 중 회전체 끼임/협착 위험", "작업 전 전원 차단(LOTO) 및 정비 중 조작금지 표지판 부착"
+                def_r2, def_s2 = "작업장 주변 환경 및 잔여물로 인한 전도/낙하 위험", "개인보호구(안전모/안전화) 착용 및 작업 공간 사전 정리정돈"
+                def_r3, def_s3 = "설비 인양 및 중량물 취급 시 요통 및 근골격계 부담", "2인 1조 작업 준수 및 중량물 운반 보조기구(호이스트) 활용"
         else:
             target_info = ai_risk_db[selected_job]
             custom_job = selected_job
-            job_desc = st.text_area("작업 세부 내용 (AI 자동입력)", target_info["desc"])
+            def_desc = target_info["desc"]
             tbm_place = target_info["place"]
             r_list = target_info["risks"]
             def_r1, def_s1 = r_list[0] if len(r_list) > 0 else ("", "")
             def_r2, def_s2 = r_list[1] if len(r_list) > 1 else ("", "")
             def_r3, def_s3 = r_list[2] if len(r_list) > 2 else ("", "")
 
-        # --- 실시간 유해·위험요인 및 감소대책 수정 입력창 ---
-        st.markdown("##### ⚠️ 유해·위험요인 및 안전감소대책 (직접 수정 가능)")
-        r1 = st.text_input("위험요인 ①", value=def_r1, key="tbm_r1_input")
-        s1 = st.text_input("감소대책 ①", value=def_s1, key="tbm_s1_input")
+        # 1단계: 세부 작업 내용 (AI 자동생성 / 직접 수정 가능)
+        job_desc = st.text_area("작업 세부 내용 (AI 자동생성 / 직접 수정 가능)", value=def_desc, key=f"tbm_desc_{custom_job[:6]}")
+
+        # 2단계: 위험요인 및 감소대책 (AI 자동완성 / 직접 수정 가능)
+        st.markdown("##### ⚠️ AI 추천 유해·위험요인 및 감소대책 (실시간 수정 가능)")
+        st.caption("💡 작업명에 맞게 AI가 추천한 문구입니다. 필요시 자유롭게 편집하면 미리보기에 실시간 반영됩니다.")
         
-        r2 = st.text_input("위험요인 ②", value=def_r2, key="tbm_r2_input")
-        s2 = st.text_input("감소대책 ②", value=def_s2, key="tbm_s2_input")
+        r1 = st.text_input("위험요인 ①", value=def_r1, key=f"tbm_r1_{custom_job[:6]}")
+        s1 = st.text_input("감소대책 ①", value=def_s1, key=f"tbm_s1_{custom_job[:6]}")
         
-        r3 = st.text_input("위험요인 ③", value=def_r3, key="tbm_r3_input")
-        s3 = st.text_input("감소대책 ③", value=def_s3, key="tbm_s3_input")
+        r2 = st.text_input("위험요인 ②", value=def_r2, key=f"tbm_r2_{custom_job[:6]}")
+        s2 = st.text_input("감소대책 ②", value=def_s2, key=f"tbm_s2_{custom_job[:6]}")
+        
+        r3 = st.text_input("위험요인 ③", value=def_r3, key=f"tbm_r3_{custom_job[:6]}")
+        s3 = st.text_input("감소대책 ③", value=def_s3, key=f"tbm_s3_{custom_job[:6]}")
 
         job_risks = []
         if r1.strip(): job_risks.append((r1, s1))
@@ -2507,7 +2537,6 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.subheader("3️⃣ 단월 공식 표준 TBM 회의록 양식 미리보기")
     sign_img_tag = f'<img src="data:image/png;base64,{sign_img_base64}" style="max-height:35px; vertical-align:middle;"/>' if sign_img_base64 else '<span style="color:#888;">(서명란)</span>'
     
-    # 수정된 위험요인/감소대책 HTML 행 자동 생성
     risk_rows_html = "".join([f'<tr><td style="border:1px solid #000; padding:6px; width:45%; background:#fafafa; font-weight:bold;">{r}</td><td style="border:1px solid #000; padding:6px; width:55%;">{s}</td></tr>' for r, s in job_risks])
     if not risk_rows_html:
         risk_rows_html = '<tr><td style="border:1px solid #000; padding:6px; width:45%; text-align:center;">-</td><td style="border:1px solid #000; padding:6px; width:55%; text-align:center;">-</td></tr>'
