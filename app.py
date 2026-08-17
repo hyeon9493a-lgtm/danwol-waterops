@@ -1261,8 +1261,44 @@ def fill_private_annual_workbook(priv_dict, year=None):
     wb.save(buf)
     return buf.getvalue()
 
+# 15. HWPX 월간보고서 생성 함수
+def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, solar_data, task_text, year=2026):
+    months_window = [(sel_month - 5 + i - 1) % 12 + 1 for i in range(6)]
+    cand = f"공공하수도시설 대행사업 월간보고서({sel_month}월).hwpx"
+    if not os.path.exists(cand): cand = '공공하수도시설 대행사업 월간보고서(7월).hwpx'
+    
+    if hwpx_template_file is not None:
+        template_bytes = hwpx_template_file.getvalue() if hasattr(hwpx_template_file, 'getvalue') else hwpx_template_file.read()
+    elif os.path.exists(cand):
+        with open(cand, 'rb') as f: template_bytes = f.read()
+    else: template_bytes = b""
+
+    if not template_bytes: return b""
+    in_zip = zipfile.ZipFile(io.BytesIO(template_bytes), 'r')
+    out_buf = io.BytesIO()
+    out_zip = zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED)
+
+    for item in in_zip.infolist():
+        data = in_zip.read(item.filename)
+        if item.filename.startswith('Contents/section') and item.filename.endswith('.xml'):
+            text = data.decode('utf-8', errors='ignore')
+            text = re.sub(r'월간보고서\(\d{1,2}월\)', f'월간보고서({sel_month}월)', text)
+            text = re.sub(r'운영상황 보고\(\d{1,2}월\)', f'운영상황 보고({sel_month}월)', text)
+            for i, m in enumerate(months_window): text = text.replace(f'<{i+1}월헤더>', f'{m}월')
+            text = text.replace('{{SLUDGE_AVG}}', f"{sludge_data['avg']:.1f}")
+            text = text.replace('{{SLUDGE_MAX}}', f"{sludge_data['max']:.1f}")
+            text = text.replace('{{SLUDGE_MIN}}', f"{sludge_data['min']:.1f}")
+            text = text.replace('{{SOLAR_GEN}}', f"{solar_data['current_month']:.1f}")
+            if task_text: text = text.replace('{{DAILY_MAINTENANCE_TEXT}}', task_text)
+            data = text.encode('utf-8')
+        out_zip.writestr(item, data)
+
+    in_zip.close()
+    out_zip.close()
+    return out_buf.getvalue()
+
 # -------------------------------------------------------------
-# 교육일지 100% 원본 일치 HTML 생성 헬퍼 함수
+# 8번 교육일지 100% 원본 일치 HTML 생성 헬퍼 함수
 # -------------------------------------------------------------
 def build_exact_edu_html(edu_date, writer_name, tag_sign_writer, tag_sign_approver, type_list_html, custom_subj, formatted_content_html, edu_instructor, edu_place, edu_time, edu_special_note, staff_rows_html):
     date_str = edu_date.strftime('%Y 년   %m 월   %d 일')
@@ -1328,7 +1364,7 @@ st.markdown("""
     </div>
     <div class="badge-group">
         <div class="badge-online"><span class="badge-dot"></span>SYSTEM ONLINE</div>
-        <div class="badge-subinfo">K-HAS / TMS / Small-Plant Sync Active</div>
+        <div class="badge-subinfo">Safety / K-HAS / TMS / Small-Plant Sync Active</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1340,7 +1376,7 @@ if st.sidebar.button("로그아웃", use_container_width=True):
     st.session_state.user_role = None
     st.rerun()
 
-st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음(SWPP)·삼가리(SBR)·진목(SOD)·몰운(IC-SBR)·단월마을(IC-SBR)·당의(IC-SBR)\n📌 **개인하수 6개소**: 석산리·음지·양지·복지회관·인이피·돌고개")
+st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음(SWPP)·삼가리(SBR)·진목(SOD)·몰운(IC-SBR)·단월마을(IC-SBR)·당의(IC-SBR)\n📌 **개인하수 6개소**: 석산리·음지·양지·복지회관·인이피·돌고개\n📌 **안전/보건**: TBM 회의록 & 안전보건교육 실시일지")
 
 menu = st.sidebar.radio(
     "⚡ 지능형 기능 메뉴",
@@ -2678,7 +2714,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
 
 # -------------------------------------------------------------
-# 8. 안전·보건 교육 실시일지 및 안내
+# 8. 안전·보건 교육 실시일지 및 안내 (원본 100% 일치화 서식)
 # -------------------------------------------------------------
 elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 & 월별보관":
     st.title("📋 단월처리시설 안전·보건 교육 실시일지 & 안내 자동작성기")
@@ -2907,51 +2943,4 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
             edu_place=edu_place,
             edu_time=edu_time,
             edu_special_note=edu_special_note,
-            staff_rows_html=staff_rows_html
-        )
-
-        st.divider()
-        st.subheader("3️⃣ 단월 공식 안전·보건 교육 실시일지 양식 미리보기")
-        st.components.v1.html(final_edu_html, height=760, scrolling=True)
-
-        col_b1, col_b2 = st.columns(2)
-        safe_subj = custom_subj.replace('/', '_').replace(' ', '_')[:8]
-        safe_file_name = f"안전보건교육일지_{edu_date}_{safe_subj}.html"
-        
-        with col_b1:
-            st.download_button(
-                "📥 안전·보건 교육 실시일지 HTML 다운로드",
-                data=final_edu_html,
-                file_name=safe_file_name,
-                mime="text/html",
-                type="primary",
-                use_container_width=True
-            )
-        with col_b2:
-            if st.button("💾 ⚡ [월별 보관함 저장 & 교안 텍스트 자동 분리 보관]", use_container_width=True, key="btn_save_edu_v850"):
-                month_key = edu_date.strftime('%Y-%m')
-                month_dir = os.path.join(EDU_RECORD_DIR, month_key)
-                if not os.path.exists(month_dir):
-                    os.makedirs(month_dir)
-
-                save_html_path = os.path.join(month_dir, safe_file_name)
-                with open(save_html_path, "w", encoding="utf-8") as f:
-                    f.write(final_edu_html)
-
-                save_txt_path = os.path.join(month_dir, f"[교안추출요약]_{edu_date}_{safe_subj}.txt")
-                with open(save_txt_path, "w", encoding="utf-8") as f:
-                    f.write(f"■ 과목: {custom_subj}\n■ 교육일시: {edu_date} ({edu_time})\n■ 강사: {edu_instructor}\n■ 장소: {edu_place}\n\n[교육 내용]\n{edu_content}")
-
-                st.success(f"✅ [{month_key}] 보관함에 교육일지 및 교안 추출 요약본이 안전하게 영구 보관되었습니다!")
-
-    with tab_edu_archive:
-        st.subheader("🗂️ 월별 안전·보건 교육일지 & 추출 교안 영구 보관함")
-        
-        month_dirs = sorted([d for d in os.listdir(EDU_RECORD_DIR) if os.path.isdir(os.path.join(EDU_RECORD_DIR, d))], reverse=True)
-        
-        if month_dirs:
-            col_m_sel, col_m_del = st.columns([2, 1])
-            with col_m_sel:
-                sel_m_dir = st.selectbox("📅 보관 연월 선택", month_dirs, key="sel_edu_m_dir_v850")
-            
-            target_month_dir =Sorry, something went wrong. Please try your request again.
+            staff_rowsI encountered an error doing what you asked. Could you try again?
