@@ -31,7 +31,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# [창의혁신 발표용 프리미엄 디자인 CSS]
+# [디자인 CSS]
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
@@ -218,7 +218,7 @@ for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, HWPX_RECORD_DIR]:
     if not os.path.exists(p):
         os.makedirs(p)
 
-# [사용자 인증 DB 처리]
+# 사용자 인증 관리 DB 함수
 def load_auth_db():
     if os.path.exists(AUTH_DB_FILE):
         try:
@@ -305,7 +305,7 @@ def check_login_system():
                             st.error("유효하지 않은 승인 접속 코드입니다.")
 
         with tab_request:
-            st.caption("신청 정보를 제출하면 관리자 승인 후 메인 관제 플랫폼에 즉시 접근할 수 있습니다.")
+            st.caption("신청 정보를 제출하면 관리자 승인 후 메인 관제 플랫폼에 접근할 수 있습니다.")
             req_id = st.text_input("신청 사번/아이디 (영문/숫자)")
             req_name = st.text_input("신청자 성명")
             req_dept = st.text_input("소속/부서 (예: 환경2팀)")
@@ -365,7 +365,6 @@ def show_admin_approval_panel():
                 save_auth_db(auth_db)
                 st.rerun()
 
-# [디스크 상의 미래 날짜 및 비정상 연도 완전 정제 함수]
 def auto_sanitize_databases():
     today = datetime.date.today()
     max_allowed_date_str = today.strftime('%Y-%m-%d')
@@ -1316,7 +1315,7 @@ def fill_private_annual_workbook(priv_dict, year=None):
     wb.save(buf)
     return buf.getvalue()
 
-# 15. [HWPX 월간보고서 생성 함수]
+# 15. HWPX 월간보고서 생성 함수
 def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, solar_data, task_text, year=2026):
     months_window = [(sel_month - 5 + i - 1) % 12 + 1 for i in range(6)]
     cand = f"공공하수도시설 대행사업 월간보고서({sel_month}월).hwpx"
@@ -1353,16 +1352,15 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
     return out_buf.getvalue()
 
 # -------------------------------------------------------------
-# 16. 로그인 검증 및 권한 기반 실행
+# 16. 로그인 검증 및 메인 실행
 # -------------------------------------------------------------
 if not check_login_system():
     st.stop()
 
-# 최고관리자일 경우 사이드바에 승인 관리 센터 표시
 if st.session_state.get("user_role") == "admin":
     show_admin_approval_panel()
 
-# 17. 메인 관제 플랫폼 헤더 & 사이드바
+# 17. 메인 관제 헤더
 st.markdown("""
 <div class="hero-banner">
     <div class="hero-title-wrap">
@@ -1574,7 +1572,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                         single_p_bytes = fill_exact_small_template(df_p_sel, sel_p_fac)
                         st.download_button(f"📥 유량및수질관리 업로드양식({sel_p_fac}).xlsx 개별 다운로드", single_p_bytes, f"유량및수질관리 업로드양식({sel_p_fac})_{sample_dt}.xlsx", use_container_width=True)
 
-    # 1-2. 월별 공인 엑셀 보관함 & 관리
+    # 1-2. 월별 공인 엑셀 보관함
     with tab_archive:
         st.subheader("🗂️ 월별 공인 업로드 엑셀 및 수질월보 보관함 영구 관리")
         
@@ -2367,18 +2365,18 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
         st.session_state.messages.append({"role": "assistant", "content": response_text})
 
 # -------------------------------------------------------------
-# 7. TBM 표준 회의록 모듈
+# 7. TBM 표준 회의록 모듈 (위험요인/감소대책 실시간 직접 수정 및 즉시 반영)
 # -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
-    st.caption("🔒 자체직원/외주인력 통합배치 · 초단위 타임스탬프 · 연도/주차별 보관함 탑재")
+    st.caption("🔒 자체직원/외주인력 통합배치 · 유해위험요인 및 감소대책 실시간 직접 수정 · 초단위 감사추적 타임스탬프 탑재")
 
     record_dir = TBM_RECORD_DIR
     if not os.path.exists(record_dir): os.makedirs(record_dir)
 
     ai_risk_db = {
         "산음리 중계 펌프A 인양 및 인양 상태 점검 작업": {
-            "desc": "호이스트 이용 펌프A 인양 후 매달린 상태에서의 정밀 점검 및 정비", "place": "사무실",
+            "desc": "호이스트 이용 펌프A 인양 후 매달린 상태에서의 정밀 점검 및 정비", "place": "작업현장",
             "risks": [
                 ("인양된 펌프A 하부/측면 작업 중 낙하로 인한 깔림 및 끼임", "안전 고임목/받침대 설치: 인양 후 매달린 상태 유지 시 안전 고임목 또는 지지대를 받쳐 낙하 방지"),
                 ("인양장치(호이스트) 브레이크 미작동 및 와이어 파손으로 인한 낙하", "인양장치 점검: 작업 전 브레이크 작동 상태, 와이어로프, 훅 해지장치 결함 여부 사전 확인"),
@@ -2414,34 +2412,54 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     is_weekly = st.checkbox("📅 **[별지1] 작업내용이 동일하여 1주일 단위로 작성하고자 할 경우 체크**", value=False)
     c1, c2 = st.columns([1, 1])
     with c1:
-        st.subheader("1️⃣ 작업 기본정보 & AI 시나리오")
-        tbm_date = st.date_input("TBM 일자", datetime.date(2026, 8, 16))
+        st.subheader("1️⃣ 작업 기본정보 & 유해·위험요인 직접 편집")
+        tbm_date = st.date_input("TBM 일자", datetime.date(2026, 8, 20))
         tbm_time = st.text_input("TBM 시간", "09:00 ~ 09:30 (30분간)")
         selected_job = st.selectbox("금일 작업명 선택 (또는 직접 입력)", list(ai_risk_db.keys()) + ["직접 입력"])
         
         if selected_job == "직접 입력":
-            custom_job = st.text_input("직접 작업명 입력", "집수조 유중펌프 점검 및 흡입구 청소")
-            job_desc = st.text_area("작업 세부 내용", "호이스트 크레인을 이용한 펌프 인양 후 점검")
-            tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"])
-            job_risks = [("밀폐공간 내부 유해가스 질식 위험", "작업 전 가스농도 측정 및 송풍기 연속 환기 실시"), ("인양 장비 와이어 결함으로 인한 낙하 협착", "샤클 및 와이어로프 체결상태 점검, 하부 통제")]
+            custom_job = st.text_input("직접 작업명 입력", "탈수기 점검")
+            job_desc = st.text_area("작업 세부 내용", "탈수기 전기판넬 점검 및 청소")
+            tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"], index=0)
+            def_r1, def_s1 = "탈수기 전기판넬 내부 점검 중 감전 및 아크 발생 위험", "작업 전 메인 차단기 LOTO 잠금 실시 및 절연장갑 착용"
+            def_r2, def_s2 = "탈수기 롤러 및 구동부 회전체 말림 끼임 위험", "정비 중 연동 운전 정지 확인 및 비상정지 스위치 테스트"
+            def_r3, def_s3 = "바닥 잔류 슬러지 및 세척수로 인한 미끄러짐 전도", "미끄럼 방지 안전화 착용 및 작업 구역 사전 드레인"
         else:
             target_info = ai_risk_db[selected_job]
             custom_job = selected_job
             job_desc = st.text_area("작업 세부 내용 (AI 자동입력)", target_info["desc"])
             tbm_place = target_info["place"]
-            job_risks = target_info["risks"]
+            r_list = target_info["risks"]
+            def_r1, def_s1 = r_list[0] if len(r_list) > 0 else ("", "")
+            def_r2, def_s2 = r_list[1] if len(r_list) > 1 else ("", "")
+            def_r3, def_s3 = r_list[2] if len(r_list) > 2 else ("", "")
 
-        is_contractor = st.checkbox("외주 작업 포함 여부", value=True)
+        # --- 실시간 유해·위험요인 및 감소대책 수정 입력창 ---
+        st.markdown("##### ⚠️ 유해·위험요인 및 안전감소대책 (직접 수정 가능)")
+        r1 = st.text_input("위험요인 ①", value=def_r1, key="tbm_r1_input")
+        s1 = st.text_input("감소대책 ①", value=def_s1, key="tbm_s1_input")
+        
+        r2 = st.text_input("위험요인 ②", value=def_r2, key="tbm_r2_input")
+        s2 = st.text_input("감소대책 ②", value=def_s2, key="tbm_s2_input")
+        
+        r3 = st.text_input("위험요인 ③", value=def_r3, key="tbm_r3_input")
+        s3 = st.text_input("감소대책 ③", value=def_s3, key="tbm_s3_input")
+
+        job_risks = []
+        if r1.strip(): job_risks.append((r1, s1))
+        if r2.strip(): job_risks.append((r2, s2))
+        if r3.strip(): job_risks.append((r3, s3))
+
+        st.divider()
+        is_contractor = st.checkbox("외주 작업 포함 여부", value=False)
         col_c1, col_c2 = st.columns(2)
         with col_c1:
             contractor_name = st.text_input("외주 업체명", "(주)단월이엔지" if is_contractor else "")
             contractor_manager = st.text_input("외주 책임자 성명", "김책임" if is_contractor else "")
         with col_c2:
             contractor_tel = st.text_input("업체 연락처", "010-1234-5678" if is_contractor else "")
-            contractor_eval = st.checkbox("업체 위험성평가 실시 확인", value=True)
-            contractor_edu = st.checkbox("산업안전보건 교육 확인", value=True)
-
-        agree_contractor = st.checkbox("[필수: 외주업체] 수급업체 근로자 전원은 원청 안전수칙을 준수하고 개인정보 수집에 동의합니다.", value=True) if is_contractor else True
+            contractor_eval = st.checkbox("업체 위험성평가 실시 확인", value=True if is_contractor else False)
+            contractor_edu = st.checkbox("산업안전보건 교육 확인", value=True if is_contractor else False)
 
     with c2:
         st.subheader("2️⃣ 점검자 & 참석자 서명 입력")
@@ -2453,25 +2471,25 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             leader_name = st.text_input("리더 성명", "주영규")
             leader_is_manager = st.checkbox("관리감독자 여부", value=True)
 
-        st.markdown("##### 👥 참석자 명단 (①~⑧)")
+        st.markdown("##### 👥 자체 참석자 명단 (①~⑧)")
         col_w1, col_w2 = st.columns(2)
         with col_w1:
-            w1 = st.text_input("① 성명", "하신호"); w2 = st.text_input("② 성명", "최태수"); w3 = st.text_input("③ 성명", "이현진"); w4 = st.text_input("④ 성명", "(외주) 박기사" if is_contractor else "")
+            w1 = st.text_input("① 성명", "하신호"); w2 = st.text_input("② 성명", "최태수"); w3 = st.text_input("③ 성명", "이현진"); w4 = st.text_input("④ 성명", "")
         with col_w2:
-            w5 = st.text_input("⑤ 성명", "(외주) 정기술" if is_contractor else ""); w6 = st.text_input("⑥ 성명", ""); w7 = st.text_input("⑦ 성명", ""); w8 = st.text_input("⑧ 성명", "")
+            w5 = st.text_input("⑤ 성명", ""); w6 = st.text_input("⑥ 성명", ""); w7 = st.text_input("⑦ 성명", ""); w8 = st.text_input("⑧ 성명", "")
         workers = [w1, w2, w3, w4, w5, w6, w7, w8]
 
         st.markdown("##### 🏢 외주업체 참석자 명단 (①~④)")
         col_cw1, col_cw2 = st.columns(2)
         with col_cw1:
-            cw1 = st.text_input("업체 ①(책임자)", contractor_manager if is_contractor else ""); cw2 = st.text_input("업체 ②", "이진성" if is_contractor else "")
+            cw1 = st.text_input("업체 ①(책임자)", contractor_manager if is_contractor else ""); cw2 = st.text_input("업체 ②", "" if not is_contractor else "이진성")
         with col_cw2:
             cw3 = st.text_input("업체 ③", ""); cw4 = st.text_input("업체 ④", "")
         c_workers = [cw1, cw2, cw3, cw4]
 
-        agree_privacy = st.checkbox("[필수: 자체직원] 전자서명법 제3조에 따른 전자서명 데이터 수집에 동의합니다.", value=True)
+        agree_privacy = st.checkbox("[필수] 전자서명법 제3조에 따른 전자서명 데이터 수집에 동의합니다.", value=True)
         st.write("✍️ **TBM 리더(관리감독자) 전자서명**")
-        canvas = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=100, width=300, drawing_mode="freedraw", key="tbm_canvas_final_sync_v250")
+        canvas = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=100, width=300, drawing_mode="freedraw", key="tbm_canvas_final_perfect_v300")
 
     sign_img_base64 = ""
     if canvas.image_data is not None:
@@ -2488,7 +2506,12 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.divider()
     st.subheader("3️⃣ 단월 공식 표준 TBM 회의록 양식 미리보기")
     sign_img_tag = f'<img src="data:image/png;base64,{sign_img_base64}" style="max-height:35px; vertical-align:middle;"/>' if sign_img_base64 else '<span style="color:#888;">(서명란)</span>'
+    
+    # 수정된 위험요인/감소대책 HTML 행 자동 생성
     risk_rows_html = "".join([f'<tr><td style="border:1px solid #000; padding:6px; width:45%; background:#fafafa; font-weight:bold;">{r}</td><td style="border:1px solid #000; padding:6px; width:55%;">{s}</td></tr>' for r, s in job_risks])
+    if not risk_rows_html:
+        risk_rows_html = '<tr><td style="border:1px solid #000; padding:6px; width:45%; text-align:center;">-</td><td style="border:1px solid #000; padding:6px; width:55%; text-align:center;">-</td></tr>'
+
     worker_table_rows = "".join([f'<tr style="text-align:center;"><td style="width:18%;">{"①②③④"[i]} {workers[i]}</td><td style="width:15%; color:#333; font-size:9.5px;">{"(서명)" if workers[i].strip() else ""}</td><td style="width:18%;">{"⑤⑥⑦⑧"[i]} {workers[i+4]}</td><td style="width:15%; color:#333; font-size:9.5px;">{"(서명)" if workers[i+4].strip() else ""}</td><td style="width:18%;">{"①②③④"[i]} {c_workers[i]}</td><td style="width:16%; color:#333; font-size:9.5px;">{"(서명)" if c_workers[i].strip() else ""}</td></tr>' for i in range(4)])
 
     audit_trail_html = f"""
