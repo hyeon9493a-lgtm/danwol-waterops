@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+plotly
+openpyxl
+pillow
+streamlit-drawable-canvas
+gspread
+oauth2client
