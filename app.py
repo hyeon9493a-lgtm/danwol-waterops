@@ -23,7 +23,7 @@ import warnings
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# 1. 페이지 기본 설정 & 프리미엄 디자인 스타일
+# 1. 페이지 기본 설정 & 디자인 스타일
 st.set_page_config(
     page_title="DANWOL AI-WaterOps 360 | 단월 스마트 자율운전 관제 플랫폼",
     page_icon="💧",
@@ -1527,9 +1527,9 @@ if st.sidebar.button("로그아웃", use_container_width=True):
     st.session_state.user_role = None
     st.rerun()
 
-st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음·삼가리·진목·몰운·단월마을·당의\n📌 **안전/보건**: TBM 회의록 & 안전보건교육 실시일지")
+st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음·삼가리·진목·몰운·단월마을·당의\n📌 **개인하수 6개소**: 석산리·음지·양지·복지회관·인이피·돌고개\n📌 **안전/보건**: TBM 회의록 & 안전보건교육 실시일지")
 
-# 8개 전체 메뉴 등록
+# 8대 전체 메뉴 등록
 menu = st.sidebar.radio(
     "⚡ 지능형 기능 메뉴",
     [
@@ -2513,7 +2513,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
         st.session_state.messages.append({"role": "assistant", "content": response_text})
 
 # -------------------------------------------------------------
-# 7. TBM 표준 회의록 모듈 (AI 자동완성 + 실시간 직접 수정 및 즉시 반영)
+# 7. TBM 표준 회의록 모듈
 # -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
@@ -2566,12 +2566,11 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         
         selected_job = st.selectbox("금일 작업명 선택 (또는 직접 입력)", list(ai_risk_db.keys()) + ["직접 입력"])
         
-        # --- AI 작업명 분석 및 자동 생성 엔진 ---
+        # AI 작업명 분석 및 자동 생성
         if selected_job == "직접 입력":
             custom_job = st.text_input("직접 작업명 입력", "탈수기 점검")
             tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"], index=1)
             
-            # 작업명 키워드 기반 AI 지능형 시나리오 매칭
             if any(k in custom_job for k in ["탈수기", "탈수", "여과포", "스크류"]):
                 def_desc = "원심탈수기 전기판넬 점검, 롤러 및 스크류 컨베이어 구동 상태 확인 및 세척"
                 def_r1, def_s1 = "회전체(롤러/스크류) 점검 중 신체 말림 및 끼임 위험", "LOTO 잠금 및 전원 차단 표지 부착, 비상정지장치 사전 점검"
@@ -2607,19 +2606,13 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             def_r2, def_s2 = r_list[1] if len(r_list) > 1 else ("", "")
             def_r3, def_s3 = r_list[2] if len(r_list) > 2 else ("", "")
 
-        # 1단계: 세부 작업 내용 (AI 자동생성 / 직접 수정 가능)
         job_desc = st.text_area("작업 세부 내용 (AI 자동생성 / 직접 수정 가능)", value=def_desc, key=f"tbm_desc_{custom_job[:6]}")
 
-        # 2단계: 위험요인 및 감소대책 (AI 자동완성 / 직접 수정 가능)
         st.markdown("##### ⚠️ AI 추천 유해·위험요인 및 감소대책 (실시간 수정 가능)")
-        st.caption("💡 작업명에 맞게 AI가 추천한 문구입니다. 필요시 자유롭게 편집하면 미리보기에 실시간 반영됩니다.")
-        
         r1 = st.text_input("위험요인 ①", value=def_r1, key=f"tbm_r1_{custom_job[:6]}")
         s1 = st.text_input("감소대책 ①", value=def_s1, key=f"tbm_s1_{custom_job[:6]}")
-        
         r2 = st.text_input("위험요인 ②", value=def_r2, key=f"tbm_r2_{custom_job[:6]}")
         s2 = st.text_input("감소대책 ②", value=def_s2, key=f"tbm_s2_{custom_job[:6]}")
-        
         r3 = st.text_input("위험요인 ③", value=def_r3, key=f"tbm_r3_{custom_job[:6]}")
         s3 = st.text_input("감소대책 ③", value=def_s3, key=f"tbm_s3_{custom_job[:6]}")
 
@@ -2856,14 +2849,14 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
         
         with col_e1:
             st.subheader("1️⃣ 교육 기본정보 & AI 자동생성")
-            edu_date = st.date_input("교육 실시 일자", datetime.date(2026, 8, 20), key="edu_date_in_v800")
+            edu_date = st.date_input("교육 실시 일자", datetime.date(2026, 8, 20), key="edu_date_in_v850")
             
             st.markdown("##### 📎 1단계: 교안/자료 업로드 및 AI 자동 추출")
             uploaded_edu_files = st.file_uploader(
                 "교안(PDF, HWPX) 또는 포스터/사진 파일 업로드 (복수 지원)",
                 type=["pdf", "png", "jpg", "jpeg", "hwpx", "hwp", "txt"],
                 accept_multiple_files=True,
-                key="up_edu_files_v800"
+                key="up_edu_files_v850"
             )
 
             extracted_summary = ""
@@ -2883,7 +2876,7 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
 
                 if detected_subject:
                     st.success(f"💡 업로드된 교안에서 **'{detected_subject}'** 표준 교육내용이 감지되었습니다!")
-                    if st.button("⚡ [추출된 교안 내용으로 교육양식 자동 채우기]", type="primary", key="btn_auto_fill_v800"):
+                    if st.button("⚡ [추출된 교안 내용으로 교육양식 자동 채우기]", type="primary", key="btn_auto_fill_v850"):
                         st.session_state["auto_filled_subj"] = detected_subject
                         st.session_state["auto_filled_content"] = extracted_summary
                         st.session_state["auto_filled_note"] = detected_note
@@ -2947,10 +2940,10 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
             col_pad1, col_pad2 = st.columns(2)
             with col_pad1:
                 st.caption("✍️ **작성자(담당) 서명**")
-                canvas_writer = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_writer_v800")
+                canvas_writer = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_writer_v850")
             with col_pad2:
                 st.caption("✍️ **결재자(시설장) 서명**")
-                canvas_approver = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_approver_v800")
+                canvas_approver = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_approver_v850")
 
             st.markdown("##### 👥 단월처리시설 내부직원 참석자 명단 (5인)")
             default_staff = [
@@ -2965,8 +2958,8 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
             for num, d_dept, d_name in default_staff:
                 col_st1, col_st2, col_st3 = st.columns([1, 1.5, 1.5])
                 with col_st1: st.write(f"**연번 {num}**")
-                with col_st2: s_dept = st.text_input(f"소속 #{num}", value=d_dept, key=f"edu_dept_{num}_v800", label_visibility="collapsed")
-                with col_st3: s_name = st.text_input(f"성명 #{num}", value=d_name, key=f"edu_name_{num}_v800", label_visibility="collapsed")
+                with col_st2: s_dept = st.text_input(f"소속 #{num}", value=d_dept, key=f"edu_dept_{num}_v850", label_visibility="collapsed")
+                with col_st3: s_name = st.text_input(f"성명 #{num}", value=d_name, key=f"edu_name_{num}_v850", label_visibility="collapsed")
                 staff_list.append((num, s_dept, s_name))
 
         # 전자서명 이미지 인코딩
@@ -3007,4 +3000,5 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
                 <td style="width:10%; font-size:10px; color:#555;">{sign_l}</td>
                 <td style="width:7%; font-weight:bold; font-size:11px;">{idx_r}</td>
                 <td style="width:18%; font-size:11px;">{dept_r}</td>
-                <td style="width:15%; fontI encountered an error doing what you asked. Could you try again?
+                <td style="width:15%; font-size:11px;">{name_r}</td>
+                <td style="width:10%; font-size:10px; color:#555I encountered an error doing what you asked. Could you try again?
