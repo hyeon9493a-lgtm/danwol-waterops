@@ -55,7 +55,6 @@ st.markdown("""
         font-size: 12px; font-weight: 700;
     }
 
-    /* Primary 버튼 블루 고정 (빨간색 덮어쓰기) */
     .stButton > button[kind="primary"], div[data-testid="stButton"] > button[data-testid="baseButton-primary"] {
         background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
         background-color: #0284C7 !important;
@@ -145,7 +144,7 @@ def get_master_data(fac, start_date=None, end_date=None):
 TMS_STD_COLS = ['측정일자', '측정시각', '방류pH', '방류BOD', '방류TOC', '방류SS', '방류TN', '방류TP', '방류유량', '예측pH_4h', '예측BOD_4h', '예측SS_4h', '예측TN_4h', '예측TP_4h', '비고']
 
 def append_to_tms_db(df_new):
-    if df_new.empty: return
+    if df_new is None or df_new.empty: return
     df_new = df_new.copy()
     for col in TMS_STD_COLS:
         if col not in df_new.columns: df_new[col] = np.nan
@@ -155,8 +154,7 @@ def append_to_tms_db(df_new):
             df_m = pd.read_csv(TMS_ACCUM_DB)
             df_comb = pd.concat([df_m, df_new], ignore_index=True).drop_duplicates(subset=['측정일자', '측정시각'], keep='last')
         except: df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
-    else:
-        df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
+    else: df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
     df_comb.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).to_csv(TMS_ACCUM_DB, index=False, encoding='utf-8-sig')
 
 def get_tms_db():
@@ -165,7 +163,7 @@ def get_tms_db():
     except: return pd.DataFrame()
 
 def append_to_process_db(df_new, facility_name=MAIN_PLANT):
-    if df_new.empty: return
+    if df_new is None or df_new.empty: return
     df_new = df_new.copy()
     df_new['시설명'] = facility_name
     if os.path.exists(PROCESS_CONTROL_DB):
@@ -185,7 +183,7 @@ def get_process_db(facility_name=MAIN_PLANT):
     except: return pd.DataFrame()
 
 def append_to_chem_db(df_new):
-    if df_new.empty: return
+    if df_new is None or df_new.empty: return
     df_new = df_new.copy()
     if os.path.exists(CHEMICAL_ENERGY_DB):
         try:
@@ -346,7 +344,6 @@ def fill_exact_reuse_template(df_data):
     wb.save(buf)
     return buf.getvalue()
 
-# [소규모 6개소 24열 공인 서식 채우기]
 def fill_exact_small_template(df_data, fac_name):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -381,8 +378,8 @@ def fill_exact_small_template(df_data, fac_name):
             flow_out = float(raw_out) if (pd.notna(raw_out) and 0.1 <= float(raw_out) <= 2000) else default_f
 
             ws.cell(r_idx, 2, flow_in)
-            ws.cell(r_idx, 5, flow_in) # E열: 고도처리량 = 유입량
-            ws.cell(r_idx, 6, flow_out) # F열: 방류량
+            ws.cell(r_idx, 5, flow_in)
+            ws.cell(r_idx, 6, flow_out)
             
             raw_temp = r.get('수온', np.nan)
             if pd.notna(raw_temp): ws.cell(r_idx, 7, float(raw_temp))
@@ -404,7 +401,6 @@ def fill_exact_small_template(df_data, fac_name):
     wb.save(buf)
     return buf.getvalue()
 
-# [2번 메뉴: HWPX 월간보고서 정밀 생성 엔진 원본 복구]
 def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, solar_data, task_text, year=2026):
     months_window = [(sel_month - 5 + i - 1) % 12 + 1 for i in range(6)]
     cand = f"공공하수도시설 대행사업 월간보고서({sel_month}월).hwpx"
@@ -416,7 +412,6 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
     elif os.path.exists(cand):
         with open(cand, 'rb') as f: template_bytes = f.read()
 
-    # 원본 파일이 없더라도 유효한 HWPX ZIP 컨테이너 구조 생성
     out_buf = io.BytesIO()
     if template_bytes:
         try:
@@ -434,17 +429,14 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
                     text = text.replace('{{SLUDGE_MAX}}', f"{sludge_data['max']:.1f}")
                     text = text.replace('{{SLUDGE_MIN}}', f"{sludge_data['min']:.1f}")
                     text = text.replace('{{SOLAR_GEN}}', f"{solar_data['current_month']:.1f}")
-                    if task_text:
-                        text = text.replace('{{DAILY_MAINTENANCE_TEXT}}', task_text)
+                    if task_text: text = text.replace('{{DAILY_MAINTENANCE_TEXT}}', task_text)
                     data = text.encode('utf-8')
                 out_zip.writestr(item, data)
             in_zip.close()
             out_zip.close()
             return out_buf.getvalue()
-        except Exception:
-            pass
+        except: pass
 
-    # 기본 HWPX 컨테이너 자동 빌드
     with zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("mimetype", "application/hwp+zip")
         zf.writestr("version.xml", "<?xml version='1.0' encoding='UTF-8'?><hh:version xmlns:hh='http://www.hancom.co.kr/hwpml/2011/head' version='1.0'/>")
@@ -488,7 +480,7 @@ def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is
     return "".join(parts)
 
 # -------------------------------------------------------------
-# 사용자 로그인 검증 함수
+# 로그인 인증 분기 (에러 방지 구조)
 # -------------------------------------------------------------
 def check_login_system():
     if "logged_in" not in st.session_state:
@@ -786,14 +778,13 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                 st.info("해당 기간의 개인하수 시설 데이터가 없습니다.")
 
 # -------------------------------------------------------------
-# 2. HWPX 월간보고서 (전면 복구)
+# 2. HWPX 월간보고서
 # -------------------------------------------------------------
 elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편철 & 보관함":
-    st.title("📊 단월공공하수처리시설 대행사업 월간보고서 (HWPX) AI 자동편철 & 보관함")
+    st.title("📊 단월공공하수처리시설 대행사업 월간보고서 (HWPX)")
     st.caption("🔒 최근 6개월 슬라이딩 윈도우 동적 반영 · 슬러지/태양광 실데이터 치환 · 한글(HWPX) 표준 편철 및 보관")
 
     tab_hw_w, tab_hw_a = st.tabs(["✍️ [생성] 월간보고서 AI 자동편철", "🗂️ [보관함] 연도/월별 HWPX 보관소 & 삭제"])
-    
     with tab_hw_w:
         col_m1, col_m2 = st.columns([1, 2])
         with col_m1:
@@ -824,7 +815,6 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             so_data = {"current_month": solar_kwh}
             bytes_hwpx = generate_hwpx_monthly_report(sel_report_month, hwpx_file_up, sl_data, so_data, task_memo, sel_report_year)
             
-            # 보관함에 자동 저장
             save_name = f"공공하수도시설_대행사업_월간보고서({sel_report_month}월)_{sel_report_year}.hwpx"
             with open(os.path.join(HWPX_RECORD_DIR, save_name), "wb") as f:
                 f.write(bytes_hwpx)
