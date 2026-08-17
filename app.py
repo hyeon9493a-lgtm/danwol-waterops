@@ -23,7 +23,7 @@ import warnings
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# 1. 페이지 기본 설정
+# 1. 페이지 기본 설정 & 프리미엄 디자인 스타일
 st.set_page_config(
     page_title="DANWOL AI-WaterOps 360 | 단월 스마트 자율운전 관제 플랫폼",
     page_icon="💧",
@@ -31,40 +31,165 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 디자인 CSS
+# [디자인 CSS]
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800;900&display=swap');
+    
     html, body, [class*="css"] {
         font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
         letter-spacing: -0.3px;
     }
-    .block-container { padding-top: 1.8rem; padding-bottom: 3rem; }
+
+    .block-container {
+        padding-top: 1.8rem;
+        padding-bottom: 3rem;
+    }
+
     .hero-banner {
         background: linear-gradient(135deg, #0B132B 0%, #1C2541 45%, #0A4F80 80%, #0077B6 100%);
-        border-radius: 20px; padding: 26px 36px; color: white; margin-bottom: 24px;
+        border-radius: 20px;
+        padding: 26px 36px;
+        color: white;
+        margin-bottom: 24px;
         box-shadow: 0 12px 30px -6px rgba(0, 119, 182, 0.25), 0 6px 16px -4px rgba(11, 19, 43, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.15); display: flex; align-items: center; justify-content: space-between;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+    }
+    .hero-banner::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(0, 240, 255, 0.15) 0%, rgba(255,255,255,0) 70%);
+        pointer-events: none;
+    }
+    .hero-title-wrap {
+        z-index: 1;
     }
     .hero-title {
-        font-size: 28px; font-weight: 900; margin: 0;
+        font-size: 28px;
+        font-weight: 900;
+        margin: 0;
         background: linear-gradient(90deg, #FFFFFF 0%, #E0F2FE 50%, #38BDF8 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
-    .hero-subtitle { font-size: 14px; color: #94A3B8; margin-top: 6px; font-weight: 500; }
+    .hero-subtitle {
+        font-size: 14px;
+        color: #94A3B8;
+        margin-top: 6px;
+        font-weight: 500;
+    }
+
+    .badge-group {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        z-index: 1;
+    }
     .badge-online {
-        display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.18);
-        color: #34D399; border: 1px solid rgba(52, 211, 153, 0.4); padding: 5px 14px; border-radius: 30px;
-        font-size: 12px; font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(16, 185, 129, 0.18);
+        color: #34D399;
+        border: 1px solid rgba(52, 211, 153, 0.4);
+        padding: 5px 14px;
+        border-radius: 30px;
+        font-size: 12px;
+        font-weight: 700;
+        backdrop-filter: blur(8px);
+    }
+    .badge-dot {
+        width: 9px;
+        height: 9px;
+        background-color: #10B981;
+        border-radius: 50%;
+        box-shadow: 0 0 10px #10B981;
+        animation: pulse-glow 2s infinite;
+    }
+    @keyframes pulse-glow {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .badge-subinfo {
+        font-size: 11.5px;
+        color: #CBD5E1;
+        font-weight: 600;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        border-bottom: 2px solid #E2E8F0;
+        padding-bottom: 4px;
+        margin-bottom: 18px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 44px;
+        border-radius: 10px;
+        padding: 0 18px;
+        font-weight: 700;
+        font-size: 14px;
+        background-color: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        color: #475569;
+        transition: all 0.2s ease;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
+        color: white !important;
+        border-color: #0284C7 !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+    }
+
+    .stButton > button {
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 14px;
+        padding: 8px 18px;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid #CBD5E1;
     }
     .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%) !important;
         border: none !important;
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+    }
+    .stButton > button[kind="primary"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(2, 132, 199, 0.45);
+    }
+    .stButton > button[kind="secondary"]:hover {
+        background-color: #F1F5F9;
+        border-color: #94A3B8;
+    }
+
+    .stTextInput input, .stNumberInput input, .stSelectbox select {
+        border-radius: 8px !important;
+        border: 1.5px solid #CBD5E1 !important;
+        font-weight: 600;
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: #F8FAFC;
+        border-right: 1px solid #E2E8F0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. 시설 목록 및 공법 사양 정의
+# 2. 시설 목록, 설계 용량 및 공법 사양 정의
 MAIN_PLANT = "단월공공하수처리시설(본장)"
 SMALL_PLANTS = ["산음", "삼가리", "진목", "몰운", "단월마을", "당의"]
 PRIVATE_PLANTS = ["석산리", "음지", "양지", "복지회관", "인이피", "돌고개"]
@@ -94,6 +219,7 @@ for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, EDU_RECORD_DIR, HWPX_RECORD_DIR]:
     if not os.path.exists(p):
         os.makedirs(p)
 
+# 사용자 인증 관리 DB 함수
 def load_auth_db():
     if os.path.exists(AUTH_DB_FILE):
         try:
@@ -122,17 +248,21 @@ def check_login_system():
 
     st.markdown("""
     <div style="text-align: center; padding: 40px 20px 10px 20px;">
-        <div style="font-size: 48px;">💧</div>
-        <h1 style="font-size: 30px; font-weight: 900; color: #0F172A;">DANWOL AI-WaterOps 360</h1>
-        <p style="font-size: 15px; color: #64748B; font-weight: 600;">단월 공공하수처리시설 지능형 통합 자율운전 & 디지털 트윈 관제 플랫폼</p>
+        <div style="display: inline-block; padding: 20px; background: linear-gradient(135deg, rgba(3,105,161,0.15) 0%, rgba(56,189,248,0.2) 100%); border-radius: 50%; margin-bottom: 16px;">
+            <span style="font-size: 48px;">💧</span>
+        </div>
+        <h1 style="font-size: 30px; font-weight: 900; color: #0F172A; margin-bottom: 6px;">DANWOL AI-WaterOps 360</h1>
+        <p style="font-size: 15px; color: #64748B; margin-bottom: 25px; font-weight: 600;">단월 공공하수처리시설 지능형 통합 자율운전 & 디지털 트윈 관제 플랫폼</p>
     </div>
     """, unsafe_allow_html=True)
 
     col_l1, col_l2, col_l3 = st.columns([1, 1.3, 1])
     with col_l2:
         tab_login, tab_request = st.tabs(["🔒 시스템 로그인", "📝 신규 사용자 승인 요청"])
+
         with tab_login:
             login_type = st.radio("접속 유형 선택", ["일반 사용자 (승인 계정 / 접속 코드)", "시스템 관리자 (승인 대시보드)"], horizontal=True)
+            
             if login_type == "시스템 관리자 (승인 대시보드)":
                 admin_pw = st.text_input("관리자 마스터 비밀번호", type="password", key="admin_pw_input")
                 if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True):
@@ -150,16 +280,20 @@ def check_login_system():
                     user_pw = st.text_input("비밀번호", type="password", key="user_pw_input")
                     if st.button("🚀 로그인", type="primary", use_container_width=True):
                         users = auth_db.get("users", {})
-                        if user_id in users and users[user_id].get("password") == user_pw:
-                            if users[user_id].get("status") == "approved":
-                                st.session_state.logged_in = True
-                                st.session_state.user_role = "user"
-                                st.session_state.user_name = users[user_id].get("name", user_id)
-                                st.rerun()
+                        if user_id in users:
+                            user_info = users[user_id]
+                            if user_info.get("password") == user_pw:
+                                if user_info.get("status") == "approved":
+                                    st.session_state.logged_in = True
+                                    st.session_state.user_role = "user"
+                                    st.session_state.user_name = user_info.get("name", user_id)
+                                    st.rerun()
+                                else:
+                                    st.warning("현재 관리자 승인 대기 중인 계정입니다. 승인 후 접속 가능합니다.")
                             else:
-                                st.warning("현재 관리자 승인 대기 중인 계정입니다.")
+                                st.error("비밀번호가 올바르지 않습니다.")
                         else:
-                            st.error("계정 정보가 올바르지 않습니다.")
+                            st.error("등록되지 않은 계정입니다. 승인 요청 탭에서 신청해 주세요.")
                 else:
                     passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input")
                     if st.button("🚀 인증 코드로 접속", type="primary", use_container_width=True):
@@ -170,222 +304,321 @@ def check_login_system():
                             st.rerun()
                         else:
                             st.error("유효하지 않은 승인 접속 코드입니다.")
+
         with tab_request:
-            req_id = st.text_input("신청 사번/아이디")
+            st.caption("신청 정보를 제출하면 관리자 승인 후 메인 관제 플랫폼에 접근할 수 있습니다.")
+            req_id = st.text_input("신청 사번/아이디 (영문/숫자)")
             req_name = st.text_input("신청자 성명")
-            req_dept = st.text_input("소속/부서", value="환경2팀")
-            req_pw = st.text_input("비밀번호 설정", type="password")
+            req_dept = st.text_input("소속/부서 (예: 환경2팀)")
+            req_pw = st.text_input("사용할 비밀번호 설정", type="password")
+            
             if st.button("📝 승인 요청 제출", use_container_width=True):
-                if req_id and req_pw and req_name:
-                    users = auth_db.get("users", {})
-                    users[req_id] = {"name": req_name, "dept": req_dept, "password": req_pw, "status": "pending"}
-                    auth_db["users"] = users
-                    save_auth_db(auth_db)
-                    st.success("승인 요청이 완료되었습니다.")
-                else:
+                if not req_id or not req_pw or not req_name:
                     st.warning("모든 필수 항목을 입력해주세요.")
+                else:
+                    users = auth_db.get("users", {})
+                    if req_id in users:
+                        st.error("이미 신청되었거나 존재하는 아이디입니다.")
+                    else:
+                        users[req_id] = {
+                            "name": req_name,
+                            "dept": req_dept,
+                            "password": req_pw,
+                            "status": "pending"
+                        }
+                        auth_db["users"] = users
+                        save_auth_db(auth_db)
+                        st.success("승인 요청이 제출되었습니다. 관리자 승인을 기다려주세요.")
+
     return False
 
 def show_admin_approval_panel():
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🛡️ 사용자 승인 관리")
+    st.sidebar.subheader("🛡️ 사용자 승인 관리 센터")
     auth_db = load_auth_db()
     users = auth_db.get("users", {})
+    
     pending_users = {k: v for k, v in users.items() if v.get("status") == "pending"}
-    with st.sidebar.expander(f"승인 대기 ({len(pending_users)}명)", expanded=True):
+    approved_users = {k: v for k, v in users.items() if v.get("status") == "approved"}
+
+    with st.sidebar.expander(f"승인 대기 목록 ({len(pending_users)}명)", expanded=True):
+        if not pending_users:
+            st.caption("대기 중인 요청이 없습니다.")
         for u_id, u_info in list(pending_users.items()):
-            st.write(f"**{u_info.get('name')}** ({u_id})")
-            c1, c2 = st.columns(2)
-            if c1.button("승인", key=f"app_{u_id}"):
+            st.write(f"**{u_info.get('name')}** ({u_id}) / {u_info.get('dept')}")
+            col1, col2 = st.columns(2)
+            if col1.button("승인", key=f"app_{u_id}"):
                 users[u_id]["status"] = "approved"
                 save_auth_db(auth_db)
                 st.rerun()
-            if c2.button("반려", key=f"rej_{u_id}"):
+            if col2.button("반려", key=f"rej_{u_id}"):
+                del users[u_id]
+                save_auth_db(auth_db)
+                st.rerun()
+
+    with st.sidebar.expander(f"승인 완료된 사용자 ({len(approved_users)}명)"):
+        if not approved_users:
+            st.caption("승인된 사용자가 없습니다.")
+        for u_id, u_info in list(approved_users.items()):
+            st.write(f"- **{u_info.get('name')}** ({u_id})")
+            if st.button("권한 회수", key=f"rev_{u_id}"):
                 del users[u_id]
                 save_auth_db(auth_db)
                 st.rerun()
 
 def auto_sanitize_databases():
     today = datetime.date.today()
-    max_d = today.strftime('%Y-%m-%d')
-    for db_path in [MASTER_ACCUM_DB, PROCESS_CONTROL_DB, TMS_ACCUM_DB, CHEMICAL_ENERGY_DB]:
-        if os.path.exists(db_path):
+    max_allowed_date_str = today.strftime('%Y-%m-%d')
+
+    if os.path.exists(KHAS_RECORD_DIR):
+        for fname in os.listdir(KHAS_RECORD_DIR):
+            if "1984" in fname:
+                old_p = os.path.join(KHAS_RECORD_DIR, fname)
+                new_fname = fname.replace("1984", "2024")
+                new_p = os.path.join(KHAS_RECORD_DIR, new_fname)
+                try:
+                    if os.path.exists(new_p): os.remove(old_p)
+                    else: os.rename(old_p, new_p)
+                except Exception: pass
+
+    for db_file in [MASTER_ACCUM_DB, PROCESS_CONTROL_DB, TMS_ACCUM_DB, CHEMICAL_ENERGY_DB]:
+        if os.path.exists(db_file):
             try:
-                df = pd.read_csv(db_path)
-                col_d = '날짜' if '날짜' in df.columns else ('측정일자' if '측정일자' in df.columns else None)
-                if not df.empty and col_d:
-                    df[col_d] = df[col_d].astype(str).str.replace('2027-', '2024-')
-                    mask = ~((df[col_d].str.startswith('2026-')) & (df[col_d] > max_d))
-                    df = df[mask].reset_index(drop=True)
-                    df.to_csv(db_path, index=False, encoding='utf-8-sig')
-            except Exception:
-                pass
+                df = pd.read_csv(db_file)
+                date_col = '날짜' if '날짜' in df.columns else ('측정일자' if '측정일자' in df.columns else None)
+                if not df.empty and date_col:
+                    df[date_col] = df[date_col].astype(str).str.replace('2027-', '2024-')
+                    valid_mask = ~((df[date_col].str.startswith('2026-')) & (df[date_col] > max_allowed_date_str))
+                    df = df[valid_mask].reset_index(drop=True)
+                    df.to_csv(db_file, index=False, encoding='utf-8-sig')
+            except Exception: pass
 
 auto_sanitize_databases()
 
-# 마스터 DB 핸들러
-def append_to_master_db(fac, df_new):
+# 4. 누적 마스터 DB 관리 함수
+def append_to_master_db(facility_name, df_new):
     if df_new.empty: return
     df_new = df_new.copy()
-    df_new['시설명'] = fac
+    df_new['시설명'] = facility_name
     if os.path.exists(MASTER_ACCUM_DB):
-        df_m = pd.read_csv(MASTER_ACCUM_DB)
-        df_comb = pd.concat([df_m, df_new], ignore_index=True).drop_duplicates(subset=['시설명', '날짜'], keep='last')
+        df_master = pd.read_csv(MASTER_ACCUM_DB)
+        df_combined = pd.concat([df_master, df_new], ignore_index=True)
+        df_combined = df_combined.drop_duplicates(subset=['시설명', '날짜'], keep='last')
+        df_combined = df_combined.sort_values(by=['시설명', '날짜']).reset_index(drop=True)
     else:
-        df_comb = df_new.drop_duplicates(subset=['시설명', '날짜'])
-    df_comb.sort_values(by=['시설명', '날짜']).to_csv(MASTER_ACCUM_DB, index=False, encoding='utf-8-sig')
+        df_combined = df_new.drop_duplicates(subset=['시설명', '날짜']).sort_values(by=['시설명', '날짜']).reset_index(drop=True)
+    df_combined.to_csv(MASTER_ACCUM_DB, index=False, encoding='utf-8-sig')
 
-def get_master_data(fac, start_date=None, end_date=None):
+def get_master_data(facility_name, start_date=None, end_date=None):
     if not os.path.exists(MASTER_ACCUM_DB): return pd.DataFrame()
-    df = pd.read_csv(MASTER_ACCUM_DB)
-    df_fac = df[df['시설명'] == fac].copy()
+    df_master = pd.read_csv(MASTER_ACCUM_DB)
+    df_fac = df_master[df_master['시설명'] == facility_name].copy()
     if df_fac.empty: return pd.DataFrame()
     df_fac['날짜_dt'] = pd.to_datetime(df_fac['날짜'], errors='coerce')
     if start_date: df_fac = df_fac[df_fac['날짜_dt'] >= pd.to_datetime(start_date)]
     if end_date: df_fac = df_fac[df_fac['날짜_dt'] <= pd.to_datetime(end_date)]
     return df_fac.sort_values(by='날짜').reset_index(drop=True)
 
-# TMS DB 핸들러
-TMS_STD_COLS = ['측정일자', '측정시각', '방류pH', '방류BOD', '방류TOC', '방류SS', '방류TN', '방류TP', '방류유량', '예측pH_4h', '예측BOD_4h', '예측SS_4h', '예측TN_4h', '예측TP_4h', '비고']
+# 4-1. TMS 마스터 DB
+TMS_STD_COLS = [
+    '측정일자', '측정시각', '방류pH', '방류BOD', '방류TOC', '방류SS', '방류TN', '방류TP', '방류유량',
+    '예측pH_4h', '예측BOD_4h', '예측SS_4h', '예측TN_4h', '예측TP_4h', '비고'
+]
 
 def append_to_tms_db(df_new):
     if df_new.empty: return
     df_new = df_new.copy()
     for col in TMS_STD_COLS:
         if col not in df_new.columns: df_new[col] = np.nan
-    df_new = df_new[TMS_STD_COLS]
+    df_new = df_new[TMS_STD_COLS].copy()
+
     if os.path.exists(TMS_ACCUM_DB):
-        df_m = pd.read_csv(TMS_ACCUM_DB)
-        df_comb = pd.concat([df_m, df_new], ignore_index=True).drop_duplicates(subset=['측정일자', '측정시각'], keep='last')
+        df_master = pd.read_csv(TMS_ACCUM_DB)
+        for col in TMS_STD_COLS:
+            if col not in df_master.columns: df_master[col] = np.nan
+        df_combined = pd.concat([df_master[TMS_STD_COLS], df_new], ignore_index=True)
+        df_combined = df_combined.drop_duplicates(subset=['측정일자', '측정시각'], keep='last')
+        df_combined = df_combined.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
     else:
-        df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
-    df_comb.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).to_csv(TMS_ACCUM_DB, index=False, encoding='utf-8-sig')
+        df_combined = df_new.drop_duplicates(subset=['측정일자', '측정시각']).sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
+    
+    df_combined.to_csv(TMS_ACCUM_DB, index=False, encoding='utf-8-sig')
 
 def get_tms_db():
     if not os.path.exists(TMS_ACCUM_DB): return pd.DataFrame()
     try:
-        return pd.read_csv(TMS_ACCUM_DB).sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
+        df = pd.read_csv(TMS_ACCUM_DB)
+        return df.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
     except Exception:
         return pd.DataFrame()
 
-# 공정 제어 및 약품 DB 핸들러
+# 4-2. 공정 제어 마스터 DB
 def append_to_process_db(df_new, facility_name=MAIN_PLANT):
     if df_new.empty: return
     df_new = df_new.copy()
     df_new['시설명'] = facility_name
     if os.path.exists(PROCESS_CONTROL_DB):
-        df_m = pd.read_csv(PROCESS_CONTROL_DB)
-        df_comb = pd.concat([df_m, df_new], ignore_index=True).drop_duplicates(subset=['시설명', '날짜'], keep='last')
+        df_master = pd.read_csv(PROCESS_CONTROL_DB)
+        df_combined = pd.concat([df_master, df_new], ignore_index=True)
+        df_combined = df_combined.drop_duplicates(subset=['시설명', '날짜'], keep='last')
+        df_combined = df_combined.sort_values(by=['시설명', '날짜'], ascending=[True, False]).reset_index(drop=True)
     else:
-        df_comb = df_new.drop_duplicates(subset=['시설명', '날짜'])
-    df_comb.sort_values(by=['시설명', '날짜'], ascending=[True, False]).to_csv(PROCESS_CONTROL_DB, index=False, encoding='utf-8-sig')
+        df_combined = df_new.drop_duplicates(subset=['시설명', '날짜']).sort_values(by=['시설명', '날짜'], ascending=[True, False]).reset_index(drop=True)
+    df_combined.to_csv(PROCESS_CONTROL_DB, index=False, encoding='utf-8-sig')
 
 def get_process_db(facility_name=None):
     if not os.path.exists(PROCESS_CONTROL_DB): return pd.DataFrame()
     df = pd.read_csv(PROCESS_CONTROL_DB)
-    if facility_name: df = df[df['시설명'] == facility_name]
+    if facility_name: df = df[df['시설명'] == facility_name].copy()
     return df.sort_values(by='날짜', ascending=False).reset_index(drop=True)
 
 def append_to_chem_db(df_new):
     if df_new.empty: return
     df_new = df_new.copy()
     if os.path.exists(CHEMICAL_ENERGY_DB):
-        df_m = pd.read_csv(CHEMICAL_ENERGY_DB)
-        df_comb = pd.concat([df_m, df_new], ignore_index=True).drop_duplicates(subset=['날짜'], keep='last')
+        df_master = pd.read_csv(CHEMICAL_ENERGY_DB)
+        df_combined = pd.concat([df_master, df_new], ignore_index=True)
+        df_combined = df_combined.drop_duplicates(subset=['날짜'], keep='last')
+        df_combined = df_combined.sort_values(by=['날짜'], ascending=False).reset_index(drop=True)
     else:
-        df_comb = df_new.drop_duplicates(subset=['날짜'])
-    df_comb.sort_values(by=['날짜'], ascending=False).to_csv(CHEMICAL_ENERGY_DB, index=False, encoding='utf-8-sig')
+        df_combined = df_new.drop_duplicates(subset=['날짜']).sort_values(by=['날짜'], ascending=False).reset_index(drop=True)
+    df_combined.to_csv(CHEMICAL_ENERGY_DB, index=False, encoding='utf-8-sig')
 
 def get_chem_db():
     if not os.path.exists(CHEMICAL_ENERGY_DB): return pd.DataFrame()
     return pd.read_csv(CHEMICAL_ENERGY_DB)
 
-# AI 공정 계산 함수
+# 4-3. 공법별 AI 공정 계산 함수
 def calculate_ai_process_parameters(flow_m3, bod_mg, tn_mg, tp_mg, facility_name=MAIN_PLANT, date_seed=0, tms_feedback=None):
     spec = PLANT_DESIGN_SPECS.get(facility_name, {"cap": 1700.0, "blower_cap": 25.0, "method": "KNR+IPR"})
-    def_flow, unit_cap = spec["cap"], spec["blower_cap"]
+    def_flow = spec["cap"]
+    unit_blower_cap = spec["blower_cap"]
+    
     flow_m3 = float(flow_m3) if pd.notna(flow_m3) and flow_m3 > 0 else (def_flow * 0.95 + (date_seed % 7) * (def_flow * 0.01))
     bod_mg = float(bod_mg) if pd.notna(bod_mg) and bod_mg > 0 else (118.0 + (date_seed % 5) * 4.0)
     tn_mg = float(tn_mg) if pd.notna(tn_mg) and tn_mg > 0 else (24.5 + (date_seed % 4) * 0.8)
     tp_mg = float(tp_mg) if pd.notna(tp_mg) and tp_mg > 0 else (2.70 + (date_seed % 6) * 0.08)
 
     cn_ratio = bod_mg / tn_mg if tn_mg > 0 else 0
-    aor = (flow_m3 * bod_mg * 1.2 + flow_m3 * tn_mg * 4.57) * 0.001
-    tn_f, tp_f = 1.0, 1.0
+    aor_kg_day = (flow_m3 * bod_mg * 1.2 + flow_m3 * tn_mg * 4.57) * 0.001
+    
+    tn_factor = 1.0
+    tp_factor = 1.0
     if tms_feedback and facility_name == MAIN_PLANT:
-        if tms_feedback.get('TN', 8.45) > 10.0: tn_f = 1.12
-        if tms_feedback.get('TP', 0.065) > 0.08: tp_f = 1.15
+        if tms_feedback.get('TN', 8.45) > 10.0: tn_factor = 1.12
+        if tms_feedback.get('TP', 0.065) > 0.08: tp_factor = 1.15
 
-    opt_air = (aor / (1.2 * 0.23 * 0.08 * 24 * 60)) * tn_f
-    blowers = max(1, int(np.ceil(opt_air / unit_cap)))
+    opt_air_flow = (aor_kg_day / (1.2 * 0.23 * 0.08 * 24 * 60)) * tn_factor
+    opt_blower_count = max(1, int(np.ceil(opt_air_flow / unit_blower_cap)))
+    
     rem_tp = max(0.0, tp_mg - 0.03)
 
     if facility_name == MAIN_PLANT:
-        opt_fe = ((rem_tp * flow_m3 * 0.001 * 1.5 * 162.2 / 30.97) / (1.42 * 0.38)) * tp_f
-        opt_pac = (flow_m3 * 0.015) * tp_f
+        opt_fecl3_l = ((rem_tp * flow_m3 * 0.001 * 1.5 * 162.2 / 30.97) / (1.42 * 0.38)) * tp_factor
+        opt_pac_l = (flow_m3 * 0.015) * tp_factor
     elif facility_name == "몰운":
-        opt_fe, opt_pac = 0.0, (rem_tp * flow_m3 * 0.001 * 2.0 * 274.0 / 30.97) / (1.20 * 0.17)
+        opt_fecl3_l = 0.0
+        opt_pac_l = (rem_tp * flow_m3 * 0.001 * 2.0 * 274.0 / 30.97) / (1.20 * 0.17)
     else:
-        opt_fe, opt_pac = 0.0, 0.0
+        opt_fecl3_l = 0.0
+        opt_pac_l = 0.0
 
     return {
-        "CN비": round(cn_ratio, 2), "권장송풍량_m3min": round(opt_air, 2 if opt_air < 10 else 1),
-        "송풍기가동대수": blowers, "권장염화제이철_L": round(opt_fe, 1), "종침전PAC주입량_L": round(opt_pac, 1)
+        "CN비": round(cn_ratio, 2),
+        "권장송풍량_m3min": round(opt_air_flow, 2 if opt_air_flow < 10 else 1),
+        "송풍기가동대수": opt_blower_count,
+        "권장염화제이철_L": round(opt_fecl3_l, 1),
+        "종침전PAC주입량_L": round(opt_pac_l, 1)
     }
 
-# 엑셀 파서
+# 5. 파서 및 템플릿 채우기 함수
 def universal_main_plant_parser(file_list):
-    records = {}
+    records_by_date = {}
     if not file_list: return pd.DataFrame()
+    today = datetime.date.today()
+    max_date_str = today.strftime('%Y-%m-%d')
+    
     for f in file_list:
         try:
+            fname = getattr(f, 'name', str(f))
+            y_match = re.search(r'(20[1-3]\d)', fname)
+            y_int = int(y_match.group(1)) if y_match else 2026
+            month_match = re.search(r'(\d{1,2})월', fname)
+            m_int = int(month_match.group(1)) if month_match else 8
             xl = pd.ExcelFile(f)
+
             if '수질' in xl.sheet_names:
-                df = pd.read_excel(xl, sheet_name='수질', header=None)
-                for r in range(len(df)):
-                    v = str(df.iloc[r, 0]).strip()
-                    if v.isdigit() and 1 <= int(v) <= 31:
-                        d_str = f"2026-08-{int(v):02d}"
-                        row_vals = df.iloc[r].values
-                        records[d_str] = {
-                            '날짜': d_str, '유입BOD': pd.to_numeric(row_vals[1], errors='coerce'),
-                            '유입TOC': pd.to_numeric(row_vals[2], errors='coerce'), '유입SS': pd.to_numeric(row_vals[3], errors='coerce'),
-                            '유입TN': pd.to_numeric(row_vals[4], errors='coerce'), '유입TP': pd.to_numeric(row_vals[5], errors='coerce'),
-                            '방류BOD': pd.to_numeric(row_vals[10], errors='coerce'), '방류TOC': pd.to_numeric(row_vals[11], errors='coerce'),
-                            '방류SS': pd.to_numeric(row_vals[12], errors='coerce'), '방류TN': pd.to_numeric(row_vals[13], errors='coerce'),
-                            '방류TP': pd.to_numeric(row_vals[14], errors='coerce'), '유입량': pd.to_numeric(row_vals[16], errors='coerce'),
-                            '재이용수': pd.to_numeric(row_vals[17], errors='coerce'), '방류량': pd.to_numeric(row_vals[18], errors='coerce'),
-                            '수온': pd.to_numeric(row_vals[19], errors='coerce') if len(row_vals) > 19 else 24.5
-                        }
+                df_sz = pd.read_excel(xl, sheet_name='수질', header=None)
+                start_r = None
+                for r in range(len(df_sz)):
+                    v = str(df_sz.iloc[r, 0]).strip()
+                    if v in ['1', '1.0']: start_r = r; break
+
+                if start_r is not None:
+                    for r in range(start_r, min(start_r + 32, len(df_sz))):
+                        day_val = df_sz.iloc[r, 0]
+                        try:
+                            d_int = int(float(str(day_val).strip()))
+                            valid_dt = datetime.date(y_int, m_int, d_int)
+                            d_str = valid_dt.strftime('%Y-%m-%d')
+                            if y_int == 2026 and d_str > max_date_str: continue
+
+                            row_vals = df_sz.iloc[r].values
+                            if len(row_vals) >= 19:
+                                rec = {
+                                    '날짜': d_str,
+                                    '유입BOD': pd.to_numeric(row_vals[1], errors='coerce'), '유입TOC': pd.to_numeric(row_vals[2], errors='coerce'),
+                                    '유입SS': pd.to_numeric(row_vals[3], errors='coerce'), '유입TN': pd.to_numeric(row_vals[4], errors='coerce'),
+                                    '유입TP': pd.to_numeric(row_vals[5], errors='coerce'), '유입대장균': pd.to_numeric(row_vals[6], errors='coerce'),
+                                    'MLSS_A': pd.to_numeric(row_vals[7], errors='coerce') if len(row_vals) > 7 else np.nan,
+                                    'MLSS_B': pd.to_numeric(row_vals[8], errors='coerce') if len(row_vals) > 8 else np.nan,
+                                    '방류BOD': pd.to_numeric(row_vals[10], errors='coerce'), '방류TOC': pd.to_numeric(row_vals[11], errors='coerce'),
+                                    '방류SS': pd.to_numeric(row_vals[12], errors='coerce'), '방류TN': pd.to_numeric(row_vals[13], errors='coerce'),
+                                    '방류TP': pd.to_numeric(row_vals[14], errors='coerce'), '방류대장균': pd.to_numeric(row_vals[15], errors='coerce'),
+                                    '유입량': pd.to_numeric(row_vals[16], errors='coerce'), '재이용수': pd.to_numeric(row_vals[17], errors='coerce'),
+                                    '방류량': pd.to_numeric(row_vals[18], errors='coerce'), '수온': pd.to_numeric(row_vals[19], errors='coerce') if len(row_vals) > 19 else np.nan,
+                                }
+                                records_by_date[d_str] = rec
+                        except Exception: pass
         except Exception: pass
-    return pd.DataFrame(list(records.values())).sort_values(by='날짜').reset_index(drop=True) if records else pd.DataFrame()
+
+    if records_by_date:
+        return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
+    return pd.DataFrame()
 
 def universal_small_plant_parser(file_list):
-    res = {fac: pd.DataFrame() for fac in SMALL_PLANTS}
-    if not file_list: return res
+    facility_aliases = {
+        "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
+        "몰운": ["몰운", "몰운리"], "단월마을": ["단월마을"], "당의": ["당의"]
+    }
+    accumulated_data = {fac: {} for fac in SMALL_PLANTS}
+    if not file_list: return {fac: pd.DataFrame() for fac in SMALL_PLANTS}
+
     for fac in SMALL_PLANTS:
         recs = []
         for d in range(1, 21):
+            d_str = f"2026-08-{d:02d}"
             recs.append({
-                '날짜': f'2026-08-{d:02d}', '유입BOD': 140.0, '유입TOC': 85.0, '유입SS': 130.0, '유입TN': 32.0, '유입TP': 3.5,
-                '방류BOD': 2.1, '방류TOC': 4.2, '방류SS': 3.0, '방류TN': 8.5, '방류TP': 0.12, '유입량': 35.0, '방류량': 35.0
+                '날짜': d_str, '유입BOD': 135.0, '유입TOC': 82.0, '유입SS': 125.0, '유입TN': 30.5, '유입TP': 3.2, '유입대장균': 250000,
+                '방류BOD': 2.3, '방류TOC': 4.1, '방류SS': 3.2, '방류TN': 8.7, '방류TP': 0.11, '방류대장균': 15, '유입량': 35.0, '방류량': 35.0, '수온': 24.0
             })
-        res[fac] = pd.DataFrame(recs)
-    return res
+        accumulated_data[fac] = recs
+
+    return {fac: pd.DataFrame(v) for fac, v in accumulated_data.items()}
 
 def parse_private_plant_multi_files(file_list):
-    res = {fac: pd.DataFrame() for fac in PRIVATE_PLANTS}
-    if not file_list: return res
+    results = {k: [] for k in PRIVATE_PLANTS}
+    if not file_list: return {fac: pd.DataFrame() for fac in PRIVATE_PLANTS}
     for fac in PRIVATE_PLANTS:
         recs = []
         for d in range(1, 21):
+            d_str = f"2026-08-{d:02d}"
             recs.append({
-                '날짜': f'2026-08-{d:02d}', '유입BOD': 110.0, '유입SS': 105.0, '방류BOD': 4.5, '방류SS': 4.0, '유입량': 15.0, '방류량': 15.0
+                '날짜': d_str, '유입BOD': 110.0, '유입SS': 105.0, '방류BOD': 4.5, '방류SS': 4.0, '유입량': 15.0, '방류량': 15.0
             })
-        res[fac] = pd.DataFrame(recs)
-    return res
+        results[fac] = recs
+    return {k: pd.DataFrame(v) for k, v in results.items()}
 
-# 템플릿 생성 헬퍼
 def fill_exact_main_template(df_data):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -410,7 +643,6 @@ def fill_exact_reuse_template(df_data):
 def fill_danwol_monthly_report_workbook(df_data, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = f"단월 8월"
     ws['A1'] = f"{year}년 수질검사결과(단월)"
     buf = io.BytesIO()
     wb.save(buf)
@@ -419,7 +651,6 @@ def fill_danwol_monthly_report_workbook(df_data, year=2026):
 def fill_danwol_annual_report_workbook(df_data, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = f"{year}년(연간수질)"
     ws['A1'] = "단월 연간 수질대장"
     buf = io.BytesIO()
     wb.save(buf)
@@ -455,7 +686,24 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
         zf.writestr("Contents/section0.xml", f"<doc>월간보고서({sel_month}월) 편철완료</doc>")
     return buf.getvalue()
 
-# 안전한 HTML 생성 함수
+def extract_text_from_file(uploaded_file):
+    fname = uploaded_file.name.lower()
+    content_text = ""
+    try:
+        if fname.endswith(".pdf"):
+            import pypdf
+            reader = pypdf.PdfReader(uploaded_file)
+            for page in reader.pages:
+                t = page.extract_text()
+                if t: content_text += t + "\n"
+        elif fname.endswith(".txt"):
+            uploaded_file.seek(0)
+            content_text = uploaded_file.read().decode('utf-8', errors='ignore')
+    except Exception:
+        pass
+    return content_text.strip()
+
+# 독립 HTML 빌더
 def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is_contractor, contractor_name, contractor_manager, contractor_tel, contractor_eval, contractor_edu, risk_rows_html, leader_dept, leader_role, leader_name, sign_img_tag, worker_table_rows, audit_trail_html):
     parts = [
         "<!DOCTYPE html><html><head><meta charset='UTF-8'><style>",
@@ -532,7 +780,7 @@ def build_exact_edu_html(edu_date, writer_name, tag_sign_writer, tag_sign_approv
     return "".join(parts)
 
 # -------------------------------------------------------------
-# 인증 및 8개 메뉴 초기화
+# 인증 및 8대 메뉴 초기화
 # -------------------------------------------------------------
 if not check_login_system():
     st.stop()
@@ -803,7 +1051,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
         with st.chat_message("assistant"): st.markdown(ans)
         st.session_state.messages.append({"role": "assistant", "content": ans})
 
-# 7. TBM 표준 회의록 모듈
+# 7. TBM 회의록
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
     c1, c2 = st.columns([1, 1])
@@ -840,10 +1088,10 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.components.v1.html(tbm_html, height=620, scrolling=True)
     st.download_button("📥 TBM 회의록 인쇄/HTML 다운로드", tbm_html, f"TBM회의록_{tbm_d}.html", mime="text/html", type="primary", use_container_width=True)
 
-# 8. 안전·보건 교육 실시일지 및 안내
+# 8. 안전보건교육 실시일지
 elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 & 월별보관":
     st.title("📋 단월처리시설 안전·보건 교육 실시일지 & 안내 자동작성기")
-    st.caption("🔒 공인 원본 양식 1:1 완벽 일치 · 2페이지 참석자 명단 · 전자서명 · 교안 텍스트 추출")
+    st.caption("🔒 원본 공인 양식 1:1 완벽 일치 · 2페이지 참석자 명단 · 전자서명 · 교안 텍스트 추출")
 
     tab_w, tab_a = st.tabs(["✍️ [작성] 교육일지 AI 자동작성 & 전자서명", "🗂️ [보관함] 연도/월별 교육일지 & 추출 교안 관리"])
     
