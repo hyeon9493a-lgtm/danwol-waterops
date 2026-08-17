@@ -23,7 +23,7 @@ import warnings
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# 1. 페이지 기본 설정 & 디자인 스타일
+# 1. 페이지 기본 설정 & 프리미엄 디자인 스타일
 st.set_page_config(
     page_title="DANWOL AI-WaterOps 360 | 단월 스마트 자율운전 관제 플랫폼",
     page_icon="💧",
@@ -207,7 +207,6 @@ PLANT_DESIGN_SPECS = {
 # 3. 보관 디렉토리 및 마스터 DB 경로
 KHAS_RECORD_DIR = "monthly_khas_records"
 TBM_RECORD_DIR = "tbm_records"
-EDU_RECORD_DIR = "edu_records"
 HWPX_RECORD_DIR = "hwpx_records"
 MASTER_ACCUM_DB = "danwol_accumulated_master.csv"
 TMS_ACCUM_DB = "danwol_tms_master.csv"
@@ -215,7 +214,7 @@ PROCESS_CONTROL_DB = "danwol_process_control_master.csv"
 CHEMICAL_ENERGY_DB = "danwol_chemical_energy_master.csv"
 AUTH_DB_FILE = "user_auth_db.json"
 
-for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, EDU_RECORD_DIR, HWPX_RECORD_DIR]:
+for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, HWPX_RECORD_DIR]:
     if not os.path.exists(p):
         os.makedirs(p)
 
@@ -542,7 +541,7 @@ def get_chem_db():
     if not os.path.exists(CHEMICAL_ENERGY_DB): return pd.DataFrame()
     return pd.read_csv(CHEMICAL_ENERGY_DB)
 
-# 4-3. 공법별 AI 공정 계산 함수
+# 4-3. 공법별 AI 공정 지능형 계산 함수
 def calculate_ai_process_parameters(flow_m3, bod_mg, tn_mg, tp_mg, facility_name=MAIN_PLANT, date_seed=0, tms_feedback=None):
     spec = PLANT_DESIGN_SPECS.get(facility_name, {"cap": 1700.0, "blower_cap": 25.0, "method": "KNR+IPR"})
     def_flow = spec["cap"]
@@ -1352,151 +1351,6 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
     out_zip.close()
     return out_buf.getvalue()
 
-# 교안 및 파일 텍스트 지능형 추출 함수
-def extract_text_from_file(uploaded_file):
-    fname = uploaded_file.name.lower()
-    content_text = ""
-    try:
-        if fname.endswith(".pdf"):
-            try:
-                import pypdf
-                pdf_reader = pypdf.PdfReader(uploaded_file)
-                for page in pdf_reader.pages:
-                    t = page.extract_text()
-                    if t: content_text += t + "\n"
-            except Exception:
-                uploaded_file.seek(0)
-                raw_bytes = uploaded_file.read()
-                matches = re.findall(rb"[\x20-\x7E\x80-\xFF]{4,}", raw_bytes)
-                content_text = " ".join([m.decode('utf-8', errors='ignore') for m in matches[:100]])
-        elif fname.endswith(".hwpx"):
-            uploaded_file.seek(0)
-            in_zip = zipfile.ZipFile(io.BytesIO(uploaded_file.read()), 'r')
-            for item in in_zip.infolist():
-                if item.filename.startswith('Contents/section') and item.filename.endswith('.xml'):
-                    xml_data = in_zip.read(item.filename).decode('utf-8', errors='ignore')
-                    clean_txt = re.sub(r'<[^>]+>', ' ', xml_data)
-                    content_text += clean_txt + "\n"
-        elif fname.endswith(".txt"):
-            uploaded_file.seek(0)
-            content_text = uploaded_file.read().decode('utf-8', errors='ignore')
-    except Exception as e:
-        content_text = f"텍스트 추출 중 오류: {str(e)}"
-    
-    return content_text.strip()
-
-# -------------------------------------------------------------
-# 교육일지 100% 원본 일치 HTML 생성 헬퍼 함수
-# -------------------------------------------------------------
-def build_exact_edu_html(edu_date, writer_name, tag_sign_writer, tag_sign_approver, type_list_html, custom_subj, formatted_content_html, edu_instructor, edu_place, edu_time, edu_special_note, staff_rows_html):
-    date_str = edu_date.strftime('%Y 년   %m 월   %d 일')
-    html_text = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-    @page {{ size: A4; margin: 15mm; }}
-    body {{ font-family: 'Batang', '바탕', 'Malgun Gothic', serif; color: #000; font-size: 12px; line-height: 1.4; margin: 0 auto; width: 680px; }}
-    .title-wrap {{ text-align: center; margin-top: 10px; margin-bottom: 12px; }}
-    .main-title {{ font-size: 21px; font-weight: bold; text-decoration: underline; text-underline-offset: 5px; letter-spacing: 2px; }}
-    .header-info-wrap {{ display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; }}
-    .meta-left {{ font-size: 12.5px; line-height: 1.8; }}
-    table.approval-box {{ border-collapse: collapse; width: 210px; height: 65px; text-align: center; }}
-    table.approval-box th, table.approval-box td {{ border: 1px solid #000; font-size: 11.5px; padding: 2px; }}
-    table.main-form {{ width: 100%; border-collapse: collapse; border: 1.5px solid #000; margin-bottom: 20px; }}
-    table.main-form th, table.main-form td {{ border: 1px solid #000; padding: 6px 8px; vertical-align: middle; }}
-    .col-header {{ text-align: center; font-weight: bold; width: 15%; background: #ffffff; }}
-    .page-break {{ page-break-before: always; margin-top: 40px; }}
-</style></head><body>
-    <div class="title-wrap">
-        <div class="main-title">안전 · 보건 교육 실시일지</div>
-    </div>
-    <div class="header-info-wrap">
-        <div class="meta-left">
-            <div>○ 작성일자 : {date_str}</div>
-            <div>○ 작성자 : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>(인)</b></div>
-        </div>
-        <table class="approval-box">
-            <tr style="height:22px; font-weight:bold;">
-                <th rowspan="2" style="width:25px;">결<br><br>재</th>
-                <th style="width:60px;">담 당</th>
-                <th style="width:60px;">결&nbsp;&nbsp;재</th>
-                <th style="width:65px;"></th>
-            </tr>
-            <tr style="height:43px;">
-                <td>{tag_sign_writer}</td>
-                <td>{tag_sign_approver}</td>
-                <td></td>
-            </tr>
-        </table>
-    </div>
-    <table class="main-form">
-        <tr>
-            <td class="col-header" style="height: 100px;">교 육 의<br><br>구&nbsp;&nbsp;&nbsp;&nbsp;분</td>
-            <td colspan="4" style="padding: 10px 18px;">
-                {type_list_html}
-            </td>
-        </tr>
-        <tr style="text-align:center; height:24px; font-weight:bold;">
-            <td class="col-header" rowspan="2">교&nbsp;&nbsp;&nbsp;&nbsp;육<br><br>인&nbsp;&nbsp;&nbsp;&nbsp;원</td>
-            <td style="width:22%;">구&nbsp;&nbsp;&nbsp;&nbsp;분</td>
-            <td style="width:16%;">계</td>
-            <td style="width:16%;">남</td>
-            <td style="width:16%;">여</td>
-            <td style="width:18%;">교육미실시 사유</td>
-        </tr>
-        <tr style="text-align:center; height:24px;">
-            <td style="font-weight:bold;">교육대상자 수</td>
-            <td>5 명</td><td>5 명</td><td>0 명</td>
-            <td rowspan="3" style="font-size:11px; color:#333;"></td>
-        </tr>
-        <tr style="text-align:center; height:24px;">
-            <td class="col-header" rowspan="2"></td>
-            <td style="font-weight:bold;">교육실시자 수</td>
-            <td>5 명</td><td>5 명</td><td>0 명</td>
-        </tr>
-        <tr style="text-align:center; height:24px;">
-            <td style="font-weight:bold;">교육미실시자 수</td>
-            <td>0 명</td><td>0 명</td><td>0 명</td>
-        </tr>
-        <tr>
-            <td class="col-header">교&nbsp;&nbsp;&nbsp;&nbsp;육<br>과&nbsp;&nbsp;&nbsp;&nbsp;목</td>
-            <td colspan="4" style="padding-left:15px; font-weight:bold; font-size:13px;">
-                {custom_subj}
-            </td>
-        </tr>
-        <tr style="height: 140px;">
-            <td class="col-header">교&nbsp;&nbsp;&nbsp;&nbsp;육<br><br>내&nbsp;&nbsp;&nbsp;&nbsp;용</td>
-            <td colspan="4" style="vertical-align: top; padding: 10px 15px; line-height: 1.6; font-weight: 500;">
-                {formatted_content_html}
-            </td>
-        </tr>
-        <tr style="height: 65px;">
-            <td class="col-header">교육실시자<br>및<br>장&nbsp;&nbsp;&nbsp;&nbsp;소</td>
-            <td colspan="4" style="padding-left: 15px; line-height: 1.7;">
-                <b>교육실시자 :</b> {edu_instructor}<br>
-                <b>교육장소 :</b> {edu_place}<br>
-                <b>교육시간 :</b> {edu_time}
-            </td>
-        </tr>
-        <tr style="height: 40px;">
-            <td class="col-header">특&nbsp;&nbsp;&nbsp;&nbsp;기<br>사&nbsp;&nbsp;&nbsp;&nbsp;항</td>
-            <td colspan="4" style="padding-left: 15px;">
-                {edu_special_note}
-            </td>
-        </tr>
-    </table>
-    <div class="page-break"></div>
-    <div style="text-align: center; font-size: 17px; font-weight: bold; margin-bottom: 12px; letter-spacing: 2px;">
-        안전보건교육 참석자 명단
-    </div>
-    <table class="main-form" style="font-size: 11px;">
-        <tr style="background:#ffffff; text-align:center; font-weight:bold; height:26px;">
-            <td style="width:7%;">연번</td><td style="width:18%;">소 속</td><td style="width:15%;">성 명</td><td style="width:10%;">날 인</td>
-            <td style="width:7%;">연번</td><td style="width:18%;">소 속</td><td style="width:15%;">성 명</td><td style="width:10%;">날 인</td>
-        </tr>
-        {staff_rows_html}
-    </table>
-    <div style="text-align:center; font-size:10px; color:#888; margin-top:5px;">- 7 -</div>
-</body></html>"""
-    return html_text
-
 # -------------------------------------------------------------
 # 16. 로그인 검증 및 메인 실행
 # -------------------------------------------------------------
@@ -1511,11 +1365,11 @@ st.markdown("""
 <div class="hero-banner">
     <div class="hero-title-wrap">
         <h1 class="hero-title">💧 DANWOL AI-WaterOps 360</h1>
-        <div class="hero-subtitle">단월 본장(1,700 ㎥/일) 및 소규모 6개소 · 안전보건 관리 & 디지털 트윈 관제 플랫폼</div>
+        <div class="hero-subtitle">단월 본장(1,700 ㎥/일) 및 소규모 6개소(산음/삼가리/진목/몰운/단월마을/당의) · 지능형 자율제어 디지털 트윈 플랫폼</div>
     </div>
     <div class="badge-group">
         <div class="badge-online"><span class="badge-dot"></span>SYSTEM ONLINE</div>
-        <div class="badge-subinfo">Safety / K-HAS / TMS / Small-Plant Sync Active</div>
+        <div class="badge-subinfo">K-HAS / TMS / Small-Plant Sync Active</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1527,9 +1381,8 @@ if st.sidebar.button("로그아웃", use_container_width=True):
     st.session_state.user_role = None
     st.rerun()
 
-st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음·삼가리·진목·몰운·단월마을·당의\n📌 **개인하수 6개소**: 석산리·음지·양지·복지회관·인이피·돌고개\n📌 **안전/보건**: TBM 회의록 & 안전보건교육 실시일지")
+st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음(SWPP)·삼가리(SBR)·진목(SOD)·몰운(IC-SBR)·단월마을(IC-SBR)·당의(IC-SBR)\n📌 **개인하수 6개소**: 석산리·음지·양지·복지회관·인이피·돌고개")
 
-# 8대 전체 메뉴 등록
 menu = st.sidebar.radio(
     "⚡ 지능형 기능 메뉴",
     [
@@ -1539,8 +1392,7 @@ menu = st.sidebar.radio(
         "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단",
         "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석",
         "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)",
-        "📝 7. TBM 표준회의록 AI 자동작성/출력",
-        "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 & 월별보관"
+        "📝 7. TBM 표준회의록 AI 자동작성/출력"
     ]
 )
 
@@ -2513,7 +2365,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
         st.session_state.messages.append({"role": "assistant", "content": response_text})
 
 # -------------------------------------------------------------
-# 7. TBM 표준 회의록 모듈
+# 7. TBM 표준 회의록 모듈 (AI 자동완성 + 실시간 직접 수정 및 즉시 반영)
 # -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
@@ -2566,11 +2418,12 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         
         selected_job = st.selectbox("금일 작업명 선택 (또는 직접 입력)", list(ai_risk_db.keys()) + ["직접 입력"])
         
-        # AI 작업명 분석 및 자동 생성
+        # --- AI 작업명 분석 및 자동 생성 엔진 ---
         if selected_job == "직접 입력":
             custom_job = st.text_input("직접 작업명 입력", "탈수기 점검")
             tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"], index=1)
             
+            # 작업명 키워드 기반 AI 지능형 시나리오 매칭
             if any(k in custom_job for k in ["탈수기", "탈수", "여과포", "스크류"]):
                 def_desc = "원심탈수기 전기판넬 점검, 롤러 및 스크류 컨베이어 구동 상태 확인 및 세척"
                 def_r1, def_s1 = "회전체(롤러/스크류) 점검 중 신체 말림 및 끼임 위험", "LOTO 잠금 및 전원 차단 표지 부착, 비상정지장치 사전 점검"
@@ -2606,13 +2459,19 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             def_r2, def_s2 = r_list[1] if len(r_list) > 1 else ("", "")
             def_r3, def_s3 = r_list[2] if len(r_list) > 2 else ("", "")
 
+        # 1단계: 세부 작업 내용 (AI 자동생성 / 직접 수정 가능)
         job_desc = st.text_area("작업 세부 내용 (AI 자동생성 / 직접 수정 가능)", value=def_desc, key=f"tbm_desc_{custom_job[:6]}")
 
+        # 2단계: 위험요인 및 감소대책 (AI 자동완성 / 직접 수정 가능)
         st.markdown("##### ⚠️ AI 추천 유해·위험요인 및 감소대책 (실시간 수정 가능)")
+        st.caption("💡 작업명에 맞게 AI가 추천한 문구입니다. 필요시 자유롭게 편집하면 미리보기에 실시간 반영됩니다.")
+        
         r1 = st.text_input("위험요인 ①", value=def_r1, key=f"tbm_r1_{custom_job[:6]}")
         s1 = st.text_input("감소대책 ①", value=def_s1, key=f"tbm_s1_{custom_job[:6]}")
+        
         r2 = st.text_input("위험요인 ②", value=def_r2, key=f"tbm_r2_{custom_job[:6]}")
         s2 = st.text_input("감소대책 ②", value=def_s2, key=f"tbm_s2_{custom_job[:6]}")
+        
         r3 = st.text_input("위험요인 ③", value=def_r3, key=f"tbm_r3_{custom_job[:6]}")
         s3 = st.text_input("감소대책 ③", value=def_s3, key=f"tbm_s3_{custom_job[:6]}")
 
@@ -2794,211 +2653,3 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
                 st.components.v1.html(view_html_data, height=650, scrolling=True)
     else:
         st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
-
-# -------------------------------------------------------------
-# 8. 안전·보건 교육 실시일지 및 안내 (원본 100% 일치화 서식 적용)
-# -------------------------------------------------------------
-elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 & 월별보관":
-    st.title("📋 단월처리시설 안전·보건 교육 실시일지 & 안내 자동작성기")
-    st.caption("🔒 공인 원본 양식 1:1 완벽 일치 · 결재라인(담당/결재) 전자서명 · 교안 텍스트 AI 자동 추출 & 요약 보관 · 내부직원 5인 명단")
-
-    tab_edu_write, tab_edu_archive = st.tabs([
-        "✍️ [작성] 교육일지 AI 자동작성 & 전자서명",
-        "🗂️ [보관함] 연도/월별 교육일지 & 추출 교안 관리"
-    ])
-
-    edu_subject_db = {
-        "근골격계질환 예방과 관리": {
-            "type": "4. 일반 안전보건교육    (매반기 12시간이상)",
-            "hours": "09:00 ~ 09:30",
-            "place": "단월공공하수처리시설 사무실",
-            "instructor": "주영규 시설장",
-            "note": "게시물-스트레칭으로 여는 작업 시작",
-            "content": """1. 근골격계질환이란?
-2. 근골격계질환 발생단계
-3. 근골격계질환 종류
-4. 근골격계질환 위험요인
-5. 근골격계 부담작업의 범위
-6. 올바른 작업자세 및 들기자세
-7. 근골격계질환 예방 스트레칭"""
-        },
-        "고열·폭염 작업 및 온열질환 예방": {
-            "type": "4. 일반 안전보건교육    (매반기 12시간이상)",
-            "hours": "09:00 ~ 09:30",
-            "place": "단월공공하수처리시설 사무실",
-            "instructor": "주영규 시설장",
-            "note": "폭염안전 5대 기본수칙 포스터 게시 및 보냉장구 지급 완료",
-            "content": """1. 폭염작업 안전보건 5대 기본수칙 (물, 냉방장치, 휴식, 보냉장구, 119신고)
-2. 온열질환 종류(열사병, 열탈진, 열경련, 열실신)별 주요 증상 및 응급처치 요령
-3. 체감온도 단계별(33℃, 35℃, 38℃) 조치사항 및 옥외작업 관리기준"""
-        },
-        "밀폐공간 질식재해 예방 및 복합가스 측정 요령": {
-            "type": "3. 특별 안전보건교육    (16시간 이상)",
-            "hours": "09:00 ~ 09:30",
-            "place": "단월공공하수처리시설 사무실",
-            "instructor": "주영규 시설장",
-            "note": "복합가스농도측정기 및 송풍기 작동 점검 완료",
-            "content": """1. 밀폐공간 출입 전 산소(18% 이상) 및 유해가스(H2S, CO 등) 농도 사전 측정
-2. 송풍기를 이용한 30분 이상 연속 강제 환기 및 LOTO 전원 차단 철저
-3. 비상 구조용 삼각대, 송기마스크 및 구명줄 착용 상태 점검"""
-        }
-    }
-
-    with tab_edu_write:
-        col_e1, col_e2 = st.columns([1.1, 0.9])
-        
-        with col_e1:
-            st.subheader("1️⃣ 교육 기본정보 & AI 자동생성")
-            edu_date = st.date_input("교육 실시 일자", datetime.date(2026, 8, 20), key="edu_date_in_v850")
-            
-            st.markdown("##### 📎 1단계: 교안/자료 업로드 및 AI 자동 추출")
-            uploaded_edu_files = st.file_uploader(
-                "교안(PDF, HWPX) 또는 포스터/사진 파일 업로드 (복수 지원)",
-                type=["pdf", "png", "jpg", "jpeg", "hwpx", "hwp", "txt"],
-                accept_multiple_files=True,
-                key="up_edu_files_v850"
-            )
-
-            extracted_summary = ""
-            detected_subject = ""
-            detected_note = ""
-            if uploaded_edu_files:
-                for up_f in uploaded_edu_files:
-                    fname_l = up_f.name.lower()
-                    if "근골격" in fname_l:
-                        detected_subject = "근골격계질환 예방과 관리"
-                        detected_note = "게시물-스트레칭으로 여는 작업 시작"
-                        extracted_summary = edu_subject_db["근골격계질환 예방과 관리"]["content"]
-                    elif "폭염" in fname_l or "온열" in fname_l:
-                        detected_subject = "고열·폭염 작업 및 온열질환 예방"
-                        detected_note = "폭염안전 5대 기본수칙 포스터 게시 및 보냉장구 지급 완료"
-                        extracted_summary = edu_subject_db["고열·폭염 작업 및 온열질환 예방"]["content"]
-
-                if detected_subject:
-                    st.success(f"💡 업로드된 교안에서 **'{detected_subject}'** 표준 교육내용이 감지되었습니다!")
-                    if st.button("⚡ [추출된 교안 내용으로 교육양식 자동 채우기]", type="primary", key="btn_auto_fill_v850"):
-                        st.session_state["auto_filled_subj"] = detected_subject
-                        st.session_state["auto_filled_content"] = extracted_summary
-                        st.session_state["auto_filled_note"] = detected_note
-                        st.rerun()
-
-            st.markdown("##### 📝 2단계: 교육과목 및 세부내용 확인/수정")
-            default_subj_choice = st.session_state.get("auto_filled_subj", "근골격계질환 예방과 관리")
-            sel_edu_subj = st.selectbox(
-                "교육 과목 선택 (또는 직접 입력)", 
-                list(edu_subject_db.keys()) + ["직접 입력"],
-                index=list(edu_subject_db.keys()).index(default_subj_choice) if default_subj_choice in edu_subject_db else 0
-            )
-            
-            if sel_edu_subj == "직접 입력":
-                custom_subj = st.text_input("직접 교육과목 입력", "근골격계질환 예방과 관리")
-                def_type = "4. 일반 안전보건교육    (매반기 12시간이상)"
-                def_place = "단월공공하수처리시설 사무실"
-                def_hours = "09:00 ~ 09:30"
-                def_inst = "주영규 시설장"
-                def_note = st.session_state.get("auto_filled_note", "게시물-스트레칭으로 여는 작업 시작")
-                def_content = st.session_state.get("auto_filled_content", "1. 근골격계질환이란?\n2. 올바른 작업자세\n3. 예방 스트레칭")
-            else:
-                target_edu = edu_subject_db[sel_edu_subj]
-                custom_subj = sel_edu_subj
-                def_type = target_edu["type"]
-                def_place = target_edu["place"]
-                def_hours = target_edu["hours"]
-                def_inst = target_edu["instructor"]
-                def_note = st.session_state.get("auto_filled_note", target_edu.get("note", "게시물-스트레칭으로 여는 작업 시작"))
-                def_content = st.session_state.get("auto_filled_content", target_edu["content"])
-
-            edu_type_sel = st.selectbox("교육의 구분", [
-                "4. 일반 안전보건교육    (매반기 12시간이상)",
-                "3. 특별 안전보건교육    (16시간 이상)",
-                "1. 신규 채용시 교육    (8 시간 이상)",
-                "2. 작업내용 변경시 교육 (2 시간 이상)",
-                "5. 관리감독자 교육      (16시간 이상)",
-                "6. 기타(                     )교육"
-            ], index=0 if "일반" in def_type else 1)
-
-            col_sub1, col_sub2 = st.columns(2)
-            with col_sub1:
-                edu_instructor = st.text_input("교육실시자", value=def_inst)
-                edu_place = st.text_input("교육장소", value=def_place)
-            with col_sub2:
-                edu_time = st.text_input("교육시간", value=def_hours)
-                edu_special_note = st.text_input("특기사항", value=def_note)
-
-            edu_content = st.text_area("교육내용 (수정 가능)", value=def_content, height=150)
-
-        with col_e2:
-            st.subheader("2️⃣ 결재란 서명 & 내부직원 5인 명단")
-            
-            st.markdown("##### 🏛️ 상단 결재란 (담당 / 결재)")
-            col_sign_meta1, col_sign_meta2 = st.columns(2)
-            with col_sign_meta1:
-                writer_name = st.text_input("작성자(담당) 성명", value="이현진")
-            with col_sign_meta2:
-                approver_name = st.text_input("결재자(시설장) 성명", value="주영규")
-
-            col_pad1, col_pad2 = st.columns(2)
-            with col_pad1:
-                st.caption("✍️ **작성자(담당) 서명**")
-                canvas_writer = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_writer_v850")
-            with col_pad2:
-                st.caption("✍️ **결재자(시설장) 서명**")
-                canvas_approver = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_approver_v850")
-
-            st.markdown("##### 👥 단월처리시설 내부직원 참석자 명단 (5인)")
-            default_staff = [
-                ("1", "환경 2팀", "주영규"),
-                ("2", "환경 2팀", "이홍섭"),
-                ("3", "환경 2팀", "하신호"),
-                ("4", "환경 2팀", "최태수"),
-                ("5", "환경 2팀", "이현진")
-            ]
-            
-            staff_list = []
-            for num, d_dept, d_name in default_staff:
-                col_st1, col_st2, col_st3 = st.columns([1, 1.5, 1.5])
-                with col_st1: st.write(f"**연번 {num}**")
-                with col_st2: s_dept = st.text_input(f"소속 #{num}", value=d_dept, key=f"edu_dept_{num}_v850", label_visibility="collapsed")
-                with col_st3: s_name = st.text_input(f"성명 #{num}", value=d_name, key=f"edu_name_{num}_v850", label_visibility="collapsed")
-                staff_list.append((num, s_dept, s_name))
-
-        # 전자서명 이미지 인코딩
-        sign_writer_base64 = ""
-        if canvas_writer.image_data is not None and np.any(canvas_writer.image_data[:, :, 3] > 0):
-            img_w = Image.fromarray(canvas_writer.image_data.astype('uint8'), 'RGBA')
-            buf_w = io.BytesIO()
-            img_w.save(buf_w, format="PNG")
-            sign_writer_base64 = base64.b64encode(buf_w.getvalue()).decode()
-
-        sign_approver_base64 = ""
-        if canvas_approver.image_data is not None and np.any(canvas_approver.image_data[:, :, 3] > 0):
-            img_a = Image.fromarray(canvas_approver.image_data.astype('uint8'), 'RGBA')
-            buf_a = io.BytesIO()
-            img_a.save(buf_a, format="PNG")
-            sign_approver_base64 = base64.b64encode(buf_a.getvalue()).decode()
-
-        tag_sign_writer = f'<img src="data:image/png;base64,{sign_writer_base64}" style="max-height:35px;"/>' if sign_writer_base64 else f'<span style="font-family:\'Batang\', serif; font-size:12px;">{writer_name}</span>'
-        tag_sign_approver = f'<img src="data:image/png;base64,{sign_approver_base64}" style="max-height:35px;"/>' if sign_approver_base64 else f'<span style="font-family:\'Batang\', serif; font-size:12px;">{approver_name}</span>'
-
-        # 참석자 명단 행 생성
-        staff_rows_html = ""
-        for i in range(1, 26):
-            if i <= len(staff_list):
-                idx_l, dept_l, name_l = staff_list[i-1]
-                sign_l = "(인)" if name_l.strip() else ""
-            else:
-                idx_l, dept_l, name_l, sign_l = str(i), "", "", ""
-
-            idx_r = str(i + 25)
-            dept_r, name_r, sign_r = "", "", ""
-
-            staff_rows_html += f"""
-            <tr style="text-align:center; height:23px;">
-                <td style="width:7%; font-weight:bold; font-size:11px;">{idx_l}</td>
-                <td style="width:18%; font-size:11px;">{dept_l}</td>
-                <td style="width:15%; font-weight:bold; font-size:11px;">{name_l}</td>
-                <td style="width:10%; font-size:10px; color:#555;">{sign_l}</td>
-                <td style="width:7%; font-weight:bold; font-size:11px;">{idx_r}</td>
-                <td style="width:18%; font-size:11px;">{dept_r}</td>
-                <td style="width:15%; font-size:11px;">{name_r}</td>
-                <td style="width:10%; font-size:10px; color:#555I encountered an error doing what you asked. Could you try again?
