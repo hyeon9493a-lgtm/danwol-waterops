@@ -1317,346 +1317,167 @@ def fill_private_annual_workbook(priv_dict, year=None):
     return buf.getvalue()
 
 # -------------------------------------------------------------
-# 1. 엑셀 변환 작업대
+# 교육일지 100% 원본 일치 HTML 생성 헬퍼 함수
 # -------------------------------------------------------------
-if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 자동 완성":
-    st.title("📑 운영일지 및 실험실 데이터 업로드 ➜ 하수도정보시스템 공인 양식 자동 완성")
-    st.caption("🔒 운영일지(1월~8월) 1:1 완벽 직결 · 소규모/개인 12개 탭 대장 완성 · 유량/수온/수질 12인자 정밀 매핑")
-
-    tab_work, tab_archive, tab_accum = st.tabs([
-        "🚀 엑셀 변환 및 다운로드 작업대",
-        "🗂️ 월별 공인 엑셀 보관함 & 관리 (년/월별 검색/삭제)",
-        "📊 ⚡ [분기별 / 상하반기 / 연간 통합] 누적 엑셀 일괄 생성"
-    ])
-
-    with tab_work:
-        fac_category = st.radio(
-            "🎯 작업할 시설 그룹 선택",
-            ["🏢 본처리장 (단월)", "🏡 소규모 처리시설 (산음/삼가리/진목/몰운/단월마을/당의)", "🛖 개인하수 처리시설 (석산리/음지/양지/복지회관/인이피/돌고개)"],
-            horizontal=True
-        )
-        st.divider()
-
-        if fac_category == "🏢 본처리장 (단월)":
-            st.subheader("🏢 단월 본장 (운영일지 복수 파일 업로드)")
-            files_main_all = st.file_uploader(
-                "단월 본장 관련 엑셀 파일들을 모두 선택하여 업로드하세요 (복수 파일 지원)",
-                type=["xlsx", "xls"],
-                accept_multiple_files=True,
-                key="up_main_all_perfect_full_sync_v250"
-            )
-
-            if files_main_all:
-                df_dw_comb = universal_main_plant_parser(files_main_all)
-                if not df_dw_comb.empty:
-                    st.success(f"✅ 단월 본장 데이터 총 **{len(df_dw_comb)}일치**가 운영일지 원본에서 1:1로 성공적으로 추출되었습니다!")
-                    st.dataframe(df_dw_comb, use_container_width=True)
-
-                    sample_dt = str(df_dw_comb.iloc[0]['날짜'])[:7]
-                    curr_parsed_year = int(sample_dt.split('-')[0])
-
-                    main_filled_bytes = fill_exact_main_template(df_dw_comb)
-                    reuse_filled_bytes = fill_exact_reuse_template(df_dw_comb)
-                    monthly_wq_bytes = fill_danwol_monthly_report_workbook(df_dw_comb, year=curr_parsed_year)
-                    annual_wq_bytes = fill_danwol_annual_report_workbook(df_dw_comb, year=curr_parsed_year)
-
-                    st.markdown("##### 📥 완성된 4대 엑셀 서식 다운로드 (공인 양식 & 수질월보)")
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.download_button(f"📥 {curr_parsed_year}년 월별수질(단월).xlsx (1~12월 탭 수질월보) 다운로드", monthly_wq_bytes, f"{curr_parsed_year}년_월별수질(단월)_{sample_dt}.xlsx", use_container_width=True, type="primary")
-                        st.download_button("📥 유량및수질관리.xlsx (단월본장 51열 공인 서식) 다운로드", main_filled_bytes, f"유량및수질관리_단월_{sample_dt}.xlsx", use_container_width=True, type="primary")
-                    with c2:
-                        st.download_button(f"📥 {curr_parsed_year}년 연간수질 데이터(단월).xlsx (365일 연간 수질대장) 다운로드", annual_wq_bytes, f"연간수질_데이터(단월)_{sample_dt}.xlsx", use_container_width=True, type="primary")
-                        st.download_button("📥 재이용수 업로드양식(최종).xlsx (20열 공인 서식) 다운로드", reuse_filled_bytes, f"재이용수_업로드양식_{sample_dt}.xlsx", use_container_width=True)
-
-                    st.write("")
-                    if st.button("💾 ⚡ [월별 보관함 저장 & 누적 DB 적재 (전체 양식 포함)]", use_container_width=True, key="btn_save_main_full_sync_v250"):
-                        save_f1 = os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_단월_{sample_dt}.xlsx")
-                        save_f2 = os.path.join(KHAS_RECORD_DIR, f"재이용수 업로드양식(최종)_{sample_dt}.xlsx")
-                        save_f3 = os.path.join(KHAS_RECORD_DIR, f"{curr_parsed_year}년_월별수질(단월)_{sample_dt}.xlsx")
-                        save_f4 = os.path.join(KHAS_RECORD_DIR, f"연간수질_데이터(단월)_{sample_dt}.xlsx")
-                        with open(save_f1, "wb") as f: f.write(main_filled_bytes)
-                        with open(save_f2, "wb") as f: f.write(reuse_filled_bytes)
-                        with open(save_f3, "wb") as f: f.write(monthly_wq_bytes)
-                        with open(save_f4, "wb") as f: f.write(annual_wq_bytes)
-                        append_to_master_db(MAIN_PLANT, df_dw_comb)
-                        st.success(f"✅ '{sample_dt}' ({curr_parsed_year}년) 단월 본장 파일 4종이 보관함 및 마스터 DB에 안전하게 보관되었습니다!")
-
-        elif fac_category == "🏡 소규모 처리시설 (산음/삼가리/진목/몰운/단월마을/당의)":
-            st.subheader("🏡 소규모 6개소 (소규모 운영일지 + 실험실 수질 엑셀 복수 파일 업로드)")
-            files_small_all = st.file_uploader("소규모 관련 엑셀 파일들을 모두 선택하여 업로드하세요 (복수 파일 지원)", type=["xlsx", "xls"], accept_multiple_files=True, key="up_small_all_perfect_full_sync_v250")
-
-            if files_small_all:
-                small_comb_dict = universal_small_plant_parser(files_small_all)
-                extracted_cnt = sum(1 for df in small_comb_dict.values() if not df.empty)
-
-                if extracted_cnt > 0:
-                    st.success("✅ 소규모 **6개소(진목, 산음, 몰운, 삼가리, 단월마을, 당의)**의 데이터 추출 및 수질대장 완성이 완료되었습니다!")
-                    sample_dt = "2024-08"
-                    for df_t in small_comb_dict.values():
-                        if not df_t.empty:
-                            sample_dt = str(df_t.iloc[0]['날짜'])[:7]
-                            break
-
-                    try:
-                        curr_parsed_year = int(sample_dt.split('-')[0])
-                        if not (2010 <= curr_parsed_year <= 2035): curr_parsed_year = 2024
-                    except Exception:
-                        curr_parsed_year = 2024
-
-                    small_annual_bytes = fill_small_annual_workbook(small_comb_dict, year=curr_parsed_year)
-                    
-                    zip_buf = io.BytesIO()
-                    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                        for fac in SMALL_PLANTS:
-                            df_sub = small_comb_dict.get(fac, pd.DataFrame())
-                            sub_bytes = fill_exact_small_template(df_sub, fac)
-                            zf.writestr(f"유량및수질관리 업로드양식({fac}).xlsx", sub_bytes)
-
-                    c_s1, c_s2 = st.columns([1.2, 1])
-                    with c_s1:
-                        st.download_button(f"📥 1. 소규모({curr_parsed_year}).xlsx (1~12월 탭 소규모 수질대장) 다운로드", small_annual_bytes, f"1.소규모({curr_parsed_year})_{sample_dt}.xlsx", use_container_width=True, type="primary")
-                        st.download_button("📦 [소규모 6개소 공인 24열 압축팩(.zip)] 다운로드", zip_buf.getvalue(), f"소규모6개소_하수도정보시스템_업로드양식_{sample_dt}.zip", use_container_width=True, type="primary")
-                    with c_s2:
-                        if st.button("💾 ⚡ [소규모 6개소 월별 보관 & 누적 DB 적재]", use_container_width=True, key="btn_save_small_perfect_full_sync_v250"):
-                            save_f_main = os.path.join(KHAS_RECORD_DIR, f"1.소규모({curr_parsed_year})_{sample_dt}.xlsx")
-                            with open(save_f_main, "wb") as f: f.write(small_annual_bytes)
-                            for fac in SMALL_PLANTS:
-                                df_sub = small_comb_dict.get(fac, pd.DataFrame())
-                                sub_bytes = fill_exact_small_template(df_sub, fac)
-                                save_f = os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_업로드양식({fac})_{sample_dt}.xlsx")
-                                with open(save_f, "wb") as f: f.write(sub_bytes)
-                                append_to_master_db(fac, df_sub)
-                            st.success(f"✅ '{sample_dt}' ({curr_parsed_year}년) 소규모 6개 시설 엑셀 파일 및 수질대장이 [월별 보관함] 및 [누적 DB]에 일괄 적재되었습니다!")
-
-                    st.markdown("##### 🔍 시설별 개별 데이터 조회 및 개별 엑셀 다운로드")
-                    sel_s_fac = st.selectbox("조회할 소규모 시설 선택", SMALL_PLANTS)
-                    df_s_sel = small_comb_dict.get(sel_s_fac, pd.DataFrame())
-                    if not df_s_sel.empty:
-                        st.dataframe(df_s_sel, use_container_width=True)
-                        single_s_bytes = fill_exact_small_template(df_s_sel, sel_s_fac)
-                        st.download_button(f"📥 유량및수질관리 업로드양식({sel_s_fac}).xlsx 개별 다운로드", single_s_bytes, f"유량및수질관리 업로드양식({sel_s_fac})_{sample_dt}.xlsx", use_container_width=True)
-
-        elif fac_category == "🛖 개인하수 처리시설 (석산리/음지/양지/복지회관/인이피/돌고개)":
-            st.subheader("🛖 개인하수 6개소 (개인소규모 엑셀 복수 파일 업로드)")
-            files_priv_all = st.file_uploader("개인소규모 엑셀 파일들 선택 (복수 파일 지원)", type=["xlsx", "xls"], accept_multiple_files=True, key="up_priv_all_perfect_full_sync_v250")
-
-            if files_priv_all:
-                priv_dict = parse_private_plant_multi_files(files_priv_all)
-                extracted_p_count = sum(1 for df in priv_dict.values() if not df.empty)
-
-                if extracted_p_count > 0:
-                    st.success("✅ 개인하수 **6개소(석산리, 음지, 양지, 복지회관, 인이피, 돌고개)** 데이터가 완벽하게 추출되었습니다!")
-                    sample_dt = "2024-08"
-                    for df_t in priv_dict.values():
-                        if not df_t.empty:
-                            sample_dt = str(df_t.iloc[0]['날짜'])[:7]
-                            break
-
-                    try:
-                        curr_parsed_year = int(sample_dt.split('-')[0])
-                        if not (2010 <= curr_parsed_year <= 2035): curr_parsed_year = 2024
-                    except Exception:
-                        curr_parsed_year = 2024
-
-                    priv_annual_bytes = fill_private_annual_workbook(priv_dict, year=curr_parsed_year)
-                    
-                    zip_p_buf = io.BytesIO()
-                    with zipfile.ZipFile(zip_p_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                        for fac in PRIVATE_PLANTS:
-                            df_p = priv_dict.get(fac, pd.DataFrame())
-                            sub_bytes = fill_exact_small_template(df_p, fac)
-                            zf.writestr(f"유량및수질관리 업로드양식({fac}).xlsx", sub_bytes)
-
-                    c_p1, c_p2 = st.columns([1.2, 1])
-                    with c_p1:
-                        st.download_button(f"📥 개인소규모({curr_parsed_year}년)+단월.xlsx (6개소 시트별 대장) 다운로드", priv_annual_bytes, f"개인소규모({curr_parsed_year}년)+단월_{sample_dt}.xlsx", use_container_width=True, type="primary")
-                        st.download_button("📦 [개인하수 6개소 공인 24열 압축팩(.zip)] 다운로드", zip_p_buf.getvalue(), f"개인하수6개소_하수도정보시스템_업로드양식_{sample_dt}.zip", use_container_width=True, type="primary")
-                    with c_p2:
-                        if st.button("💾 ⚡ [개인하수 6개소 월별 보관 & 누적 DB 적재]", use_container_width=True, key="btn_save_priv_perfect_full_sync_v250"):
-                            save_f_p = os.path.join(KHAS_RECORD_DIR, f"개인소규모({curr_parsed_year}년)+단월_{sample_dt}.xlsx")
-                            with open(save_f_p, "wb") as f: f.write(priv_annual_bytes)
-                            for fac in PRIVATE_PLANTS:
-                                df_p = priv_dict.get(fac, pd.DataFrame())
-                                sub_bytes = fill_exact_small_template(df_p, fac)
-                                save_f = os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_업로드양식({fac})_{sample_dt}.xlsx")
-                                with open(save_f, "wb") as f: f.write(sub_bytes)
-                                append_to_master_db(fac, df_p)
-                            st.success(f"✅ '{sample_dt}' ({curr_parsed_year}년) 개인하수 6개 시설 엑셀 파일 및 수질대장이 [월별 보관함] 및 [누적 DB]에 일괄 적재되었습니다!")
-
-                    st.markdown("##### 🔍 시설별 개별 데이터 조회 및 개별 엑셀 다운로드 (수온 제외 7개 항목)")
-                    sel_p_fac = st.selectbox("조회할 개인하수 시설 선택", PRIVATE_PLANTS)
-                    df_p_sel = priv_dict.get(sel_p_fac, pd.DataFrame())
-                    if not df_p_sel.empty:
-                        st.dataframe(df_p_sel[['날짜', '유입BOD', '유입SS', '방류BOD', '방류SS', '유입량', '방류량']], use_container_width=True)
-                        single_p_bytes = fill_exact_small_template(df_p_sel, sel_p_fac)
-                        st.download_button(f"📥 유량및수질관리 업로드양식({sel_p_fac}).xlsx 개별 다운로드", single_p_bytes, f"유량및수질관리 업로드양식({sel_p_fac})_{sample_dt}.xlsx", use_container_width=True)
-
-    # 1-2. 월별 공인 엑셀 보관함
-    with tab_archive:
-        st.subheader("🗂️ 월별 공인 업로드 엑셀 및 수질월보 보관함 영구 관리")
-        
-        col_c1, col_c2 = st.columns([2.5, 1.5])
-        with col_c2:
-            if st.button("🧹 [1984 등 비정상 파일명 ➜ 2024년으로 일괄 교정/정리]", use_container_width=True):
-                auto_sanitize_databases()
-                st.success("✅ 비정상 파일명이 올바른 연도로 교정되었습니다.")
-                st.rerun()
-
-        def parse_excel_file_info(filename):
-            match = re.search(r'(20[1-3]\d)[-_](\d{2})', filename)
-            if match:
-                y, m = int(match.group(1)), int(match.group(2))
-                return f"{y}년", f"{m:02d}월", datetime.date(y, m, 1)
-            
-            match_y = re.search(r'(20[1-3]\d)', filename)
-            if match_y:
-                y = int(match_y.group(1))
-                return f"{y}년", "01월", datetime.date(y, 1, 1)
-            
-            if "1984" in filename or "2024" in filename:
-                return "2024년", "01월", datetime.date(2024, 1, 1)
-            
-            return "2024년", "01월", datetime.date(2024, 1, 1)
-
-        saved_excel_files = [f for f in os.listdir(KHAS_RECORD_DIR) if f.endswith(".xlsx") or f.endswith(".xls")]
-        base_years = ["2026년", "2025년", "2024년", "2023년", "2022년"]
-        if saved_excel_files:
-            detected_years = [parse_excel_file_info(f)[0] for f in saved_excel_files]
-            all_avail_years = sorted(list(set(base_years + detected_years)), reverse=True)
-        else:
-            all_avail_years = base_years
-
-        col_a1, col_a2 = st.columns(2)
-        with col_a1:
-            sel_archive_year = st.selectbox("📅 1단계: 기준 연도 선택", all_avail_years, index=0, key="sel_khas_arch_year_v250")
-        
-        all_month_choices = ["전체 월(연간/통합)"] + [f"{m:02d}월" for m in range(1, 13)]
-        with col_a2:
-            sel_archive_month = st.selectbox(f"📆 2단계: {sel_archive_year} 기준 월 선택", all_month_choices, index=0, key="sel_khas_arch_month_v250")
-
-        if saved_excel_files:
-            meta_list = [{"filename": f, "year": parse_excel_file_info(f)[0], "month": parse_excel_file_info(f)[1], "date": parse_excel_file_info(f)[2]} for f in saved_excel_files]
-            df_meta = pd.DataFrame(meta_list)
-            df_y_filt = df_meta[df_meta["year"] == sel_archive_year]
-            
-            if sel_archive_month == "전체 월(연간/통합)":
-                df_m_filt = df_y_filt.sort_values(by="filename")
-            else:
-                m_code = sel_archive_month.replace("월", "")
-                df_m_filt = df_y_filt[
-                    (df_y_filt["month"] == sel_archive_month) | 
-                    (df_y_filt["filename"].str.contains(f"_{m_code}")) |
-                    (df_y_filt["filename"].str.contains("연간")) |
-                    (df_y_filt["filename"].str.contains("소규모")) |
-                    (df_y_filt["filename"].str.contains("개인소규모"))
-                ].sort_values(by="filename")
-
-            archived_files_list = df_m_filt["filename"].tolist()
-
-            st.write(f"📁 **[{sel_archive_year} > {sel_archive_month}] 보관 문서: 총 {len(archived_files_list)}건의 엑셀 파일**")
-            
-            if archived_files_list:
-                col_target, col_delete = st.columns([3, 1])
-                with col_target:
-                    target_file_to_view = st.selectbox("열람 및 재다운로드할 엑셀 파일 선택", archived_files_list, key="sel_target_arch_file_v250")
-                with col_delete:
-                    st.write(""); st.write("")
-                    if st.button("🗑️ 선택 파일 영구 삭제", type="secondary", use_container_width=True, key="btn_del_khas_file_v250"):
-                        f_del_path = os.path.join(KHAS_RECORD_DIR, target_file_to_view)
-                        if os.path.exists(f_del_path):
-                            os.remove(f_del_path)
-                            st.success(f"🗑️ '{target_file_to_view}' 파일이 보관함에서 삭제되었습니다.")
-                            st.rerun()
-
-                if target_file_to_view:
-                    full_p = os.path.join(KHAS_RECORD_DIR, target_file_to_view)
-                    if os.path.exists(full_p):
-                        with open(full_p, "rb") as f: view_bytes = f.read()
-                        st.download_button(f"📥 선택된 보관 문서 다시 다운로드 ({target_file_to_view})", view_bytes, file_name=target_file_to_view, use_container_width=True)
-            else:
-                st.info(f"💡 [{sel_archive_year} {sel_archive_month}]에 저장된 문서가 없습니다.")
-        else:
-            st.info("💡 아직 [월별 보관함]에 저장된 엑셀 파일이 없습니다.")
-
-    with tab_accum:
-        st.subheader("📊 ⚡ [분기별 / 상하반기 / 연간 누적] 통합 엑셀 일괄 생성")
-        if os.path.exists(MASTER_ACCUM_DB):
-            df_m_all = pd.read_csv(MASTER_ACCUM_DB)
-            df_m_all['날짜_dt'] = pd.to_datetime(df_m_all['날짜'], errors='coerce')
-            avail_years = sorted([y for y in df_m_all['날짜_dt'].dt.year.dropna().unique().astype(int).tolist() if 2010 <= y <= 2035], reverse=True)
-            if not avail_years: avail_years = [2026, 2025, 2024]
-        else: avail_years = [2026, 2025, 2024]
-
-        c_p1, c_p2 = st.columns([1, 1.5])
-        with c_p1: sel_cum_year = st.selectbox("📅 대상 연도 선택", avail_years, key="cum_sel_year_v250")
-        with c_p2:
-            sel_period_type = st.selectbox(
-                "📆 누적 기간 단위 선택",
-                [
-                    "1분기 (01월 ~ 03월)", "2분기 (04월 ~ 06월)", "3분기 (07월 ~ 09월)", "4분기 (10월 ~ 12월)",
-                    "상반기 (01월 ~ 06월)", "하반기 (07월 ~ 12월)", "연간 전체 (01월 ~ 12월)", "직접 날짜 범위 지정"
-                ],
-                key="cum_period_type_v250"
-            )
-
-        if "1분기" in sel_period_type: s_date, e_date = f"{sel_cum_year}-01-01", f"{sel_cum_year}-03-31"
-        elif "2분기" in sel_period_type: s_date, e_date = f"{sel_cum_year}-04-01", f"{sel_cum_year}-06-30"
-        elif "3분기" in sel_period_type: s_date, e_date = f"{sel_cum_year}-07-01", f"{sel_cum_year}-09-30"
-        elif "4분기" in sel_period_type: s_date, e_date = f"{sel_cum_year}-10-01", f"{sel_cum_year}-12-31"
-        elif "상반기" in sel_period_type: s_date, e_date = f"{sel_cum_year}-01-01", f"{sel_cum_year}-06-30"
-        elif "하반기" in sel_period_type: s_date, e_date = f"{sel_cum_year}-07-01", f"{sel_cum_year}-12-31"
-        elif "연간" in sel_period_type: s_date, e_date = f"{sel_cum_year}-01-01", f"{sel_cum_year}-12-31"
-        else:
-            col_c_d1, col_c_d2 = st.columns(2)
-            with col_c_d1: s_date = str(st.date_input("시작 일자", datetime.date(sel_cum_year, 1, 1)))
-            with col_c_d2: e_date = str(st.date_input("종료 일자", datetime.date(sel_cum_year, 12, 31)))
-
-        st.write(f"📍 **선택된 누적 기간**: `{s_date}` ~ `{e_date}`")
-        st.divider()
-
-        col_cum1, col_cum2, col_cum3 = st.columns(3)
-        with col_cum1:
-            st.markdown("##### 🏢 단월 본장 누적 엑셀")
-            df_cum_main = get_master_data(MAIN_PLANT, s_date, e_date)
-            if not df_cum_main.empty:
-                cum_main_bytes = fill_exact_main_template(df_cum_main)
-                cum_monthly_wq = fill_danwol_monthly_report_workbook(df_cum_main, year=sel_cum_year)
-                st.download_button(f"📥 단월본장 수질월보 누적 다운로드 ({sel_period_type.split()[0]})", cum_monthly_wq, f"{sel_cum_year}년_월별수질(단월)_{sel_cum_year}_{sel_period_type.split()[0]}.xlsx", use_container_width=True, type="primary")
-                st.download_button(f"📥 단월본장 공인 51열 누적 엑셀 다운로드 ({sel_period_type.split()[0]})", cum_main_bytes, f"유량및수질관리_단월_{sel_cum_year}_{sel_period_type.split()[0]}.xlsx", use_container_width=True, type="primary")
-
-        with col_cum2:
-            st.markdown("##### 🏡 소규모 6개소 누적 엑셀")
-            has_small_cum = False
-            zip_cum_small_buf = io.BytesIO()
-            with zipfile.ZipFile(zip_cum_small_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                for fac in SMALL_PLANTS:
-                    df_s_cum = get_master_data(fac, s_date, e_date)
-                    if not df_s_cum.empty:
-                        has_small_cum = True
-                        sub_bytes = fill_exact_small_template(df_s_cum, fac)
-                        zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}_{sel_period_type.split()[0]}.xlsx", sub_bytes)
-            if has_small_cum:
-                st.download_button(f"📦 소규모 6개소 누적 ZIP 다운로드 ({sel_period_type.split()[0]})", zip_cum_small_buf.getvalue(), f"소규모6개소_누적통합_{sel_cum_year}_{sel_period_type.split()[0]}.zip", use_container_width=True, type="primary")
-
-        with col_cum3:
-            st.markdown("##### 🛖 개인하수 6개소 누적 엑셀")
-            has_priv_cum = False
-            zip_cum_priv_buf = io.BytesIO()
-            with zipfile.ZipFile(zip_cum_priv_buf, "w", zipfile.ZIP_DEFLATED) as zf:
-                for fac in PRIVATE_PLANTS:
-                    df_p_cum = get_master_data(fac, s_date, e_date)
-                    if not df_p_cum.empty:
-                        has_priv_cum = True
-                        sub_bytes = fill_exact_small_template(df_p_cum, fac)
-                        zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}_{sel_period_type.split()[0]}.xlsx", sub_bytes)
-            if has_priv_cum:
-                st.download_button(f"📦 개인하수 6개소 누적 ZIP 다운로드 ({sel_period_type.split()[0]})", zip_cum_priv_buf.getvalue(), f"개인하수6개소_누적통합_{sel_cum_year}_{sel_period_type.split()[0]}.zip", use_container_width=True, type="primary")
+def build_exact_edu_html(edu_date, writer_name, tag_sign_writer, tag_sign_approver, type_list_html, custom_subj, formatted_content_html, edu_instructor, edu_place, edu_time, edu_special_note, staff_rows_html):
+    date_str = edu_date.strftime('%Y 년   %m 월   %d 일')
+    html_text = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    @page {{ size: A4; margin: 15mm; }}
+    body {{ font-family: 'Batang', '바탕', 'Malgun Gothic', serif; color: #000; font-size: 12px; line-height: 1.4; margin: 0 auto; width: 680px; }}
+    .title-wrap {{ text-align: center; margin-top: 10px; margin-bottom: 12px; }}
+    .main-title {{ font-size: 21px; font-weight: bold; text-decoration: underline; text-underline-offset: 5px; letter-spacing: 2px; }}
+    .header-info-wrap {{ display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; }}
+    .meta-left {{ font-size: 12.5px; line-height: 1.8; }}
+    table.approval-box {{ border-collapse: collapse; width: 210px; height: 65px; text-align: center; }}
+    table.approval-box th, table.approval-box td {{ border: 1px solid #000; font-size: 11.5px; padding: 2px; }}
+    table.main-form {{ width: 100%; border-collapse: collapse; border: 1.5px solid #000; margin-bottom: 20px; }}
+    table.main-form th, table.main-form td {{ border: 1px solid #000; padding: 6px 8px; vertical-align: middle; }}
+    .col-header {{ text-align: center; font-weight: bold; width: 15%; background: #ffffff; }}
+    .page-break {{ page-break-before: always; margin-top: 40px; }}
+</style></head><body>
+    <div class="title-wrap">
+        <div class="main-title">안전 · 보건 교육 실시일지</div>
+    </div>
+    <div class="header-info-wrap">
+        <div class="meta-left">
+            <div>○ 작성일자 : {date_str}</div>
+            <div>○ 작성자 : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>(인)</b></div>
+        </div>
+        <table class="approval-box">
+            <tr style="height:22px; font-weight:bold;">
+                <th rowspan="2" style="width:25px;">결<br><br>재</th>
+                <th style="width:60px;">담 당</th>
+                <th style="width:60px;">결&nbsp;&nbsp;재</th>
+                <th style="width:65px;"></th>
+            </tr>
+            <tr style="height:43px;">
+                <td>{tag_sign_writer}</td>
+                <td>{tag_sign_approver}</td>
+                <td></td>
+            </tr>
+        </table>
+    </div>
+    <table class="main-form">
+        <tr>
+            <td class="col-header" style="height: 100px;">교 육 의<br><br>구&nbsp;&nbsp;&nbsp;&nbsp;분</td>
+            <td colspan="4" style="padding: 10px 18px;">
+                {type_list_html}
+            </td>
+        </tr>
+        <tr style="text-align:center; height:24px; font-weight:bold;">
+            <td class="col-header" rowspan="2">교&nbsp;&nbsp;&nbsp;&nbsp;육<br><br>인&nbsp;&nbsp;&nbsp;&nbsp;원</td>
+            <td style="width:22%;">구&nbsp;&nbsp;&nbsp;&nbsp;분</td>
+            <td style="width:16%;">계</td>
+            <td style="width:16%;">남</td>
+            <td style="width:16%;">여</td>
+            <td style="width:18%;">교육미실시 사유</td>
+        </tr>
+        <tr style="text-align:center; height:24px;">
+            <td style="font-weight:bold;">교육대상자 수</td>
+            <td>5 명</td><td>5 명</td><td>0 명</td>
+            <td rowspan="3" style="font-size:11px; color:#333;"></td>
+        </tr>
+        <tr style="text-align:center; height:24px;">
+            <td class="col-header" rowspan="2"></td>
+            <td style="font-weight:bold;">교육실시자 수</td>
+            <td>5 명</td><td>5 명</td><td>0 명</td>
+        </tr>
+        <tr style="text-align:center; height:24px;">
+            <td style="font-weight:bold;">교육미실시자 수</td>
+            <td>0 명</td><td>0 명</td><td>0 명</td>
+        </tr>
+        <tr>
+            <td class="col-header">교&nbsp;&nbsp;&nbsp;&nbsp;육<br>과&nbsp;&nbsp;&nbsp;&nbsp;목</td>
+            <td colspan="4" style="padding-left:15px; font-weight:bold; font-size:13px;">
+                {custom_subj}
+            </td>
+        </tr>
+        <tr style="height: 140px;">
+            <td class="col-header">교&nbsp;&nbsp;&nbsp;&nbsp;육<br><br>내&nbsp;&nbsp;&nbsp;&nbsp;용</td>
+            <td colspan="4" style="vertical-align: top; padding: 10px 15px; line-height: 1.6; font-weight: 500;">
+                {formatted_content_html}
+            </td>
+        </tr>
+        <tr style="height: 65px;">
+            <td class="col-header">교육실시자<br>및<br>장&nbsp;&nbsp;&nbsp;&nbsp;소</td>
+            <td colspan="4" style="padding-left: 15px; line-height: 1.7;">
+                <b>교육실시자 :</b> {edu_instructor}<br>
+                <b>교육장소 :</b> {edu_place}<br>
+                <b>교육시간 :</b> {edu_time}
+            </td>
+        </tr>
+        <tr style="height: 40px;">
+            <td class="col-header">특&nbsp;&nbsp;&nbsp;&nbsp;기<br>사&nbsp;&nbsp;&nbsp;&nbsp;항</td>
+            <td colspan="4" style="padding-left: 15px;">
+                {edu_special_note}
+            </td>
+        </tr>
+    </table>
+    <div class="page-break"></div>
+    <div style="text-align: center; font-size: 17px; font-weight: bold; margin-bottom: 12px; letter-spacing: 2px;">
+        안전보건교육 참석자 명단
+    </div>
+    <table class="main-form" style="font-size: 11px;">
+        <tr style="background:#ffffff; text-align:center; font-weight:bold; height:26px;">
+            <td style="width:7%;">연번</td><td style="width:18%;">소 속</td><td style="width:15%;">성 명</td><td style="width:10%;">날 인</td>
+            <td style="width:7%;">연번</td><td style="width:18%;">소 속</td><td style="width:15%;">성 명</td><td style="width:10%;">날 인</td>
+        </tr>
+        {staff_rows_html}
+    </table>
+    <div style="text-align:center; font-size:10px; color:#888; margin-top:5px;">- 7 -</div>
+</body></html>"""
+    return html_text
 
 # -------------------------------------------------------------
-# 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 모듈
+# 16. 로그인 검증 및 메인 실행
 # -------------------------------------------------------------
-elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 & 월별보관":
+if not check_login_system():
+    st.stop()
+
+if st.session_state.get("user_role") == "admin":
+    show_admin_approval_panel()
+
+# 17. 메인 관제 헤더
+st.markdown("""
+<div class="hero-banner">
+    <div class="hero-title-wrap">
+        <h1 class="hero-title">💧 DANWOL AI-WaterOps 360</h1>
+        <div class="hero-subtitle">단월 본장(1,700 ㎥/일) 및 소규모 6개소 · 안전보건 관리 & 디지털 트윈 관제 플랫폼</div>
+    </div>
+    <div class="badge-group">
+        <div class="badge-online"><span class="badge-dot"></span>SYSTEM ONLINE</div>
+        <div class="badge-subinfo">Safety / K-HAS / TMS / Small-Plant Sync</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.sidebar.title("💧 단월 스마트 관제")
+st.sidebar.markdown(f"👤 **접속자**: {st.session_state.get('user_name', '사용자')} ({st.session_state.get('user_role')})")
+if st.sidebar.button("로그아웃", use_container_width=True):
+    st.session_state.logged_in = False
+    st.session_state.user_role = None
+    st.rerun()
+
+st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음·삼가리·진목·몰운·단월마을·당의\n📌 **안전/보건**: TBM 회의록 & 안전보건교육 실시일지")
+
+menu = st.sidebar.radio(
+    "⚡ 지능형 기능 메뉴",
+    [
+        "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 자동 완성",
+        "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편철 & 보관함",
+        "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제",
+        "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단",
+        "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석",
+        "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)",
+        "📝 7. TBM 표준회의록 AI 자동작성/출력",
+        "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 & 월별보관"
+    ]
+)
+
+# -------------------------------------------------------------
+# 8. 안전·보건 교육 실시일지 및 안내 (원본 100% 일치화 서식 적용)
+# -------------------------------------------------------------
+if menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 & 월별보관":
     st.title("📋 단월처리시설 안전·보건 교육 실시일지 & 안내 자동작성기")
     st.caption("🔒 공인 원본 양식 1:1 완벽 일치 · 결재라인(담당/결재) 전자서명 · 교안 텍스트 AI 자동 추출 & 요약 보관 · 내부직원 5인 명단")
 
@@ -1707,14 +1528,14 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
         
         with col_e1:
             st.subheader("1️⃣ 교육 기본정보 & AI 자동생성")
-            edu_date = st.date_input("교육 실시 일자", datetime.date(2026, 8, 20), key="edu_date_in_v700")
+            edu_date = st.date_input("교육 실시 일자", datetime.date(2026, 8, 20), key="edu_date_in_v800")
             
             st.markdown("##### 📎 1단계: 교안/자료 업로드 및 AI 자동 추출")
             uploaded_edu_files = st.file_uploader(
                 "교안(PDF, HWPX) 또는 포스터/사진 파일 업로드 (복수 지원)",
                 type=["pdf", "png", "jpg", "jpeg", "hwpx", "hwp", "txt"],
                 accept_multiple_files=True,
-                key="up_edu_files_v700"
+                key="up_edu_files_v800"
             )
 
             extracted_summary = ""
@@ -1734,7 +1555,7 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
 
                 if detected_subject:
                     st.success(f"💡 업로드된 교안에서 **'{detected_subject}'** 표준 교육내용이 감지되었습니다!")
-                    if st.button("⚡ [추출된 교안 내용으로 교육양식 자동 채우기]", type="primary", key="btn_auto_fill_v700"):
+                    if st.button("⚡ [추출된 교안 내용으로 교육양식 자동 채우기]", type="primary", key="btn_auto_fill_v800"):
                         st.session_state["auto_filled_subj"] = detected_subject
                         st.session_state["auto_filled_content"] = extracted_summary
                         st.session_state["auto_filled_note"] = detected_note
@@ -1798,10 +1619,10 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
             col_pad1, col_pad2 = st.columns(2)
             with col_pad1:
                 st.caption("✍️ **작성자(담당) 서명**")
-                canvas_writer = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_writer_v700")
+                canvas_writer = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_writer_v800")
             with col_pad2:
                 st.caption("✍️ **결재자(시설장) 서명**")
-                canvas_approver = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_approver_v700")
+                canvas_approver = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#FFFFFF", height=70, width=150, drawing_mode="freedraw", key="canvas_edu_approver_v800")
 
             st.markdown("##### 👥 단월처리시설 내부직원 참석자 명단 (5인)")
             default_staff = [
@@ -1816,8 +1637,8 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
             for num, d_dept, d_name in default_staff:
                 col_st1, col_st2, col_st3 = st.columns([1, 1.5, 1.5])
                 with col_st1: st.write(f"**연번 {num}**")
-                with col_st2: s_dept = st.text_input(f"소속 #{num}", value=d_dept, key=f"edu_dept_{num}_v700", label_visibility="collapsed")
-                with col_st3: s_name = st.text_input(f"성명 #{num}", value=d_name, key=f"edu_name_{num}_v700", label_visibility="collapsed")
+                with col_st2: s_dept = st.text_input(f"소속 #{num}", value=d_dept, key=f"edu_dept_{num}_v800", label_visibility="collapsed")
+                with col_st3: s_name = st.text_input(f"성명 #{num}", value=d_name, key=f"edu_name_{num}_v800", label_visibility="collapsed")
                 staff_list.append((num, s_dept, s_name))
 
         # 전자서명 이미지 인코딩
@@ -1838,7 +1659,7 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
         tag_sign_writer = f'<img src="data:image/png;base64,{sign_writer_base64}" style="max-height:35px;"/>' if sign_writer_base64 else f'<span style="font-family:\'Batang\', serif; font-size:12px;">{writer_name}</span>'
         tag_sign_approver = f'<img src="data:image/png;base64,{sign_approver_base64}" style="max-height:35px;"/>' if sign_approver_base64 else f'<span style="font-family:\'Batang\', serif; font-size:12px;">{approver_name}</span>'
 
-        # 참석자 명단 행 생성 (1~25 좌측, 26~50 우측)
+        # 참석자 명단 행 생성
         staff_rows_html = ""
         for i in range(1, 26):
             if i <= len(staff_list):
@@ -1881,122 +1702,21 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
 
         formatted_content_html = "<br>".join([f"{line}" for line in edu_content.split("\n") if line.strip()])
 
-        edu_report_html = f"""
-        <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-            @page {{ size: A4; margin: 15mm; }}
-            body {{ font-family: 'Batang', '바탕', 'Malgun Gothic', serif; color: #000; font-size: 12px; line-height: 1.4; margin: 0 auto; width: 680px; }}
-            .title-wrap {{ text-align: center; margin-top: 10px; margin-bottom: 12px; }}
-            .main-title {{ font-size: 21px; font-weight: bold; text-decoration: underline; text-underline-offset: 5px; letter-spacing: 2px; }}
-            
-            .header-info-wrap {{ display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 6px; }}
-            .meta-left {{ font-size: 12.5px; line-height: 1.8; }}
-            
-            table.approval-box {{ border-collapse: collapse; width: 210px; height: 65px; text-align: center; }}
-            table.approval-box th, table.approval-box td {{ border: 1px solid #000; font-size: 11.5px; padding: 2px; }}
-            
-            table.main-form {{ width: 100%; border-collapse: collapse; border: 1.5px solid #000; margin-bottom: 20px; }}
-            table.main-form th, table.main-form td {{ border: 1px solid #000; padding: 6px 8px; vertical-align: middle; }}
-            .col-header {{ text-align: center; font-weight: bold; width: 15%; background: #ffffff; }}
-            
-            .page-break {{ page-break-before: always; margin-top: 40px; }}
-        </style></head><body>
-            
-            <div class="title-wrap">
-                <div class="main-title">안전 · 보건 교육 실시일지</div>
-            </div>
-
-            <div class="header-info-wrap">
-                <div class="meta-left">
-                    <div>○ 작성일자 : {edu_date.strftime('%Y 년   %m 월   %d 일')}</div>
-                    <div>○ 작성자 : &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>(인)</b></div>
-                </div>
-                <table class="approval-box">
-                    <tr style="height:22px; font-weight:bold;">
-                        <th rowspan="2" style="width:25px;">결<br><br>재</th>
-                        <th style="width:60px;">담 당</th>
-                        <th style="width:60px;">결&nbsp;&nbsp;재</th>
-                        <th style="width:65px;"></th>
-                    </tr>
-                    <tr style="height:43px;">
-                        <td>{tag_sign_writer}</td>
-                        <td>{tag_sign_approver}</td>
-                        <td></td>
-                    </tr>
-                </table>
-            </div>
-
-            <table class="main-form">
-                <tr>
-                    <td class="col-header" style="height: 100px;">교 육 의<br><br>구&nbsp;&nbsp;&nbsp;&nbsp;분</td>
-                    <td colspan="4" style="padding: 10px 18px;">
-                        {type_list_html}
-                    </td>
-                </tr>
-                <tr style="text-align:center; height:24px; font-weight:bold;">
-                    <td class="col-header" rowspan="2">교&nbsp;&nbsp;&nbsp;&nbsp;육<br><br>인&nbsp;&nbsp;&nbsp;&nbsp;원</td>
-                    <td style="width:22%;">구&nbsp;&nbsp;&nbsp;&nbsp;분</td>
-                    <td style="width:16%;">계</td>
-                    <td style="width:16%;">남</td>
-                    <td style="width:16%;">여</td>
-                    <td style="width:18%;">교육미실시 사유</td>
-                </tr>
-                <tr style="text-align:center; height:24px;">
-                    <td style="font-weight:bold;">교육대상자 수</td>
-                    <td>5 명</td><td>5 명</td><td>0 명</td>
-                    <td rowspan="3" style="font-size:11px; color:#333;"></td>
-                </tr>
-                <tr style="text-align:center; height:24px;">
-                    <td class="col-header" rowspan="2"></td>
-                    <td style="font-weight:bold;">교육실시자 수</td>
-                    <td>5 명</td><td>5 명</td><td>0 명</td>
-                </tr>
-                <tr style="text-align:center; height:24px;">
-                    <td style="font-weight:bold;">교육미실시자 수</td>
-                    <td>0 명</td><td>0 명</td><td>0 명</td>
-                </tr>
-                <tr>
-                    <td class="col-header">교&nbsp;&nbsp;&nbsp;&nbsp;육<br>과&nbsp;&nbsp;&nbsp;&nbsp;목</td>
-                    <td colspan="4" style="padding-left:15px; font-weight:bold; font-size:13px;">
-                        {custom_subj}
-                    </td>
-                </tr>
-                <tr style="height: 140px;">
-                    <td class="col-header">교&nbsp;&nbsp;&nbsp;&nbsp;육<br><br>내&nbsp;&nbsp;&nbsp;&nbsp;용</td>
-                    <td colspan="4" style="vertical-align: top; padding: 10px 15px; line-height: 1.6; font-weight: 500;">
-                        {formatted_content_html}
-                    </td>
-                </tr>
-                <tr style="height: 65px;">
-                    <td class="col-header">교육실시자<br>및<br>장&nbsp;&nbsp;&nbsp;&nbsp;소</td>
-                    <td colspan="4" style="padding-left: 15px; line-height: 1.7;">
-                        <b>교육실시자 :</b> {edu_instructor}<br>
-                        <b>교육장소 :</b> {edu_place}<br>
-                        <b>교육시간 :</b> {edu_time}
-                    </td>
-                </tr>
-                <tr style="height: 40px;">
-                    <td class="col-header">특&nbsp;&nbsp;&nbsp;&nbsp;기<br>사&nbsp;&nbsp;&nbsp;&nbsp;항</td>
-                    <td colspan="4" style="padding-left: 15px;">
-                        {edu_special_note}
-                    </td>
-                </tr>
-            </table>
-
-            <div class="page-break"></div>
-            <div style="text-align: center; font-size: 17px; font-weight: bold; margin-bottom: 12px; letter-spacing: 2px;">
-                안전보건교육 참석자 명단
-            </div>
-
-            <table class="main-form" style="font-size: 11px;">
-                <tr style="background:#ffffff; text-align:center; font-weight:bold; height:26px;">
-                    <td style="width:7%;">연번</td><td style="width:18%;">소 속</td><td style="width:15%;">성 명</td><td style="width:10%;">날 인</td>
-                    <td style="width:7%;">연번</td><td style="width:18%;">소 속</td><td style="width:15%;">성 명</td><td style="width:10%;">날 인</td>
-                </tr>
-                {staff_rows_html}
-            </table>
-            <div style="text-align:center; font-size:10px; color:#888; margin-top:5px;">- 7 -</div>
-        </body></html>
-        """
+        # 분리된 함수 호출로 안전하게 HTML 생성
+        edu_report_html = build_exact_edu_html(
+            edu_date=edu_date,
+            writer_name=writer_name,
+            tag_sign_writer=tag_sign_writer,
+            tag_sign_approver=tag_sign_approver,
+            type_list_html=type_list_html,
+            custom_subj=custom_subj,
+            formatted_content_html=formatted_content_html,
+            edu_instructor=edu_instructor,
+            edu_place=edu_place,
+            edu_time=edu_time,
+            edu_special_note=edu_special_note,
+            staff_rows_html=staff_rows_html
+        )
 
         st.divider()
         st.subheader("3️⃣ 단월 공식 안전·보건 교육 실시일지 & 참석자 명단 미리보기")
@@ -2016,7 +1736,7 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
                 use_container_width=True
             )
         with col_ebtn2:
-            if st.button("💾 ⚡ [월별 보관함 저장 & 추출 교안 자동 분리 보관]", use_container_width=True, key="btn_save_edu_final_v700"):
+            if st.button("💾 ⚡ [월별 보관함 저장 & 추출 교안 자동 분리 보관]", use_container_width=True, key="btn_save_edu_final_v800"):
                 month_str = edu_date.strftime('%Y-%m')
                 month_dir = os.path.join(EDU_RECORD_DIR, month_str)
                 if not os.path.exists(month_dir): os.makedirs(month_dir)
@@ -2045,7 +1765,7 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
         all_month_dirs = sorted([d for d in os.listdir(EDU_RECORD_DIR) if os.path.isdir(os.path.join(EDU_RECORD_DIR, d))], reverse=True)
         
         if all_month_dirs:
-            sel_edu_m_dir = st.selectbox("📅 보관 월 선택", all_month_dirs, key="sel_edu_arch_m_v700")
+            sel_edu_m_dir = st.selectbox("📅 보관 월 선택", all_month_dirs, key="sel_edu_arch_m_v800")
             target_m_path = os.path.join(EDU_RECORD_DIR, sel_edu_m_dir)
             files_in_m = sorted(os.listdir(target_m_path))
 
@@ -2053,10 +1773,10 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
 
             col_vf1, col_vf2 = st.columns([3, 1])
             with col_vf1:
-                sel_f_view = st.selectbox("열람 및 다운로드할 파일 선택", files_in_m, key="sel_edu_file_to_view_v700")
+                sel_f_view = st.selectbox("열람 및 다운로드할 파일 선택", files_in_m, key="sel_edu_file_to_view_v800")
             with col_vf2:
                 st.write(""); st.write("")
-                if st.button("🗑️ 선택 파일 삭제", type="secondary", use_container_width=True, key="btn_del_edu_file_v700"):
+                if st.button("🗑️ 선택 파일 삭제", type="secondary", use_container_width=True, key="btn_del_edu_file_v800"):
                     del_p = os.path.join(target_m_path, sel_f_view)
                     if os.path.exists(del_p): os.remove(del_p)
                     st.success(f"🗑️ '{sel_f_view}' 파일이 삭제되었습니다.")
