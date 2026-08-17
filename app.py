@@ -1017,7 +1017,7 @@ def fill_danwol_monthly_report_workbook(df_data, year=None):
         ws = wb.create_sheet(title=sname)
         ws.cell(2, 1, f"단월공공하수처리시설 수질검사결과({m}월)")
         ws.cell(4, 1, f"{year}년 {m}월 (시설용량 : 1700㎥/일)")
-        ws.cell(4, 14, "        (단위 : ㎎/ℓ, 개/㎖, ㎥/일)")
+        ws.cell(4, 14, "       (단위 : ㎎/ℓ, 개/㎖, ㎥/일)")
         
         ws.cell(5, 1, "일자"); ws.cell(5, 2, "유       입       수"); ws.cell(5, 8, "생물반응조")
         ws.cell(5, 10, "방       류       수"); ws.cell(5, 16, "유입량"); ws.cell(5, 17, "재이용량"); ws.cell(5, 18, "방류량"); ws.cell(5, 19, "반응조\n수온(℃)")
@@ -1097,7 +1097,7 @@ def fill_danwol_annual_report_workbook(df_data, year=None):
     ws.title = f"{year}년(연간수질)"
     ws.cell(1, 1, f"단월공공하수처리시설 연간 수질검사 결과({year}년)")
     ws.cell(3, 1, "(시설용량 : 1700톤/일)")
-    ws.cell(3, 16, "        (단위 : ㎎/ℓ, 톤/일)")
+    ws.cell(3, 16, "       (단위 : ㎎/ℓ, 톤/일)")
     ws.cell(4, 1, "일자"); ws.cell(4, 2, "유       입       수"); ws.cell(4, 8, "생물 반응조")
     ws.cell(4, 10, "방       류       수"); ws.cell(4, 16, "유입량"); ws.cell(4, 17, "재이용량"); ws.cell(4, 18, "방류량"); ws.cell(4, 19, "반응조\n수온(℃)")
     sub_h = ['BOD', 'TOC', 'SS', 'T-N', 'T-P', '대장균\n군수', 'MLSS A', 'MLSS B', 'BOD', 'TOC', 'SS', 'T-N', 'T-P', '대장균군수']
