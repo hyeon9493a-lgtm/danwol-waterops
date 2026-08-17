@@ -2,6 +2,13 @@ import streamlit as st
 import json
 import os
 
+# 페이지 기본 설정 (가장 첫 줄에 위치)
+st.set_page_config(
+    page_title="DANWOL AI-WaterOps 360",
+    page_icon="💧",
+    layout="wide"
+)
+
 # 승인 유저 저장 파일 경로
 AUTH_DB_FILE = "user_auth_db.json"
 
@@ -35,6 +42,8 @@ def check_login_system():
     whitelist_codes = st.secrets.get("WHITELIST_CODES", ["DW-PASS-2026", "WATER-ADMIN"])
 
     st.markdown("<h2 style='text-align: center;'>💧 DANWOL AI-WaterOps 360 보안 접속</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>단월 공공하수처리시설 지능형 통합 자율운전 & 디지털 트윈 관제 플랫폼</p>", unsafe_allow_html=True)
+    
     tab_login, tab_request = st.tabs(["🔒 시스템 로그인", "📝 신규 사용자 승인 요청"])
 
     # 탭 1: 로그인
@@ -47,6 +56,7 @@ def check_login_system():
                 if admin_pw == admin_master_pw:
                     st.session_state.logged_in = True
                     st.session_state.user_role = "admin"
+                    st.session_state.user_name = "최고관리자"
                     st.rerun()
                 else:
                     st.error("관리자 비밀번호가 일치하지 않습니다.")
@@ -77,7 +87,7 @@ def check_login_system():
                     if passcode in whitelist_codes:
                         st.session_state.logged_in = True
                         st.session_state.user_role = "user"
-                        st.session_state.user_name = "임시 인증 사용자"
+                        st.session_state.user_name = "승인 코드 접속자"
                         st.rerun()
                     else:
                         st.error("유효하지 않은 승인 접속 코드입니다.")
@@ -102,7 +112,7 @@ def check_login_system():
                         "name": req_name,
                         "dept": req_dept,
                         "password": req_pw,
-                        "status": "pending"  # 대기 상태
+                        "status": "pending"
                     }
                     auth_db["users"] = users
                     save_auth_db(auth_db)
@@ -135,9 +145,37 @@ def show_admin_approval_panel():
                 st.rerun()
 
     with st.sidebar.expander(f"승인 완료된 사용자 ({len(approved_users)}명)"):
+        if not approved_users:
+            st.caption("승인된 사용자가 없습니다.")
         for u_id, u_info in list(approved_users.items()):
-            st.write(f"- {u_info.get('name')} ({u_id})")
+            st.write(f"- **{u_info.get('name')}** ({u_id})")
             if st.button("권한 회수", key=f"rev_{u_id}"):
                 del users[u_id]
                 save_auth_db(auth_db)
                 st.rerun()
+
+# -------------------------------------------------------------
+# 메인 앱 실행 루프
+# -------------------------------------------------------------
+if not check_login_system():
+    st.stop()  # 로그인되지 않았으면 아래 관제 화면 실행 중단
+
+# 관리자일 경우 사이드바에 승인 패널 표시
+if st.session_state.get("user_role") == "admin":
+    show_admin_approval_panel()
+
+# 상단 헤더 및 로그아웃 버튼
+st.sidebar.markdown(f"**접속자**: {st.session_state.get('user_name', '사용자')} ({st.session_state.get('user_role')})")
+if st.sidebar.button("로그아웃"):
+    st.session_state.logged_in = False
+    st.session_state.user_role = None
+    st.rerun()
+
+# 관제 플랫폼 본문 화면
+st.title("🎛️ DANWOL AI-WaterOps 360 관제 대시보드")
+st.success(f"시스템 정상 가동 중 - 환영합니다, {st.session_state.get('user_name')} 님")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("유입 유량", "1,240 m³/h", "+12 m³/h")
+col2.metric("방류 수질 (BOD)", "1.2 ppm", "-0.1 ppm")
+col3.metric("전력 사용 효율", "94.8 %", "+1.2%")
