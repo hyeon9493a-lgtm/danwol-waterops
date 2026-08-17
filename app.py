@@ -381,16 +381,16 @@ def auto_sanitize_databases():
                     else: os.rename(old_p, new_p)
                 except Exception: pass
 
-    for db_path in [MASTER_ACCUM_DB, PROCESS_CONTROL_DB, TMS_ACCUM_DB, CHEMICAL_ENERGY_DB]:
-        if os.path.exists(db_path):
+    for db_file in [MASTER_ACCUM_DB, PROCESS_CONTROL_DB, TMS_ACCUM_DB, CHEMICAL_ENERGY_DB]:
+        if os.path.exists(db_file):
             try:
-                df = pd.read_csv(db_path)
-                col_d = '날짜' if '날짜' in df.columns else ('측정일자' if '측정일자' in df.columns else None)
-                if not df.empty and col_d:
-                    df[col_d] = df[col_d].astype(str).str.replace('2027-', '2024-')
-                    valid_mask = ~((df[col_d].str.startswith('2026-')) & (df[col_d] > max_allowed_date_str))
+                df = pd.read_csv(db_file)
+                date_col = '날짜' if '날짜' in df.columns else ('측정일자' if '측정일자' in df.columns else None)
+                if not df.empty and date_col:
+                    df[date_col] = df[date_col].astype(str).str.replace('2027-', '2024-')
+                    valid_mask = ~((df[date_col].str.startswith('2026-')) & (df[date_col] > max_allowed_date_str))
                     df = df[valid_mask].reset_index(drop=True)
-                    df.to_csv(db_path, index=False, encoding='utf-8-sig')
+                    df.to_csv(db_file, index=False, encoding='utf-8-sig')
             except Exception: pass
 
 auto_sanitize_databases()
@@ -428,34 +428,14 @@ TMS_STD_COLS = [
 def append_to_tms_db(df_new):
     if df_new.empty: return
     df_new = df_new.copy()
-    df_new = df_new.loc[:, ~df_new.columns.duplicated()].copy()
-    
-    if '방류pH' not in df_new.columns: df_new['방류pH'] = 7.20
-    if '방류BOD' not in df_new.columns: df_new['방류BOD'] = 2.30
-    if '방류SS' not in df_new.columns: df_new['방류SS'] = 4.80
-    if '예측pH_4h' not in df_new.columns: df_new['예측pH_4h'] = round(df_new['방류pH'] * 1.01, 2)
-    if '예측BOD_4h' not in df_new.columns: df_new['예측BOD_4h'] = round(df_new['방류BOD'] * 1.08, 2)
-    if '예측SS_4h' not in df_new.columns: df_new['예측SS_4h'] = round(df_new['방류SS'] * 1.07, 2)
-
     for col in TMS_STD_COLS:
         if col not in df_new.columns: df_new[col] = np.nan
-
     df_new = df_new[TMS_STD_COLS].copy()
 
     if os.path.exists(TMS_ACCUM_DB):
         df_master = pd.read_csv(TMS_ACCUM_DB)
-        df_master = df_master.loc[:, ~df_master.columns.duplicated()].copy()
-        
-        if '방류pH' not in df_master.columns: df_master['방류pH'] = 7.20
-        if '방류BOD' not in df_master.columns: df_master['방류BOD'] = 2.30
-        if '방류SS' not in df_master.columns: df_master['방류SS'] = 4.80
-        if '예측pH_4h' not in df_master.columns: df_master['예측pH_4h'] = round(df_master['방류pH'] * 1.01, 2)
-        if '예측BOD_4h' not in df_master.columns: df_master['예측BOD_4h'] = round(df_master['방류BOD'] * 1.08, 2)
-        if '예측SS_4h' not in df_master.columns: df_master['예측SS_4h'] = round(df_master['방류SS'] * 1.07, 2)
-
         for col in TMS_STD_COLS:
             if col not in df_master.columns: df_master[col] = np.nan
-                
         df_combined = pd.concat([df_master[TMS_STD_COLS], df_new], ignore_index=True)
         df_combined = df_combined.drop_duplicates(subset=['측정일자', '측정시각'], keep='last')
         df_combined = df_combined.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
@@ -468,26 +448,7 @@ def get_tms_db():
     if not os.path.exists(TMS_ACCUM_DB): return pd.DataFrame()
     try:
         df = pd.read_csv(TMS_ACCUM_DB)
-        df = df.loc[:, ~df.columns.duplicated()].copy()
-        if '방류pH' not in df.columns: df['방류pH'] = 7.20
-        if '방류BOD' not in df.columns: df['방류BOD'] = 2.30
-        if '방류SS' not in df.columns: df['방류SS'] = 4.80
-        
-        df['방류pH'] = pd.to_numeric(df['방류pH'], errors='coerce').fillna(7.20)
-        df['방류BOD'] = pd.to_numeric(df['방류BOD'], errors='coerce').fillna(2.30)
-        df['방류SS'] = pd.to_numeric(df['방류SS'], errors='coerce').fillna(4.80)
-        df['방류pH'] = np.where(df['방류pH'] < 5.0, np.round(7.15 + (df['방류pH'] % 0.3), 2), df['방류pH'])
-        
-        if '예측pH_4h' not in df.columns or df['예측pH_4h'].isna().any(): df['예측pH_4h'] = np.round(df['방류pH'] * 1.01, 2)
-        if '예측BOD_4h' not in df.columns or df['예측BOD_4h'].isna().any(): df['예측BOD_4h'] = np.round(df['방류BOD'] * 1.08, 2)
-        if '예측SS_4h' not in df.columns or df['예측SS_4h'].isna().any(): df['예측SS_4h'] = np.round(df['방류SS'] * 1.07, 2)
-
-        for col in TMS_STD_COLS:
-            if col not in df.columns: df[col] = np.nan
-
-        df = df[TMS_STD_COLS].sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
-        df.to_csv(TMS_ACCUM_DB, index=False, encoding='utf-8-sig')
-        return df
+        return df.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
     except Exception:
         return pd.DataFrame()
 
@@ -496,11 +457,8 @@ def append_to_process_db(df_new, facility_name=MAIN_PLANT):
     if df_new.empty: return
     df_new = df_new.copy()
     df_new['시설명'] = facility_name
-    df_new = df_new.loc[:, ~df_new.columns.duplicated()].copy()
     if os.path.exists(PROCESS_CONTROL_DB):
         df_master = pd.read_csv(PROCESS_CONTROL_DB)
-        if '시설명' not in df_master.columns: df_master['시설명'] = MAIN_PLANT
-        df_master = df_master.loc[:, ~df_master.columns.duplicated()].copy()
         df_combined = pd.concat([df_master, df_new], ignore_index=True)
         df_combined = df_combined.drop_duplicates(subset=['시설명', '날짜'], keep='last')
         df_combined = df_combined.sort_values(by=['시설명', '날짜'], ascending=[True, False]).reset_index(drop=True)
@@ -511,18 +469,14 @@ def append_to_process_db(df_new, facility_name=MAIN_PLANT):
 def get_process_db(facility_name=None):
     if not os.path.exists(PROCESS_CONTROL_DB): return pd.DataFrame()
     df = pd.read_csv(PROCESS_CONTROL_DB)
-    if '시설명' not in df.columns: df['시설명'] = MAIN_PLANT
-    if facility_name:
-        df = df[df['시설명'] == facility_name].copy()
+    if facility_name: df = df[df['시설명'] == facility_name].copy()
     return df.sort_values(by='날짜', ascending=False).reset_index(drop=True)
 
 def append_to_chem_db(df_new):
     if df_new.empty: return
     df_new = df_new.copy()
-    df_new = df_new.loc[:, ~df_new.columns.duplicated()].copy()
     if os.path.exists(CHEMICAL_ENERGY_DB):
         df_master = pd.read_csv(CHEMICAL_ENERGY_DB)
-        df_master = df_master.loc[:, ~df_master.columns.duplicated()].copy()
         df_combined = pd.concat([df_master, df_new], ignore_index=True)
         df_combined = df_combined.drop_duplicates(subset=['날짜'], keep='last')
         df_combined = df_combined.sort_values(by=['날짜'], ascending=False).reset_index(drop=True)
@@ -1307,44 +1261,8 @@ def fill_private_annual_workbook(priv_dict, year=None):
     wb.save(buf)
     return buf.getvalue()
 
-# 15. HWPX 월간보고서 생성 함수
-def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, solar_data, task_text, year=2026):
-    months_window = [(sel_month - 5 + i - 1) % 12 + 1 for i in range(6)]
-    cand = f"공공하수도시설 대행사업 월간보고서({sel_month}월).hwpx"
-    if not os.path.exists(cand): cand = '공공하수도시설 대행사업 월간보고서(7월).hwpx'
-    
-    if hwpx_template_file is not None:
-        template_bytes = hwpx_template_file.getvalue() if hasattr(hwpx_template_file, 'getvalue') else hwpx_template_file.read()
-    elif os.path.exists(cand):
-        with open(cand, 'rb') as f: template_bytes = f.read()
-    else: template_bytes = b""
-
-    if not template_bytes: return b""
-    in_zip = zipfile.ZipFile(io.BytesIO(template_bytes), 'r')
-    out_buf = io.BytesIO()
-    out_zip = zipfile.ZipFile(out_buf, 'w', zipfile.ZIP_DEFLATED)
-
-    for item in in_zip.infolist():
-        data = in_zip.read(item.filename)
-        if item.filename.startswith('Contents/section') and item.filename.endswith('.xml'):
-            text = data.decode('utf-8', errors='ignore')
-            text = re.sub(r'월간보고서\(\d{1,2}월\)', f'월간보고서({sel_month}월)', text)
-            text = re.sub(r'운영상황 보고\(\d{1,2}월\)', f'운영상황 보고({sel_month}월)', text)
-            for i, m in enumerate(months_window): text = text.replace(f'<{i+1}월헤더>', f'{m}월')
-            text = text.replace('{{SLUDGE_AVG}}', f"{sludge_data['avg']:.1f}")
-            text = text.replace('{{SLUDGE_MAX}}', f"{sludge_data['max']:.1f}")
-            text = text.replace('{{SLUDGE_MIN}}', f"{sludge_data['min']:.1f}")
-            text = text.replace('{{SOLAR_GEN}}', f"{solar_data['current_month']:.1f}")
-            if task_text: text = text.replace('{{DAILY_MAINTENANCE_TEXT}}', task_text)
-            data = text.encode('utf-8')
-        out_zip.writestr(item, data)
-
-    in_zip.close()
-    out_zip.close()
-    return out_buf.getvalue()
-
 # -------------------------------------------------------------
-# 8번 교육일지 100% 원본 일치 HTML 생성 헬퍼 함수
+# 교육일지 100% 원본 일치 HTML 생성 헬퍼 함수
 # -------------------------------------------------------------
 def build_exact_edu_html(edu_date, writer_name, tag_sign_writer, tag_sign_approver, type_list_html, custom_subj, formatted_content_html, edu_instructor, edu_place, edu_time, edu_special_note, staff_rows_html):
     date_str = edu_date.strftime('%Y 년   %m 월   %d 일')
@@ -1410,7 +1328,7 @@ st.markdown("""
     </div>
     <div class="badge-group">
         <div class="badge-online"><span class="badge-dot"></span>SYSTEM ONLINE</div>
-        <div class="badge-subinfo">Safety / K-HAS / TMS / Small-Plant Sync Active</div>
+        <div class="badge-subinfo">K-HAS / TMS / Small-Plant Sync Active</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1422,7 +1340,7 @@ if st.sidebar.button("로그아웃", use_container_width=True):
     st.session_state.user_role = None
     st.rerun()
 
-st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음(SWPP)·삼가리(SBR)·진목(SOD)·몰운(IC-SBR)·단월마을(IC-SBR)·당의(IC-SBR)\n📌 **개인하수 6개소**: 석산리·음지·양지·복지회관·인이피·돌고개\n📌 **안전/보건**: TBM 회의록 & 안전보건교육 실시일지")
+st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음(SWPP)·삼가리(SBR)·진목(SOD)·몰운(IC-SBR)·단월마을(IC-SBR)·당의(IC-SBR)\n📌 **개인하수 6개소**: 석산리·음지·양지·복지회관·인이피·돌고개")
 
 menu = st.sidebar.radio(
     "⚡ 지능형 기능 메뉴",
@@ -2569,10 +2487,14 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         job_desc = st.text_area("작업 세부 내용 (AI 자동생성 / 직접 수정 가능)", value=def_desc, key=f"tbm_desc_{custom_job[:6]}")
 
         st.markdown("##### ⚠️ AI 추천 유해·위험요인 및 감소대책 (실시간 수정 가능)")
+        st.caption("💡 작업명에 맞게 AI가 추천한 문구입니다. 필요시 자유롭게 편집하면 미리보기에 실시간 반영됩니다.")
+        
         r1 = st.text_input("위험요인 ①", value=def_r1, key=f"tbm_r1_{custom_job[:6]}")
         s1 = st.text_input("감소대책 ①", value=def_s1, key=f"tbm_s1_{custom_job[:6]}")
+        
         r2 = st.text_input("위험요인 ②", value=def_r2, key=f"tbm_r2_{custom_job[:6]}")
         s2 = st.text_input("감소대책 ②", value=def_s2, key=f"tbm_s2_{custom_job[:6]}")
+        
         r3 = st.text_input("위험요인 ③", value=def_r3, key=f"tbm_r3_{custom_job[:6]}")
         s3 = st.text_input("감소대책 ③", value=def_s3, key=f"tbm_s3_{custom_job[:6]}")
 
@@ -2756,7 +2678,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
 
 # -------------------------------------------------------------
-# 8. 안전·보건 교육 실시일지 및 안내 (원본 100% 일치화 서식)
+# 8. 안전·보건 교육 실시일지 및 안내
 # -------------------------------------------------------------
 elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작성 & 월별보관":
     st.title("📋 단월처리시설 안전·보건 교육 실시일지 & 안내 자동작성기")
@@ -2908,4 +2830,128 @@ elif menu == "📋 8. 안전·보건 교육 실시일지 및 안내 AI 자동작
             for num, d_dept, d_name in default_staff:
                 col_st1, col_st2, col_st3 = st.columns([1, 1.5, 1.5])
                 with col_st1: st.write(f"**연번 {num}**")
-                withSorry, something went wrong. Please try your request again.
+                with col_st2: s_dept = st.text_input(f"소속 #{num}", value=d_dept, key=f"edu_dept_{num}_v850", label_visibility="collapsed")
+                with col_st3: s_name = st.text_input(f"성명 #{num}", value=d_name, key=f"edu_name_{num}_v850", label_visibility="collapsed")
+                staff_list.append((num, s_dept, s_name))
+
+        sign_writer_base64 = ""
+        if canvas_writer.image_data is not None and np.any(canvas_writer.image_data[:, :, 3] > 0):
+            img_w = Image.fromarray(canvas_writer.image_data.astype('uint8'), 'RGBA')
+            buf_w = io.BytesIO()
+            img_w.save(buf_w, format="PNG")
+            sign_writer_base64 = base64.b64encode(buf_w.getvalue()).decode()
+
+        sign_approver_base64 = ""
+        if canvas_approver.image_data is not None and np.any(canvas_approver.image_data[:, :, 3] > 0):
+            img_a = Image.fromarray(canvas_approver.image_data.astype('uint8'), 'RGBA')
+            buf_a = io.BytesIO()
+            img_a.save(buf_a, format="PNG")
+            sign_approver_base64 = base64.b64encode(buf_a.getvalue()).decode()
+
+        tag_sign_writer = f'<img src="data:image/png;base64,{sign_writer_base64}" style="max-height:35px;"/>' if sign_writer_base64 else f'<span style="font-family:\'Batang\', serif; font-size:12px;">{writer_name}</span>'
+        tag_sign_approver = f'<img src="data:image/png;base64,{sign_approver_base64}" style="max-height:35px;"/>' if sign_approver_base64 else f'<span style="font-family:\'Batang\', serif; font-size:12px;">{approver_name}</span>'
+
+        staff_rows_html = ""
+        for i in range(1, 26):
+            if i <= len(staff_list):
+                idx_l, dept_l, name_l = staff_list[i-1]
+                sign_l = "(인)" if name_l.strip() else ""
+            else:
+                idx_l, dept_l, name_l, sign_l = str(i), "", "", ""
+
+            idx_r = str(i + 25)
+            dept_r, name_r, sign_r = "", "", ""
+
+            staff_rows_html += f"""
+            <tr style="text-align:center; height:23px;">
+                <td style="width:7%; font-weight:bold; font-size:11px;">{idx_l}</td>
+                <td style="width:18%; font-size:11px;">{dept_l}</td>
+                <td style="width:15%; font-weight:bold; font-size:11px;">{name_l}</td>
+                <td style="width:10%; font-size:10px; color:#555;">{sign_l}</td>
+                <td style="width:7%; font-weight:bold; font-size:11px;">{idx_r}</td>
+                <td style="width:18%; font-size:11px;">{dept_r}</td>
+                <td style="width:15%; font-size:11px;">{name_r}</td>
+                <td style="width:10%; font-size:10px; color:#555;">{sign_r}</td>
+            </tr>
+            """
+
+        type_options = [
+            ("1. 신규 채용시 교육", "(8 시간 이상)"),
+            ("2. 작업내용 변경시 교육", "(2 시간 이상)"),
+            ("3. 특별 안전보건교육", "(16시간 이상)"),
+            ("4. 일반 안전보건교육", "(매반기 12시간이상)"),
+            ("5. 관리감독자 교육", "(16시간 이상)"),
+            ("6. 기타(                     )교육", "")
+        ]
+        type_rows_list = []
+        for t_title, t_time in type_options:
+            if "일반" in t_title and "일반" in edu_type_sel:
+                type_rows_list.append(f"<div style='display:flex; justify-content:space-between; margin-bottom:3px;'><u><b>{t_title}</b></u><u><b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{t_time}</b></u></div>")
+            elif "특별" in t_title and "특별" in edu_type_sel:
+                type_rows_list.append(f"<div style='display:flex; justify-content:space-between; margin-bottom:3px;'><u><b>{t_title}</b></u><u><b>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{t_time}</b></u></div>")
+            else:
+                type_rows_list.append(f"<div style='display:flex; justify-content:space-between; margin-bottom:3px;'><span>{t_title}</span><span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{t_time}</span></div>")
+        type_list_html = "".join(type_rows_list)
+
+        formatted_content_html = "<br>".join([line for line in edu_content.split("\n") if line.strip()])
+
+        final_edu_html = build_exact_edu_html(
+            edu_date=edu_date,
+            writer_name=writer_name,
+            tag_sign_writer=tag_sign_writer,
+            tag_sign_approver=tag_sign_approver,
+            type_list_html=type_list_html,
+            custom_subj=custom_subj,
+            formatted_content_html=formatted_content_html,
+            edu_instructor=edu_instructor,
+            edu_place=edu_place,
+            edu_time=edu_time,
+            edu_special_note=edu_special_note,
+            staff_rows_html=staff_rows_html
+        )
+
+        st.divider()
+        st.subheader("3️⃣ 단월 공식 안전·보건 교육 실시일지 양식 미리보기")
+        st.components.v1.html(final_edu_html, height=760, scrolling=True)
+
+        col_b1, col_b2 = st.columns(2)
+        safe_subj = custom_subj.replace('/', '_').replace(' ', '_')[:8]
+        safe_file_name = f"안전보건교육일지_{edu_date}_{safe_subj}.html"
+        
+        with col_b1:
+            st.download_button(
+                "📥 안전·보건 교육 실시일지 HTML 다운로드",
+                data=final_edu_html,
+                file_name=safe_file_name,
+                mime="text/html",
+                type="primary",
+                use_container_width=True
+            )
+        with col_b2:
+            if st.button("💾 ⚡ [월별 보관함 저장 & 교안 텍스트 자동 분리 보관]", use_container_width=True, key="btn_save_edu_v850"):
+                month_key = edu_date.strftime('%Y-%m')
+                month_dir = os.path.join(EDU_RECORD_DIR, month_key)
+                if not os.path.exists(month_dir):
+                    os.makedirs(month_dir)
+
+                save_html_path = os.path.join(month_dir, safe_file_name)
+                with open(save_html_path, "w", encoding="utf-8") as f:
+                    f.write(final_edu_html)
+
+                save_txt_path = os.path.join(month_dir, f"[교안추출요약]_{edu_date}_{safe_subj}.txt")
+                with open(save_txt_path, "w", encoding="utf-8") as f:
+                    f.write(f"■ 과목: {custom_subj}\n■ 교육일시: {edu_date} ({edu_time})\n■ 강사: {edu_instructor}\n■ 장소: {edu_place}\n\n[교육 내용]\n{edu_content}")
+
+                st.success(f"✅ [{month_key}] 보관함에 교육일지 및 교안 추출 요약본이 안전하게 영구 보관되었습니다!")
+
+    with tab_edu_archive:
+        st.subheader("🗂️ 월별 안전·보건 교육일지 & 추출 교안 영구 보관함")
+        
+        month_dirs = sorted([d for d in os.listdir(EDU_RECORD_DIR) if os.path.isdir(os.path.join(EDU_RECORD_DIR, d))], reverse=True)
+        
+        if month_dirs:
+            col_m_sel, col_m_del = st.columns([2, 1])
+            with col_m_sel:
+                sel_m_dir = st.selectbox("📅 보관 연월 선택", month_dirs, key="sel_edu_m_dir_v850")
+            
+            target_month_dir =Sorry, something went wrong. Please try your request again.
