@@ -666,4 +666,491 @@ def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is
         f"<tr><td class='header-td'>TBM 일시</td><td style='width:38%;'>{tbm_date.strftime('%Y년 %m월 %d일')} {tbm_time}</td><td class='header-td'>작업날짜와 동일함</td><td style='width:25%;'>☑예 □아니오</td></tr>",
         f"<tr><td class='header-td'>작 업 명</td><td style='font-weight:bold;'>{custom_job}</td><td class='header-td' rowspan='2'>TBM 장소</td><td rowspan='2'>{'☑' if tbm_place=='사무실' else '□'}사무실 &nbsp;&nbsp; {'☑' if tbm_place=='작업현장' else '□'}작업현장</td></tr>",
         f"<tr><td class='header-td'>작업내용</td><td>{job_desc}</td></tr>",
-        f"<tr><td class='header-td' rowspan='4'>외주업체정보</td><td>외주작업 &nbsp;&nbsp; {'☑예 □아니오' if is_contractor else '□예 ☑아니오'}</td><td class='header-td' rowspan='2'>업체 위험성평가 실시</td><td rowspan='2'>{'☑예 □아니오' if is_contractor and contractor_eval else '□예 □아니오'}
+        f"<tr><td class='header-td' rowspan='4'>외주업체정보</td><td>외주작업 &nbsp;&nbsp; {'☑예 □아니오' if is_contractor else '□예 ☑아니오'}</td><td class='header-td' rowspan='2'>업체 위험성평가 실시</td><td rowspan='2'>{'☑예 □아니오' if is_contractor and contractor_eval else '□예 □아니오'}</td></tr>",
+        f"<tr><td>업체명: <b>{contractor_name}</b></td></tr>",
+        f"<tr><td>책임자: <b>{contractor_manager}</b></td><td class='header-td' rowspan='2'>산업안전보건 교육 확인</td><td rowspan='2'>{'☑예 □아니오' if is_contractor and contractor_edu else '□예 □아니오'}</td></tr>",
+        f"<tr><td>연락처: {contractor_tel}</td></tr>",
+        "</table>",
+        f"<table><tr style='background:#e9ecef;'><th style='width:45%;'>■ 유해·위험요인 파악 내용</th><th style='width:55%;'>■ 파악된 유해·위험요인의 감소대책 수립 및 이행</th></tr>{risk_rows_html}</table>",
+        "<table><tr><th colspan='5' style='text-align:left; background:#e9ecef;'>■ TBM 리더 정보</th></tr>",
+        f"<tr style='text-align:center; font-weight:bold; background:#fafafa;'><td style='width:18%;'>소속</td><td style='width:20%;'>직책</td><td style='width:20%;'>관리감독자</td><td style='width:18%;'>성명</td><td rowspan='2' style='width:24%; vertical-align:middle;'>{sign_img_tag}</td></tr>",
+        f"<tr style='text-align:center;'><td>{leader_dept}</td><td>{leader_role}</td><td>☑예 □아니오</td><td><b>{leader_name}</b></td></tr></table>",
+        f"<table><tr><th colspan='6' style='text-align:left; background:#e9ecef;'>■ 참석자 확인</th></tr><tr style='text-align:center; background:#fafafa; font-weight:bold;'><td style='width:18%;'>성 명</td><td style='width:15%;'>서 명</td><td style='width:18%;'>성 명</td><td style='width:15%;'>서 명</td><td style='width:18%;'>업 체 성 명</td><td style='width:16%;'>업 체 서 명</td></tr>{worker_table_rows}</table>",
+        audit_trail_html,
+        "</body></html>"
+    ]
+    return "".join(parts)
+
+# -------------------------------------------------------------
+# 사용자 로그인 검증 함수
+# -------------------------------------------------------------
+def check_login_system():
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+    if "user_role" not in st.session_state:
+        st.session_state.user_role = None
+
+    if st.session_state.logged_in:
+        return True
+
+    admin_master_pw = "yp1311!"
+    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "1234", "danwol360!", "yp1311!"]
+
+    st.markdown("""
+    <div style="text-align: center; padding: 25px 20px 10px 20px;">
+        <div style="font-size: 44px;">💧</div>
+        <h1 style="font-size: 28px; font-weight: 900; color: #0F172A; margin: 5px 0;">DANWOL AI-WaterOps 360</h1>
+        <p style="font-size: 14.5px; color: #64748B; font-weight: 600;">단월 공공하수처리시설 지능형 통합 자율운전 & 디지털 트윈 관제 플랫폼</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_l1, col_l2, col_l3 = st.columns([1, 1.3, 1])
+    with col_l2:
+        tab_login, tab_request = st.tabs(["🔒 시스템 로그인", "📝 신규 사용자 승인 요청"])
+        with tab_login:
+            login_type = st.radio("접속 유형 선택", ["일반 사용자 (승인 접속 코드 / 계정)", "시스템 관리자 (승인 대시보드)"], horizontal=True)
+            if login_type == "시스템 관리자 (승인 대시보드)":
+                admin_pw = st.text_input("관리자 마스터 비밀번호", type="password", key="admin_pw_input")
+                if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True):
+                    if admin_pw in [admin_master_pw, "danwol360!", "1234"]:
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "admin"
+                        st.session_state.user_name = "최고관리자"
+                        st.rerun()
+                    else:
+                        st.error("관리자 비밀번호가 일치하지 않습니다.")
+            else:
+                passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="yp1311!")
+                if st.button("🚀 접속하기", type="primary", use_container_width=True):
+                    if passcode in whitelist_codes:
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "user"
+                        st.session_state.user_name = "인증 사용자"
+                        st.rerun()
+                    else:
+                        st.error("유효하지 않은 승인 접속 코드입니다.")
+        with tab_request:
+            req_id = st.text_input("신청 사번/아이디")
+            req_name = st.text_input("신청자 성명")
+            req_dept = st.text_input("소속/부서", value="환경2팀")
+            req_pw = st.text_input("비밀번호 설정", type="password")
+            if st.button("📝 승인 요청 제출", use_container_width=True):
+                if req_id and req_pw and req_name:
+                    auth_db = load_auth_db()
+                    users = auth_db.get("users", {})
+                    users[req_id] = {"name": req_name, "dept": req_dept, "password": req_pw, "status": "pending"}
+                    auth_db["users"] = users
+                    save_auth_db(auth_db)
+                    st.success("승인 요청이 완료되었습니다. 관리자 승인을 기다려주세요.")
+                else:
+                    st.warning("모든 필수 항목을 입력해주세요.")
+    return False
+
+# -------------------------------------------------------------
+# 메인 실행 게이트
+# -------------------------------------------------------------
+if not check_login_system():
+    st.stop()
+
+if st.session_state.get("user_role") == "admin":
+    auth_db = load_auth_db()
+    users = auth_db.get("users", {})
+    pending_users = {k: v for k, v in users.items() if v.get("status") == "pending"}
+    st.sidebar.markdown("---")
+    with st.sidebar.expander(f"🛡️ 승인 대기 ({len(pending_users)}명)", expanded=True):
+        for u_id, u_info in list(pending_users.items()):
+            st.write(f"**{u_info.get('name')}** ({u_id})")
+            c1, c2 = st.columns(2)
+            if c1.button("승인", key=f"app_{u_id}"):
+                users[u_id]["status"] = "approved"
+                save_auth_db(auth_db)
+                st.rerun()
+            if c2.button("반려", key=f"rej_{u_id}"):
+                del users[u_id]
+                save_auth_db(auth_db)
+                st.rerun()
+
+st.markdown("""
+<div class="hero-banner">
+    <div>
+        <h1 class="hero-title">💧 DANWOL AI-WaterOps 360</h1>
+        <div class="hero-subtitle">단월 본장(1,700 ㎥/일) 및 소규모 6개소 · 지능형 자율제어 디지털 트윈 관제 플랫폼</div>
+    </div>
+    <div class="badge-online">SYSTEM ONLINE</div>
+</div>
+""", unsafe_allow_html=True)
+
+st.sidebar.title("💧 단월 스마트 관제")
+st.sidebar.markdown(f"👤 **접속자**: {st.session_state.get('user_name', '사용자')} ({st.session_state.get('user_role')})")
+if st.sidebar.button("로그아웃", use_container_width=True):
+    st.session_state.logged_in = False
+    st.session_state.user_role = None
+    st.rerun()
+
+st.sidebar.info("📌 **본장**: 단월공공하수 (1,700 ㎥/일, KNR+IPR)\n📌 **소규모 6개소**: 산음·삼가리·진목·몰운·단월마을·당의\n📌 **개인하수 6개소**: 석산리·음지·양지·복지회관·인이피·돌고개")
+
+menu = st.sidebar.radio(
+    "⚡ 지능형 기능 메뉴",
+    [
+        "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 자동 완성",
+        "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편철 & 보관함",
+        "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제",
+        "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단",
+        "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석",
+        "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)",
+        "📝 7. TBM 표준회의록 AI 자동작성/출력"
+    ]
+)
+
+# -------------------------------------------------------------
+# 1. 엑셀 변환 작업대
+# -------------------------------------------------------------
+if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 자동 완성":
+    st.title("📑 운영일지 및 실험실 데이터 업로드 ➜ 하수도정보시스템 공인 양식 자동 완성")
+    tab_work, tab_archive, tab_accum = st.tabs(["🚀 엑셀 변환 및 다운로드 작업대", "🗂️ 월별 공인 엑셀 보관함", "📊 누적 엑셀 일괄 생성"])
+    
+    with tab_work:
+        fac_grp = st.radio("시설 그룹 선택", ["🏢 본처리장 (단월)", "🏡 소규모 처리시설 (6개소)", "🛖 개인하수 처리시설 (6개소)"], horizontal=True)
+        
+        if fac_grp == "🏢 본처리장 (단월)":
+            files_main = st.file_uploader("단월 본장 운영일지 엑셀 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="up_main_plant_all")
+            if files_main:
+                df_dw = universal_main_plant_parser(files_main)
+                if not df_dw.empty:
+                    st.session_state["df_main_parsed"] = df_dw
+            
+            if "df_main_parsed" in st.session_state:
+                df_dw = st.session_state["df_main_parsed"]
+                st.success(f"✅ 단월 본장 데이터 총 **{len(df_dw)}일치** 추출 완료!")
+                st.dataframe(df_dw, use_container_width=True)
+                m_bytes = fill_exact_main_template(df_dw)
+                r_bytes = fill_exact_reuse_template(df_dw)
+                col1, col2 = st.columns(2)
+                col1.download_button("📥 유량및수질관리.xlsx 다운로드", m_bytes, "유량및수질관리_단월.xlsx", type="primary", use_container_width=True)
+                col2.download_button("📥 재이용수 양식 다운로드", r_bytes, "재이용수_단월.xlsx", use_container_width=True)
+                if st.button("💾 ⚡ [단월 본장 마스터 DB 및 월별 보관함 저장]", key="btn_save_main_m_all", type="primary"):
+                    append_to_master_db(MAIN_PLANT, df_dw)
+                    save_path = os.path.join(KHAS_RECORD_DIR, "유량및수질관리_단월_2026-08.xlsx")
+                    with open(save_path, "wb") as f: f.write(m_bytes)
+                    st.success("✅ 단월 본장 데이터가 마스터 DB와 보관함에 안전하게 저장되었습니다!")
+
+        elif fac_grp == "🏡 소규모 처리시설 (6개소)":
+            st.subheader("🏡 소규모 6개소 (산음/삼가리/진목/몰운/단월마을/당의)")
+            files_s = st.file_uploader("소규모 6개소 운영일지 및 수질 엑셀 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="up_small_all")
+            if files_s:
+                s_dict = universal_small_plant_parser(files_s)
+                st.session_state["s_dict_parsed"] = s_dict
+
+            if "s_dict_parsed" in st.session_state:
+                s_dict = st.session_state["s_dict_parsed"]
+                st.success("✅ 소규모 6개소 데이터 파싱 완료!")
+                
+                if st.button("💾 ⚡ [소규모 6개소 전체 데이터 마스터 DB 및 보관함 일괄 저장]", type="primary", use_container_width=True, key="btn_save_small_all_master"):
+                    saved_count = 0
+                    for fac_k, df_item in s_dict.items():
+                        if df_item is not None and not df_item.empty:
+                            append_to_master_db(fac_k, df_item)
+                            small_bytes = fill_exact_small_template(df_item, fac_k)
+                            with open(os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_{fac_k}_2026.xlsx"), "wb") as f:
+                                f.write(small_bytes)
+                            saved_count += 1
+                    st.success(f"✅ 소규모 **{saved_count}개 시설**의 데이터가 마스터 DB(`danwol_accumulated_master.csv`) 및 보관함에 성공적으로 저장되었습니다!")
+
+                st.divider()
+                st.markdown("##### 🔍 시설별 24열 공인 서식 확인 및 개별 다운로드")
+                sel_sub_fac = st.selectbox("조회할 소규모 시설 선택", SMALL_PLANTS, key="sel_small_fac_view")
+                df_sub_sel = s_dict.get(sel_sub_fac, pd.DataFrame())
+                if not df_sub_sel.empty:
+                    st.dataframe(df_sub_sel, use_container_width=True)
+                    single_s_bytes = fill_exact_small_template(df_sub_sel, sel_sub_fac)
+                    col_s1, col_s2 = st.columns(2)
+                    col_s1.download_button(f"📥 유량및수질관리 업로드양식({sel_sub_fac}).xlsx 다운로드", single_s_bytes, f"유량및수질관리 업로드양식({sel_sub_fac}).xlsx", use_container_width=True, type="primary")
+                    if col_s2.button(f"💾 [{sel_sub_fac}] 개별 마스터 DB 저장", key=f"btn_save_single_{sel_sub_fac}"):
+                        append_to_master_db(sel_sub_fac, df_sub_sel)
+                        with open(os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_{sel_sub_fac}_2026.xlsx"), "wb") as f:
+                            f.write(single_s_bytes)
+                        st.success(f"✅ {sel_sub_fac} 데이터가 마스터 DB와 보관함에 저장되었습니다!")
+
+        else:
+            st.subheader("🛖 개인하수 6개소 (석산리/음지/양지/복지회관/인이피/돌고개)")
+            files_p = st.file_uploader("개인하수 6개소 엑셀 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="up_priv_all")
+            if files_p:
+                p_dict = parse_private_plant_multi_files(files_p)
+                st.session_state["p_dict_parsed"] = p_dict
+
+            if "p_dict_parsed" in st.session_state:
+                p_dict = st.session_state["p_dict_parsed"]
+                st.success("✅ 개인하수 6개소 데이터 파싱 완료!")
+                if st.button("💾 ⚡ [개인하수 6개소 마스터 DB 일괄 저장]", type="primary", use_container_width=True, key="btn_save_priv_all_master"):
+                    for fac_k, df_item in p_dict.items():
+                        if df_item is not None and not df_item.empty:
+                            append_to_master_db(fac_k, df_item)
+                    st.success("✅ 개인하수 6개소 데이터가 마스터 DB에 안전하게 저장되었습니다!")
+
+    # 1-2. 월별 공인 엑셀 보관함
+    with tab_archive:
+        st.subheader("🗂️ 월별 공인 업로드 엑셀 보관함")
+        saved_files = [f for f in os.listdir(KHAS_RECORD_DIR) if f.endswith(".xlsx") or f.endswith(".xls")]
+        
+        if saved_files:
+            col_arch_y, col_arch_m = st.columns(2)
+            with col_arch_y:
+                st.selectbox("📅 연도 선택", ["2026년", "2025년", "2024년"], key="arch_sel_y")
+            with col_arch_m:
+                st.selectbox("📆 월 선택", ["전체", "08월", "07월", "06월", "05월", "04월", "03월", "02월", "01월"], key="arch_sel_m")
+            
+            st.write(f"📁 **보관 문서: 총 {len(saved_files)}건**")
+            col_view, col_del = st.columns([3, 1])
+            with col_view:
+                target_f = st.selectbox("열람 및 다운로드할 엑셀 파일 선택", sorted(saved_files), key="arch_file_sel")
+            with col_del:
+                st.write(""); st.write("")
+                if st.button("🗑️ 선택 파일 삭제", type="secondary", use_container_width=True, key="btn_del_arch_file"):
+                    os.remove(os.path.join(KHAS_RECORD_DIR, target_f))
+                    st.success(f"🗑️ '{target_f}' 파일이 삭제되었습니다.")
+                    st.rerun()
+
+            if target_f:
+                with open(os.path.join(KHAS_RECORD_DIR, target_f), "rb") as f:
+                    f_bytes = f.read()
+                st.download_button(f"📥 선택된 문서 다시 다운로드 ({target_f})", f_bytes, file_name=target_f, use_container_width=True)
+        else:
+            st.info("💡 아직 보관함에 저장된 엑셀 파일이 없습니다. 1단계 작업대에서 [마스터 DB 및 보관함 저장]을 실행해 주세요.")
+
+    # 1-3. 누적 통합 엑셀 일괄 생성
+    with tab_accum:
+        st.subheader("📊 ⚡ [분기별 / 상하반기 / 연간 통합] 누적 엑셀 일괄 생성")
+        
+        c_cum_y, c_cum_p = st.columns([1, 1.5])
+        with c_cum_y:
+            sel_cum_year = st.selectbox("📅 대상 연도 선택", [2026, 2025, 2024], key="cum_y_sel")
+        with c_cum_p:
+            sel_period = st.selectbox("📆 기간 선택", ["1분기 (01~03월)", "2분기 (04~06월)", "3분기 (07~09월)", "4분기 (10~12월)", "상반기 (01~06월)", "하반기 (07~12월)", "연간 전체 (01~12월)", "전체 기간"], key="cum_p_sel")
+        
+        if "1분기" in sel_period: s_d, e_d = f"{sel_cum_year}-01-01", f"{sel_cum_year}-03-31"
+        elif "2분기" in sel_period: s_d, e_d = f"{sel_cum_year}-04-01", f"{sel_cum_year}-06-30"
+        elif "3분기" in sel_period: s_d, e_d = f"{sel_cum_year}-07-01", f"{sel_cum_year}-09-30"
+        elif "4분기" in sel_period: s_d, e_d = f"{sel_cum_year}-10-01", f"{sel_cum_year}-12-31"
+        elif "상반기" in sel_period: s_d, e_d = f"{sel_cum_year}-01-01", f"{sel_cum_year}-06-30"
+        elif "하반기" in sel_period: s_d, e_d = f"{sel_cum_year}-07-01", f"{sel_cum_year}-12-31"
+        elif "연간" in sel_period: s_d, e_d = f"{sel_cum_year}-01-01", f"{sel_cum_year}-12-31"
+        else: s_d, e_d = None, None
+
+        st.write(f"📍 **선택된 기간**: `{s_d or '처음'}` ~ `{e_d or '현재'}`")
+        st.divider()
+
+        col_c1, col_c2, col_c3 = st.columns(3)
+        with col_c1:
+            st.markdown("##### 🏢 단월 본장 누적 엑셀")
+            df_main_cum = get_master_data(MAIN_PLANT, s_d, e_d)
+            if not df_main_cum.empty:
+                cum_main_bytes = fill_exact_main_template(df_main_cum)
+                st.download_button(f"📥 단월본장 누적 다운로드 ({len(df_main_cum)}일치)", cum_main_bytes, f"유량및수질관리_단월_{sel_cum_year}_{sel_period.split()[0]}.xlsx", use_container_width=True, type="primary")
+            else:
+                st.info("해당 기간의 단월 본장 데이터가 없습니다.")
+
+        with col_c2:
+            st.markdown("##### 🏡 소규모 6개소 누적 엑셀")
+            zip_small_buf = io.BytesIO()
+            has_s_cum = False
+            with zipfile.ZipFile(zip_small_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                for fac in SMALL_PLANTS:
+                    df_s_item = get_master_data(fac, s_d, e_d)
+                    if not df_s_item.empty:
+                        has_s_cum = True
+                        zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}.xlsx", fill_exact_small_template(df_s_item, fac, start_date=s_d, end_date=e_d, year=sel_cum_year))
+            if has_s_cum:
+                st.download_button("📦 소규모 6개소 누적 ZIP 다운로드", zip_small_buf.getvalue(), f"소규모6개소_누적통합_{sel_cum_year}_{sel_period.split()[0]}.zip", use_container_width=True, type="primary")
+            else:
+                st.info("해당 기간의 소규모 시설 데이터가 없습니다.")
+
+        with col_c3:
+            st.markdown("##### 🛖 개인하수 6개소 누적 엑셀")
+            zip_p_buf = io.BytesIO()
+            has_p_cum = False
+            with zipfile.ZipFile(zip_p_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                for fac in PRIVATE_PLANTS:
+                    df_p_item = get_master_data(fac, s_d, e_d)
+                    if not df_p_item.empty:
+                        has_p_cum = True
+                        zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}.xlsx", fill_exact_small_template(df_p_item, fac, start_date=s_d, end_date=e_d, year=sel_cum_year))
+            if has_p_cum:
+                st.download_button("📦 개인하수 6개소 누적 ZIP 다운로드", zip_p_buf.getvalue(), f"개인하수6개소_누적통합_{sel_cum_year}_{sel_period.split()[0]}.zip", use_container_width=True, type="primary")
+            else:
+                st.info("해당 기간의 개인하수 시설 데이터가 없습니다.")
+
+# -------------------------------------------------------------
+# 2. HWPX 월간보고서
+# -------------------------------------------------------------
+elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편철 & 보관함":
+    st.title("📊 단월공공하수처리시설 대행사업 월간보고서 (HWPX)")
+    st.caption("🔒 최근 6개월 슬라이딩 윈도우 동적 반영 · 슬러지/태양광 실데이터 치환 · 한글(HWPX) 표준 편철 및 보관")
+
+    tab_hw_w, tab_hw_a = st.tabs(["✍️ [생성] 월간보고서 AI 자동편철", "🗂️ [보관함] 연도/월별 HWPX 보관소 & 삭제"])
+    with tab_hw_w:
+        col_m1, col_m2 = st.columns([1, 2])
+        with col_m1:
+            sel_report_year = st.selectbox("📅 대상 연도", [2026, 2025, 2024], index=0)
+            sel_report_month = st.selectbox("📅 대상 월", list(range(1, 13)), index=7)
+            hwpx_file_up = st.file_uploader("📂 원본 HWPX 양식 업로드 (선택)", type=["hwpx"])
+        with col_m2:
+            m_win = [(sel_report_month - 5 + i - 1) % 12 + 1 for i in range(6)]
+            m_win_str = ', '.join([f'{m}월' for m in m_win])
+            st.success(f"📌 **최근 6개월 슬라이딩 윈도우 자동 연동**: **{m_win_str}**")
+
+        st.markdown("##### ⚙️ 월간 운전 통계 및 주요 실적 입력")
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            sludge_avg = st.number_input("당월 슬러지 평균 함수율 (%)", value=78.5, step=0.1)
+            sludge_max = st.number_input("최대 함수율 (%)", value=80.2, step=0.1)
+            sludge_min = st.number_input("최소 함수율 (%)", value=76.8, step=0.1)
+        with col_s2:
+            solar_kwh = st.number_input(f"{sel_report_month}월 태양광 발전량 (kWh)", value=4320.0, step=10.0)
+
+        task_memo = st.text_area(
+            "📋 주요 설비 점검 및 보수 실적",
+            value="• 생물반응조 및 2차 침전조 스컴 스키머 정기 점검 및 구동부 윤활유 보충 완료\n• 소규모 6개소 유입 펌프장 및 자동 스크린 주간 순회 점검 및 협잡물 수거 완료\n• 총인 응집제(PAC) 정량 주입펌프 토출 압력 점검 및 배관 세척 작업 완료"
+        )
+
+        if st.button("🚀 ⚡ [월간보고서 (HWPX) 자동 생성 및 다운로드]", type="primary", use_container_width=True):
+            sl_data = {"avg": sludge_avg, "max": sludge_max, "min": sludge_min}
+            so_data = {"current_month": solar_kwh}
+            bytes_hwpx = generate_hwpx_monthly_report(sel_report_month, hwpx_file_up, sl_data, so_data, task_memo, sel_report_year)
+            
+            save_name = f"공공하수도시설_대행사업_월간보고서({sel_report_month}월)_{sel_report_year}.hwpx"
+            with open(os.path.join(HWPX_RECORD_DIR, save_name), "wb") as f:
+                f.write(bytes_hwpx)
+                
+            st.success(f"✅ [{sel_report_year}년 {sel_report_month}월] 월간보고서가 자동 편철되어 보관함에 저장되었습니다!")
+            st.download_button(
+                label=f"📥 {save_name} 다운로드",
+                data=bytes_hwpx,
+                file_name=save_name,
+                mime="application/hwp+zip",
+                type="primary",
+                use_container_width=True
+            )
+
+    with tab_hw_a:
+        st.subheader("🗂️ 보관된 HWPX 월간보고서 관리")
+        saved_hwpxs = [f for f in os.listdir(HWPX_RECORD_DIR) if f.endswith(".hwpx")]
+        if saved_hwpxs:
+            st.write(f"📁 **보관된 월간보고서: 총 {len(saved_hwpxs)}건**")
+            col_hw1, col_hw2 = st.columns([3, 1])
+            with col_hw1:
+                target_hw = st.selectbox("관리 및 다운로드할 보고서 선택", sorted(saved_hwpxs), key="sel_hwpx_target")
+            with col_hw2:
+                st.write(""); st.write("")
+                if st.button("🗑️ 선택 보고서 삭제", type="secondary", use_container_width=True):
+                    os.remove(os.path.join(HWPX_RECORD_DIR, target_hw))
+                    st.success(f"🗑️ '{target_hw}' 보고서가 보관함에서 삭제되었습니다.")
+                    st.rerun()
+            if target_hw:
+                with open(os.path.join(HWPX_RECORD_DIR, target_hw), "rb") as f:
+                    hw_data = f.read()
+                st.download_button(f"📥 선택 보고서 다시 다운로드 ({target_hw})", hw_data, file_name=target_hw, mime="application/hwp+zip", use_container_width=True)
+        else:
+            st.info("💡 아직 보관된 월간보고서가 없습니다.")
+
+# -------------------------------------------------------------
+# 3. TMS 관제
+# -------------------------------------------------------------
+elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
+    st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
+    tab_t1, tab_t2, tab_t3 = st.tabs(["📝 [입력/과거데이터 업로드] 실시간 수동입력 & 엑셀 적재", "🚦 [관제] 실시간 신호등 & 2·4·6·8h 예측 그래프", "🗂️ [보관소] TMS 누적 데이터"])
+    
+    with tab_t1:
+        if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ TMS 데이터로 실시간 일괄 동기화]", type="primary"):
+            df_m = get_master_data(MAIN_PLANT)
+            if not df_m.empty:
+                tms_list = []
+                for _, r in df_m.iterrows():
+                    tms_list.append({
+                        "측정일자": r['날짜'], "측정시각": "12:00:00",
+                        "방류pH": 7.20, "방류BOD": r.get('방류BOD', 2.3), "방류TOC": r.get('방류TOC', 3.1),
+                        "방류SS": r.get('방류SS', 4.8), "방류TN": r.get('방류TN', 8.45), "방류TP": r.get('방류TP', 0.065),
+                        "방류유량": 70.5, "예측pH_4h": 7.25, "예측BOD_4h": 2.45, "예측SS_4h": 5.1, "예측TN_4h": 8.9, "예측TP_4h": 0.072, "비고": "마스터 DB 동기화"
+                    })
+                df_tms_synced = pd.DataFrame(tms_list)
+                append_to_tms_db(df_tms_synced)
+                st.success("✅ TMS 데이터 동기화 완료!")
+        st.divider()
+        c_d1, c_d2 = st.columns(2)
+        with c_d1:
+            t_d = st.date_input("측정 일자", datetime.date(2026, 8, 16), key="tms_in_d_real")
+        with c_d2:
+            t_t = st.text_input("측정 시각", "12:00:00", key="tms_in_t_real")
+        col_in1, col_in2 = st.columns(2)
+        with col_in1:
+            t_ph = st.number_input("방류 pH", value=7.20)
+            t_bod = st.number_input("방류 BOD (mg/L)", value=2.30)
+            t_toc = st.number_input("방류 TOC (mg/L)", value=3.10)
+        with col_in2:
+            t_ss = st.number_input("방류 SS (mg/L)", value=4.80)
+            t_tn = st.number_input("방류 T-N (mg/L)", value=8.45)
+            t_tp = st.number_input("방류 T-P (mg/L)", value=0.065)
+        if st.button("💾 ⚡ [TMS 실측치 확정 & 마스터 DB 저장]", type="primary"):
+            df_new_t = pd.DataFrame([{"측정일자": str(t_d), "측정시각": t_t, "방류pH": t_ph, "방류BOD": t_bod, "방류TOC": t_toc, "방류SS": t_ss, "방류TN": t_tn, "방류TP": t_tp, "방류유량": 70.5, "예측pH_4h": t_ph*1.01, "예측BOD_4h": t_bod*1.05, "예측SS_4h": t_ss*1.04, "예측TN_4h": t_tn*1.03, "예측TP_4h": t_tp*1.08, "비고": "수동입력"}])
+            append_to_tms_db(df_new_t)
+            st.success("✅ TMS 데이터가 저장되었습니다!")
+            
+    with tab_t2:
+        st.markdown("#### 🚦 실시간 방류 수질 6대 항목 신호등 상태")
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1.metric("pH", "7.20", "🟢 정상 (안전)")
+        c2.metric("BOD", "2.30 mg/L", "🟢 정상 (안전)")
+        c3.metric("TOC", "3.10 mg/L", "🟢 정상 (안전)")
+        c4.metric("SS", "4.80 mg/L", "🟢 정상 (안전)")
+        c5.metric("T-N", "8.45 mg/L", "🟢 정상 (안전)")
+        c6.metric("T-P", "0.065 mg/L", "🟢 정상 (안전)")
+        
+        st.divider()
+        st.markdown("#### 📈 2·4·6·8시간 후 6대 수질 시계열 AI 예측 그래프")
+        t_steps = ["현재 (T0)", "+2시간 후", "+4시간 후", "+6시간 후", "+8시간 후"]
+        fig_pred = make_subplots(rows=1, cols=6, subplot_titles=("pH (5.8~8.6)", "BOD (5.0)", "TOC (15.0)", "SS (10.0)", "T-N (20.0)", "T-P (0.20)"))
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[7.20, 7.22, 7.25, 7.21, 7.19], mode='lines+markers+text', text=[f"{v:.2f}" for v in [7.20, 7.22, 7.25, 7.21, 7.19]], textposition="top center", name="pH", line=dict(color='#0284C7', width=2)), row=1, col=1)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[2.30, 2.42, 2.48, 2.35, 2.25], mode='lines+markers+text', text=[f"{v:.2f}" for v in [2.30, 2.42, 2.48, 2.35, 2.25]], textposition="top center", name="BOD", line=dict(color='#3B82F6', width=2)), row=1, col=2)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[3.10, 3.20, 3.25, 3.15, 3.05], mode='lines+markers+text', text=[f"{v:.2f}" for v in [3.10, 3.20, 3.25, 3.15, 3.05]], textposition="top center", name="TOC", line=dict(color='#0EA5E9', width=2)), row=1, col=3)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[4.80, 5.00, 5.15, 4.90, 4.70], mode='lines+markers+text', text=[f"{v:.2f}" for v in [4.80, 5.00, 5.15, 4.90, 4.70]], textposition="top center", name="SS", line=dict(color='#6366F1', width=2)), row=1, col=4)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[8.45, 8.70, 9.05, 8.80, 8.40], mode='lines+markers+text', text=[f"{v:.2f}" for v in [8.45, 8.70, 9.05, 8.80, 8.40]], textposition="top center", name="T-N", line=dict(color='#10B981', width=2)), row=1, col=5)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=[0.065, 0.070, 0.073, 0.068, 0.063], mode='lines+markers+text', text=[f"{v:.3f}" for v in [0.065, 0.070, 0.073, 0.068, 0.063]], textposition="top center", name="T-P", line=dict(color='#F59E0B', width=2)), row=1, col=6)
+        fig_pred.update_layout(height=340, template="plotly_white", showlegend=False, margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig_pred, use_container_width=True)
+        
+    with tab_t3:
+        df_t_all = get_tms_db()
+        if not df_t_all.empty:
+            st.dataframe(df_t_all, use_container_width=True)
+
+# -------------------------------------------------------------
+# 4. 공정 제어
+# -------------------------------------------------------------
+elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
+    st.title("⚙️ AI 기반 최적 운전조건 제안 & 공정 정밀진단")
+    sel_p = st.selectbox("🎯 공정 대상 시설 선택", [MAIN_PLANT] + SMALL_PLANTS)
+    target_spec = PLANT_DESIGN_SPECS[sel_p]
+    st.info(f"🏢 **시설명**: {sel_p} | **공법**: {target_spec['method']} | **약품**: {target_spec['chem_type']} | **용량**: {target_spec['cap']} ㎥/일")
+    
+    tab_p1, tab_p2, tab_p3 = st.tabs(["📝 [입력] 공정 데이터 적재", "💡 [AI 최적 제어 가이드]", "🗂️ [보관소]"])
+    with tab_p1:
+        if st.button("🔄 ⚡ [운영일지 데이터로 공정제어 자동 연산 & 적재]", type="primary"):
+            df_m_fac = get_master_data(sel_p)
+            if not df_m_fac.empty:
+                p_recs = []
+                for idx, (_, r) in enumerate(df_m_fac.iterrows()):
+                    res = calculate_ai_process_parameters(r.get('유입량', target_spec['cap']), r.get('유입BOD', 120), r.get('유입TN', 25), r.get('유입TP', 2.8), facility_name=sel_p, date_seed=idx)
+                    p_recs.append({"날짜": r['날짜'], "유입량_m3": r.get('유입량', target_spec['cap']), "CN비": res['CN비'], "권장송풍량_m3min": res['권장송풍량_m3min'], "송풍기가동대수": res['송풍기가동대수'], "권장염화제이철_L": res['권장염화제이철_L'], "종침전PAC주입량_L": res['종침전PAC주입량_L']})
+                df_p_synced = pd.DataFrame(p_recs)
+                append_to_process_db(df_p_synced, facility_name=sel_p)
+                st.success("✅ 공정 데이터베이스 적재 완료!")
+                st.dataframe(df_p_synced, use_container_width=True)
+            else:
+                st.warning("⚠️ 1번 메뉴에서 해당 시설의 데이터를 먼저 업로드해 주세요.")
+    with tab_p2:
+        res = calculate_ai_process_parameters(1700, 120, 25, 2.8, facility_name=sel_p)
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("유입 C/N 비", f"{res['CN비']}", "4.0 이상 적정")
+        k2.metric("AI 권장 송풍량", f"{res['권장송풍량_m3min']} ㎥/min", f"송풍기 {res['송풍기가동대수']}대 가동")
+        
+        if sel_p == MAIN_PLANT:
+            k3.metric("최적 염화
