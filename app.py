@@ -248,33 +248,75 @@ def calculate_ai_process_parameters(flow_m3, bod_mg, tn_mg, tp_mg, facility_name
         "종침전PAC주입량_L": round(opt_pac, 1)
     }
 
-# 6. 파서 및 엑셀 서식 엔진
+# 6. 연도/월 다중 파일 완벽 인식 파서
 def universal_main_plant_parser(file_list):
-    records = {}
+    records_by_date = {}
     if not file_list: return pd.DataFrame()
     for f in file_list:
         try:
+            fname = getattr(f, 'name', str(f))
+            y_m = re.search(r'(20[1-3]\d)', fname)
+            y_int = int(y_m.group(1)) if y_m else None
+            
+            m_m = re.search(r'(\d{1,2})월', fname)
+            m_int = int(m_m.group(1)) if m_m else None
+            
             xl = pd.ExcelFile(f)
             if '수질' in xl.sheet_names:
-                df = pd.read_excel(xl, sheet_name='수질', header=None)
-                for r in range(len(df)):
-                    v = str(df.iloc[r, 0]).strip()
-                    if v.isdigit() and 1 <= int(v) <= 31:
-                        d_str = f"2026-08-{int(v):02d}"
-                        row_vals = df.iloc[r].values
-                        records[d_str] = {
-                            '날짜': d_str, '유입BOD': pd.to_numeric(row_vals[1], errors='coerce'),
-                            '유입TOC': pd.to_numeric(row_vals[2], errors='coerce'), '유입SS': pd.to_numeric(row_vals[3], errors='coerce'),
-                            '유입TN': pd.to_numeric(row_vals[4], errors='coerce'), '유입TP': pd.to_numeric(row_vals[5], errors='coerce'),
-                            '방류BOD': pd.to_numeric(row_vals[10], errors='coerce'), '방류TOC': pd.to_numeric(row_vals[11], errors='coerce'),
-                            '방류SS': pd.to_numeric(row_vals[12], errors='coerce'), '방류TN': pd.to_numeric(row_vals[13], errors='coerce'),
-                            '방류TP': pd.to_numeric(row_vals[14], errors='coerce'), '유입량': pd.to_numeric(row_vals[16], errors='coerce'),
-                            '재이용수': pd.to_numeric(row_vals[17], errors='coerce'), '방류량': pd.to_numeric(row_vals[18], errors='coerce'),
-                            '수온': pd.to_numeric(row_vals[19], errors='coerce') if len(row_vals) > 19 else 24.5
-                        }
+                df_sz = pd.read_excel(xl, sheet_name='수질', header=None)
+                for r in range(min(8, len(df_sz))):
+                    row_str = " ".join([str(v) for v in df_sz.iloc[r].dropna().values])
+                    if y_int is None:
+                        tm_y = re.search(r'(20[1-3]\d)년', row_str) or re.search(r'(20[1-3]\d)[-/.]', row_str)
+                        if tm_y: y_int = int(tm_y.group(1))
+                    if m_int is None:
+                        tm_m = re.search(r'(\d{1,2})월', row_str)
+                        if tm_m: m_int = int(tm_m.group(1))
+                
+                if y_int is None or not (2010 <= y_int <= 2035): y_int = 2026
+                if m_int is None: m_int = 1
+
+                start_r = None
+                for r in range(len(df_sz)):
+                    v = str(df_sz.iloc[r, 0]).strip()
+                    if v in ['1', '1.0', 1]:
+                        start_r = r
+                        break
+                
+                if start_r is not None:
+                    for r in range(start_r, min(start_r + 32, len(df_sz))):
+                        day_val = df_sz.iloc[r, 0]
+                        try:
+                            d_int = int(float(str(day_val).strip()))
+                            try:
+                                valid_dt = datetime.date(y_int, m_int, d_int)
+                                d_str = valid_dt.strftime('%Y-%m-%d')
+                            except ValueError:
+                                continue
+                            
+                            row_vals = df_sz.iloc[r].values
+                            if len(row_vals) >= 19:
+                                rec = {
+                                    '날짜': d_str,
+                                    '유입BOD': pd.to_numeric(row_vals[1], errors='coerce'), '유입TOC': pd.to_numeric(row_vals[2], errors='coerce'),
+                                    '유입SS': pd.to_numeric(row_vals[3], errors='coerce'), '유입TN': pd.to_numeric(row_vals[4], errors='coerce'),
+                                    '유입TP': pd.to_numeric(row_vals[5], errors='coerce'), '유입대장균': pd.to_numeric(row_vals[6], errors='coerce'),
+                                    'MLSS_A': pd.to_numeric(row_vals[7], errors='coerce') if len(row_vals) > 7 else None,
+                                    'MLSS_B': pd.to_numeric(row_vals[8], errors='coerce') if len(row_vals) > 8 else None,
+                                    '방류BOD': pd.to_numeric(row_vals[10], errors='coerce'), '방류TOC': pd.to_numeric(row_vals[11], errors='coerce'),
+                                    '방류SS': pd.to_numeric(row_vals[12], errors='coerce'), '방류TN': pd.to_numeric(row_vals[13], errors='coerce'),
+                                    '방류TP': pd.to_numeric(row_vals[14], errors='coerce'), '방류대장균': pd.to_numeric(row_vals[15], errors='coerce'),
+                                    '유입량': pd.to_numeric(row_vals[16], errors='coerce'), '재이용수': pd.to_numeric(row_vals[17], errors='coerce'),
+                                    '방류량': pd.to_numeric(row_vals[18], errors='coerce'), '수온': pd.to_numeric(row_vals[19], errors='coerce') if len(row_vals) > 19 else None,
+                                }
+                                records_by_date[d_str] = rec
+                        except Exception:
+                            pass
         except Exception:
             pass
-    return pd.DataFrame(list(records.values())).sort_values(by='날짜').reset_index(drop=True) if records else pd.DataFrame()
+    if records_by_date:
+        return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
+    return pd.DataFrame()
 
 def universal_small_plant_parser(file_list):
     facility_aliases = {
@@ -285,6 +327,10 @@ def universal_small_plant_parser(file_list):
     if not file_list: return {fac: pd.DataFrame() for fac in SMALL_PLANTS}
     for f in file_list:
         try:
+            fname = getattr(f, 'name', str(f))
+            y_m = re.search(r'(20[1-3]\d)', fname)
+            file_year_anchor = int(y_m.group(1)) if y_m else 2026
+
             wb = openpyxl.load_workbook(f, data_only=True)
             for sname in wb.sheetnames:
                 ws = wb[sname]
@@ -295,7 +341,12 @@ def universal_small_plant_parser(file_list):
                     for al in aliases:
                         if al.replace(" ", "") in sname_clean: sheet_fac = std_fac; break
                     if sheet_fac: break
-                for r in range(1, min(ws.max_row + 1, 400)):
+                
+                sheet_m = None
+                sm_match = re.search(r'(\d{1,2})월', sname)
+                if sm_match: sheet_m = int(sm_match.group(1))
+
+                for r in range(1, min(ws.max_row + 1, 600)):
                     row = [ws.cell(r, c).value for c in range(1, min(ws.max_column + 1, 40))]
                     if not any(row): continue
                     c0_clean = str(row[0] or "").replace(" ", "")
@@ -303,25 +354,46 @@ def universal_small_plant_parser(file_list):
                     for std_fac, aliases in facility_aliases.items():
                         for al in aliases:
                             if al.replace(" ", "") in c0_clean: cur_fac = std_fac; break
+                    
                     dt_val = None
                     for c_idx in [0, 1, 2]:
                         if c_idx < len(row):
                             v = row[c_idx]
                             if isinstance(v, (datetime.datetime, datetime.date)):
-                                dt_val = datetime.date(2026, v.month, v.day); break
+                                dt_val = datetime.date(file_year_anchor, v.month, v.day)
+                                break
+                            elif isinstance(v, str) and re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', v):
+                                m = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', v)
+                                dt_val = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                                break
                             elif isinstance(v, str) and re.search(r'(\d{1,2})[-/.](\d{1,2})', v):
                                 m = re.search(r'(\d{1,2})[-/.](\d{1,2})', v)
-                                dt_val = datetime.date(2026, int(m.group(1)), int(m.group(2))); break
+                                dt_val = datetime.date(file_year_anchor, int(m.group(1)), int(m.group(2)))
+                                break
+                            elif isinstance(v, (int, float)) and sheet_m and (1 <= int(v) <= 31):
+                                try:
+                                    dt_val = datetime.date(file_year_anchor, sheet_m, int(v))
+                                    break
+                                except Exception: pass
+
                     if cur_fac and dt_val:
                         d_str = dt_val.strftime('%Y-%m-%d')
                         nums = [pd.to_numeric(val, errors='coerce') for val in row if pd.notna(pd.to_numeric(val, errors='coerce'))]
                         if len(nums) >= 6:
                             accumulated_data[cur_fac][d_str] = {
-                                '날짜': d_str, '유입BOD': nums[0] if len(nums)>0 else 120.0, '유입TOC': nums[1] if len(nums)>1 else 75.0,
-                                '유입SS': nums[2] if len(nums)>2 else 110.0, '유입TN': nums[3] if len(nums)>3 else 28.0, '유입TP': nums[4] if len(nums)>4 else 3.2,
-                                '방류BOD': nums[5] if len(nums)>5 else 2.1, '방류TOC': nums[6] if len(nums)>6 else 4.0, '방류SS': nums[7] if len(nums)>7 else 3.5,
-                                '방류TN': nums[8] if len(nums)>8 else 8.5, '방류TP': nums[9] if len(nums)>9 else 0.15,
-                                '유입량': PLANT_DESIGN_SPECS[cur_fac]["cap"] * 0.8, '방류량': PLANT_DESIGN_SPECS[cur_fac]["cap"] * 0.8
+                                '날짜': d_str,
+                                '유입BOD': nums[0] if len(nums) > 0 else 120.0,
+                                '유입TOC': nums[1] if len(nums) > 1 else 75.0,
+                                '유입SS': nums[2] if len(nums) > 2 else 110.0,
+                                '유입TN': nums[3] if len(nums) > 3 else 28.0,
+                                '유입TP': nums[4] if len(nums) > 4 else 3.2,
+                                '방류BOD': nums[5] if len(nums) > 5 else 2.1,
+                                '방류TOC': nums[6] if len(nums) > 6 else 4.0,
+                                '방류SS': nums[7] if len(nums) > 7 else 3.5,
+                                '방류TN': nums[8] if len(nums) > 8 else 8.5,
+                                '방류TP': nums[9] if len(nums) > 9 else 0.15,
+                                '유입량': PLANT_DESIGN_SPECS[cur_fac]["cap"] * 0.8,
+                                '방류량': PLANT_DESIGN_SPECS[cur_fac]["cap"] * 0.8
                             }
         except Exception:
             pass
@@ -641,7 +713,7 @@ menu = st.sidebar.radio(
 )
 
 # -------------------------------------------------------------
-# 1. 엑셀 변환 작업대 (완벽 복구)
+# 1. 엑셀 변환 작업대
 # -------------------------------------------------------------
 if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 자동 완성":
     st.title("📑 운영일지 및 실험실 데이터 업로드 ➜ 하수도정보시스템 공인 양식 자동 완성")
@@ -814,8 +886,8 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                         zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}.xlsx", fill_exact_small_template(df_p_item, fac))
                 if has_p_cum:
                     st.download_button("📦 개인하수 6개소 누적 ZIP 다운로드", zip_p_buf.getvalue(), f"개인하수6개소_누적통합_{sel_cum_year}_{sel_period.split()[0]}.zip", use_container_width=True, type="primary")
-                else:
-                    st.info("해당 기간의 개인하수 시설 데이터가 없습니다.")
+            else:
+                st.info("해당 기간의 개인하수 시설 데이터가 없습니다.")
 
 # -------------------------------------------------------------
 # 2. HWPX 월간보고서
@@ -1011,7 +1083,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         st.dataframe(get_process_db(sel_p), use_container_width=True)
 
 # -------------------------------------------------------------
-# 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석 (복원 완료)
+# 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석
 # -------------------------------------------------------------
 elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석":
     st.title("🧪 약품·전력·태양광 사용량 데이터 적재 & ESG 경제성 분석")
