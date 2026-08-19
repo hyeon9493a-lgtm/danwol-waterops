@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from streamlit_drawable_canvas import st_canvas
+from openpyxl.styles import PatternFill
 import datetime
 import os
 import re
