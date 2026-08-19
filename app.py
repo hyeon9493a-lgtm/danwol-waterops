@@ -247,7 +247,7 @@ def calculate_ai_process_parameters(flow_m3, bod_mg, tn_mg, tp_mg, facility_name
         "종침전PAC주입량_L": round(opt_pac, 1)
     }
 
-# 6. 연도/월 다중 파일 완벽 인식 파서
+# 6. 연도/월 다중 파일 완벽 인식 파서 (단월 본장)
 def universal_main_plant_parser(file_list):
     records_by_date = {}
     if not file_list: return pd.DataFrame()
@@ -317,92 +317,156 @@ def universal_main_plant_parser(file_list):
         return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
     return pd.DataFrame()
 
+# [소규모 6개소 24열 서식 및 운영일지 완벽 파서]
 def universal_small_plant_parser(file_list):
     facility_aliases = {
         "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
         "몰운": ["몰운", "몰운리"], "단월마을": ["단월마을"], "당의": ["당의"]
     }
-    accumulated_data = {fac: {} for fac in SMALL_PLANTS}
-    if not file_list: return {fac: pd.DataFrame() for fac in SMALL_PLANTS}
+    accumulated_data = {fac: {} for fac in facility_aliases.keys()}
+    if not file_list: return {fac: pd.DataFrame() for fac in facility_aliases.keys()}
+    
     for f in file_list:
         try:
             fname = getattr(f, 'name', str(f))
             y_m = re.search(r'(20[1-3]\d)', fname)
             file_year_anchor = int(y_m.group(1)) if y_m else 2026
-
+            
             wb = openpyxl.load_workbook(f, data_only=True)
             for sname in wb.sheetnames:
                 ws = wb[sname]
                 if ws.max_row < 2: continue
+                
                 sheet_fac = None
                 sname_clean = sname.replace(" ", "")
+                fname_clean = fname.replace(" ", "")
                 for std_fac, aliases in facility_aliases.items():
                     for al in aliases:
-                        if al.replace(" ", "") in sname_clean: sheet_fac = std_fac; break
+                        if al.replace(" ", "") in sname_clean or al.replace(" ", "") in fname_clean:
+                            sheet_fac = std_fac; break
                     if sheet_fac: break
                 
-                sheet_m = None
-                sm_match = re.search(r'(\d{1,2})월', sname)
-                if sm_match: sheet_m = int(sm_match.group(1))
-
-                for r in range(1, min(ws.max_row + 1, 600)):
-                    row = [ws.cell(r, c).value for c in range(1, min(ws.max_column + 1, 40))]
-                    if not any(row): continue
-                    c0_clean = str(row[0] or "").replace(" ", "")
-                    cur_fac = sheet_fac
-                    for std_fac, aliases in facility_aliases.items():
-                        for al in aliases:
-                            if al.replace(" ", "") in c0_clean: cur_fac = std_fac; break
-                    
-                    dt_val = None
-                    for c_idx in [0, 1, 2]:
-                        if c_idx < len(row):
-                            v = row[c_idx]
-                            if isinstance(v, (datetime.datetime, datetime.date)):
-                                dt_val = datetime.date(file_year_anchor, v.month, v.day)
-                                break
-                            elif isinstance(v, str) and re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', v):
-                                m = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', v)
+                r1_val = str(ws.cell(1, 1).value or '')
+                r2_val = str(ws.cell(2, 1).value or '')
+                is_24_col = ('유량및수질' in r1_val or '업로드양식' in r1_val or '날짜' in r2_val)
+                
+                if is_24_col and sheet_fac:
+                    for r in range(4, min(ws.max_row + 1, 1000)):
+                        c1_val = ws.cell(r, 1).value
+                        if c1_val is None: continue
+                        
+                        dt_val = None
+                        if isinstance(c1_val, (datetime.datetime, datetime.date)):
+                            dt_val = datetime.date(c1_val.year, c1_val.month, c1_val.day)
+                        elif isinstance(c1_val, str):
+                            m = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', c1_val)
+                            if m:
                                 dt_val = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-                                break
-                            elif isinstance(v, str) and re.search(r'(\d{1,2})[-/.](\d{1,2})', v):
-                                m = re.search(r'(\d{1,2})[-/.](\d{1,2})', v)
-                                dt_val = datetime.date(file_year_anchor, int(m.group(1)), int(m.group(2)))
-                                break
-                            elif isinstance(v, (int, float)) and sheet_m and (1 <= int(v) <= 31):
-                                try:
-                                    dt_val = datetime.date(file_year_anchor, sheet_m, int(v))
-                                    break
-                                except Exception: pass
+                            else:
+                                m2 = re.search(r'(\d{1,2})[-/.](\d{1,2})', c1_val)
+                                if m2:
+                                    dt_val = datetime.date(file_year_anchor, int(m2.group(1)), int(m2.group(2)))
+                        
+                        if dt_val:
+                            d_str = dt_val.strftime('%Y-%m-%d')
+                            if d_str not in accumulated_data[sheet_fac]:
+                                accumulated_data[sheet_fac][d_str] = {'날짜': d_str}
+                            rec = accumulated_data[sheet_fac][d_str]
+                            
+                            flow_in = pd.to_numeric(ws.cell(r, 2).value, errors='coerce')
+                            flow_out = pd.to_numeric(ws.cell(r, 6).value, errors='coerce')
+                            temp_val = pd.to_numeric(ws.cell(r, 7).value, errors='coerce')
+                            
+                            if pd.notna(flow_in): rec['유입량'] = float(flow_in)
+                            if pd.notna(flow_out): rec['방류량'] = float(flow_out)
+                            if pd.notna(temp_val): rec['수온'] = float(temp_val)
+                            
+                            in_bod = pd.to_numeric(ws.cell(r, 9).value, errors='coerce')
+                            in_toc = pd.to_numeric(ws.cell(r, 10).value, errors='coerce')
+                            in_ss = pd.to_numeric(ws.cell(r, 11).value, errors='coerce')
+                            in_tn = pd.to_numeric(ws.cell(r, 12).value, errors='coerce')
+                            in_tp = pd.to_numeric(ws.cell(r, 13).value, errors='coerce')
+                            in_coli = pd.to_numeric(ws.cell(r, 14).value, errors='coerce')
+                            
+                            out_bod = pd.to_numeric(ws.cell(r, 17).value, errors='coerce')
+                            out_toc = pd.to_numeric(ws.cell(r, 18).value, errors='coerce')
+                            out_ss = pd.to_numeric(ws.cell(r, 19).value, errors='coerce')
+                            out_tn = pd.to_numeric(ws.cell(r, 20).value, errors='coerce')
+                            out_tp = pd.to_numeric(ws.cell(r, 21).value, errors='coerce')
+                            out_coli = pd.to_numeric(ws.cell(r, 22).value, errors='coerce')
+                            
+                            if pd.notna(in_bod): rec['유입BOD'] = float(in_bod)
+                            if pd.notna(in_toc): rec['유입TOC'] = float(in_toc)
+                            if pd.notna(in_ss): rec['유입SS'] = float(in_ss)
+                            if pd.notna(in_tn): rec['유입TN'] = float(in_tn)
+                            if pd.notna(in_tp): rec['유입TP'] = float(in_tp)
+                            if pd.notna(in_coli): rec['유입대장균'] = float(in_coli)
+                            
+                            if pd.notna(out_bod): rec['방류BOD'] = float(out_bod)
+                            if pd.notna(out_toc): rec['방류TOC'] = float(out_toc)
+                            if pd.notna(out_ss): rec['방류SS'] = float(out_ss)
+                            if pd.notna(out_tn): rec['방류TN'] = float(out_tn)
+                            if pd.notna(out_tp): rec['방류TP'] = float(out_tp)
+                            if pd.notna(out_coli): rec['방류대장균'] = float(out_coli)
+                else:
+                    sheet_m = None
+                    sm_match = re.search(r'(\d{1,2})월', sname)
+                    if sm_match: sheet_m = int(sm_match.group(1))
 
-                    if cur_fac and dt_val:
-                        d_str = dt_val.strftime('%Y-%m-%d')
-                        nums = [pd.to_numeric(val, errors='coerce') for val in row if pd.notna(pd.to_numeric(val, errors='coerce'))]
-                        if len(nums) >= 6:
-                            accumulated_data[cur_fac][d_str] = {
-                                '날짜': d_str,
-                                '유입BOD': nums[0] if len(nums) > 0 else 120.0,
-                                '유입TOC': nums[1] if len(nums) > 1 else 75.0,
-                                '유입SS': nums[2] if len(nums) > 2 else 110.0,
-                                '유입TN': nums[3] if len(nums) > 3 else 28.0,
-                                '유입TP': nums[4] if len(nums) > 4 else 3.2,
-                                '방류BOD': nums[5] if len(nums) > 5 else 2.1,
-                                '방류TOC': nums[6] if len(nums) > 6 else 4.0,
-                                '방류SS': nums[7] if len(nums) > 7 else 3.5,
-                                '방류TN': nums[8] if len(nums) > 8 else 8.5,
-                                '방류TP': nums[9] if len(nums) > 9 else 0.15,
-                                '유입량': PLANT_DESIGN_SPECS[cur_fac]["cap"] * 0.8,
-                                '방류량': PLANT_DESIGN_SPECS[cur_fac]["cap"] * 0.8
-                            }
+                    for r in range(1, min(ws.max_row + 1, 600)):
+                        row = [ws.cell(r, c).value for c in range(1, min(ws.max_column + 1, 40))]
+                        if not any(row): continue
+                        c0_clean = str(row[0] or "").replace(" ", "")
+                        cur_fac = sheet_fac
+                        for std_fac, aliases in facility_aliases.items():
+                            for al in aliases:
+                                if al.replace(" ", "") in c0_clean: cur_fac = std_fac; break
+                        
+                        dt_val = None
+                        for c_idx in [0, 1, 2]:
+                            if c_idx < len(row):
+                                v = row[c_idx]
+                                if isinstance(v, (datetime.datetime, datetime.date)):
+                                    dt_val = datetime.date(file_year_anchor, v.month, v.day); break
+                                elif isinstance(v, str) and re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', v):
+                                    m = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', v)
+                                    dt_val = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3))); break
+                                elif isinstance(v, str) and re.search(r'(\d{1,2})[-/.](\d{1,2})', v):
+                                    m = re.search(r'(\d{1,2})[-/.](\d{1,2})', v)
+                                    dt_val = datetime.date(file_year_anchor, int(m.group(1)), int(m.group(2))); break
+                                elif isinstance(v, (int, float)) and sheet_m and (1 <= int(v) <= 31):
+                                    try:
+                                        dt_val = datetime.date(file_year_anchor, sheet_m, int(v)); break
+                                    except Exception: pass
+
+                        if cur_fac and dt_val:
+                            d_str = dt_val.strftime('%Y-%m-%d')
+                            if d_str not in accumulated_data[cur_fac]:
+                                accumulated_data[cur_fac][d_str] = {'날짜': d_str}
+                            rec = accumulated_data[cur_fac][d_str]
+                            
+                            nums = [pd.to_numeric(val, errors='coerce') for val in row if pd.notna(pd.to_numeric(val, errors='coerce'))]
+                            if len(nums) >= 6:
+                                rec.update({
+                                    '유입BOD': nums[0], '유입TOC': nums[1], '유입SS': nums[2],
+                                    '유입TN': nums[3], '유입TP': nums[4],
+                                    '방류BOD': nums[5], '방류TOC': nums[6] if len(nums)>6 else np.nan,
+                                    '방류SS': nums[7] if len(nums)>7 else np.nan, '방류TN': nums[8] if len(nums)>8 else np.nan,
+                                    '방류TP': nums[9] if len(nums)>9 else np.nan
+                                })
+                            if len(nums) >= 1 and ('유입량' not in rec or pd.isna(rec['유입량'])):
+                                if len(nums) >= 14 and pd.notna(nums[13]):
+                                    rec['유입량'] = float(nums[13])
+                                    rec['방류량'] = float(nums[13])
         except Exception:
             pass
+            
     result_dfs = {}
-    for fac in SMALL_PLANTS:
+    for fac in facility_aliases.keys():
         if accumulated_data[fac]:
             result_dfs[fac] = pd.DataFrame(list(accumulated_data[fac].values())).sort_values(by='날짜').drop_duplicates(subset=['날짜']).reset_index(drop=True)
         else:
-            default_recs = [{"날짜": f"2026-08-{d:02d}", "유입BOD": 135.0, "유입TOC": 80.0, "유입SS": 125.0, "유입TN": 30.0, "유입TP": 3.4, "방류BOD": 2.2, "방류TOC": 4.1, "방류SS": 3.2, "방류TN": 8.7, "방류TP": 0.14, "유입량": PLANT_DESIGN_SPECS[fac]["cap"]*0.85, "방류량": PLANT_DESIGN_SPECS[fac]["cap"]*0.85} for d in range(1, 21)]
-            result_dfs[fac] = pd.DataFrame(default_recs)
+            result_dfs[fac] = pd.DataFrame()
     return result_dfs
 
 def parse_private_plant_multi_files(file_list):
@@ -480,8 +544,8 @@ def fill_exact_small_template(df_data, fac_name):
 
             raw_in = r.get('유입량', np.nan)
             raw_out = r.get('방류량', np.nan)
-            flow_in = float(raw_in) if (pd.notna(raw_in) and 0.1 <= float(raw_in) <= 2000) else default_f
-            flow_out = float(raw_out) if (pd.notna(raw_out) and 0.1 <= float(raw_out) <= 2000) else default_f
+            flow_in = float(raw_in) if (pd.notna(raw_in) and 0.001 <= float(raw_in) <= 2000) else default_f
+            flow_out = float(raw_out) if (pd.notna(raw_out) and 0.001 <= float(raw_out) <= 2000) else default_f
 
             ws.cell(r_idx, 2, flow_in)
             ws.cell(r_idx, 5, flow_in)  # E열: 고도처리량 = 유입량
