@@ -5,7 +5,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from streamlit_drawable_canvas import st_canvas
-from openpyxl.styles import PatternFill
 import datetime
 import os
 import re
@@ -421,9 +420,9 @@ def fill_exact_main_template(df_data):
     ws['A1'] = "유량및수질관리 업로드양식"
     ws.merge_cells('A1:AY1')
     headers_r1 = {
-        'A2': '날짜', 'B2': '유입량\n(반류수 포함)\n(㎥/일)', 'C2': '반류수 유량\n(㎥/일)',
-        'D2': '실제 유입량\n(㎥/일)', 'E2': '처리량', 'H2': '방류량\n(㎥)/일',
-        'I2': '처리시설 유입전\n우수토실 방류량\n(㎥)/일', 'J2': '수온\n(℃)',
+        'A2': '날짜', 'B2': '유입량(반류수 포함)(㎥/일)', 'C2': '반류수 유량(㎥/일)',
+        'D2': '실제 유입량(㎥/일)', 'E2': '처리량', 'H2': '방류량(㎥)/일',
+        'I2': '처리시설 유입전 우수토실 방류량(㎥)/일', 'J2': '수온(℃)',
         'K2': '유입수질(연계전)', 'S2': '총인시설 유입수질(연계전)',
         'AA2': '강우시 유입수질(1차처리전)', 'AI2': '방류수질',
         'AQ2': '방류수질(강우시 1차처리후 by-pass)', 'AY2': '비고'
@@ -1033,7 +1032,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             st.dataframe(df_t_all, use_container_width=True)
 
 # -------------------------------------------------------------
-# 4. 공정 제어
+# 4. 공정 제어 (BOD, TOC, SS, T-N, T-P 5대 수질 지표 완벽 복구)
 # -------------------------------------------------------------
 elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
     st.title("⚙️ AI 기반 최적 운전조건 제안 & 공정 정밀진단")
@@ -1074,11 +1073,43 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         
         st.divider()
         df_m_main = get_master_data(sel_p)
-        if not df_m_main.empty and '유입BOD' in df_m_main.columns and '방류BOD' in df_m_main.columns:
-            df_m_main['BOD_효율'] = ((df_m_main['유입BOD'] - df_m_main['방류BOD']) / df_m_main['유입BOD'] * 100).clip(0, 100)
-            fig_eff = px.line(df_m_main, x='날짜', y='BOD_효율', title=f"{sel_p} BOD 처리효율 변동 추이 (%)")
-            fig_eff.update_layout(template="plotly_white", yaxis=dict(range=[60, 100]))
-            st.plotly_chart(fig_eff, use_container_width=True)
+        if not df_m_main.empty:
+            eff_cols = []
+            if '유입BOD' in df_m_main.columns and '방류BOD' in df_m_main.columns:
+                df_m_main['BOD_효율(%)'] = ((df_m_main['유입BOD'] - df_m_main['방류BOD']) / df_m_main['유입BOD'] * 100).clip(0, 100)
+                eff_cols.append('BOD_효율(%)')
+            if '유입TOC' in df_m_main.columns and '방류TOC' in df_m_main.columns:
+                df_m_main['TOC_효율(%)'] = ((df_m_main['유입TOC'] - df_m_main['방류TOC']) / df_m_main['유입TOC'] * 100).clip(0, 100)
+                eff_cols.append('TOC_효율(%)')
+            if '유입SS' in df_m_main.columns and '방류SS' in df_m_main.columns:
+                df_m_main['SS_효율(%)'] = ((df_m_main['유입SS'] - df_m_main['방류SS']) / df_m_main['유입SS'] * 100).clip(0, 100)
+                eff_cols.append('SS_효율(%)')
+            if '유입TN' in df_m_main.columns and '방류TN' in df_m_main.columns:
+                df_m_main['T-N_효율(%)'] = ((df_m_main['유입TN'] - df_m_main['방류TN']) / df_m_main['유입TN'] * 100).clip(0, 100)
+                eff_cols.append('T-N_효율(%)')
+            if '유입TP' in df_m_main.columns and '방류TP' in df_m_main.columns:
+                df_m_main['T-P_효율(%)'] = ((df_m_main['유입TP'] - df_m_main['방류TP']) / df_m_main['유입TP'] * 100).clip(0, 100)
+                eff_cols.append('T-P_효율(%)')
+
+            if eff_cols:
+                fig_eff = px.line(
+                    df_m_main, x='날짜', y=eff_cols,
+                    title=f"[{sel_p} - {target_spec['method']}] 주요 수질 지표별 처리효율 변동 추이 (%)",
+                    color_discrete_map={
+                        'BOD_효율(%)': '#0284C7',
+                        'TOC_효율(%)': '#0EA5E9',
+                        'SS_효율(%)': '#6366F1',
+                        'T-N_효율(%)': '#10B981',
+                        'T-P_효율(%)': '#F59E0B'
+                    }
+                )
+                fig_eff.update_layout(
+                    template="plotly_white",
+                    yaxis=dict(range=[60, 100], title="처리효율 (%)"),
+                    xaxis=dict(title="날짜"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_eff, use_container_width=True)
     with tab_p3:
         st.dataframe(get_process_db(sel_p), use_container_width=True)
 
