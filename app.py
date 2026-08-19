@@ -116,7 +116,7 @@ def save_auth_db(data):
     except Exception:
         pass
 
-# 4. DB 입출력 핸들러 (데이터 영구 보호)
+# 4. DB 입출력 핸들러 (데이터 영구 보존)
 def append_to_master_db(fac, df_new):
     if df_new is None or df_new.empty: return
     df_new = df_new.copy()
@@ -827,7 +827,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
         else:
             st.info("💡 아직 보관함에 저장된 엑셀 파일이 없습니다. 1단계 작업대에서 [마스터 DB 및 보관함 저장]을 실행해 주세요.")
 
-    # 1-3. 누적 통합 엑셀 일괄 생성 (소규모 및 개인하수 6개소 압축팩 완벽 일치)
+    # 1-3. 누적 통합 엑셀 일괄 생성
     with tab_accum:
         st.subheader("📊 ⚡ [분기별 / 상하반기 / 연간 통합] 누적 엑셀 일괄 생성")
         
@@ -884,8 +884,8 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                     if not df_p_item.empty:
                         has_p_cum = True
                         zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}.xlsx", fill_exact_small_template(df_p_item, fac))
-                if has_p_cum:
-                    st.download_button("📦 개인하수 6개소 누적 ZIP 다운로드", zip_p_buf.getvalue(), f"개인하수6개소_누적통합_{sel_cum_year}_{sel_period.split()[0]}.zip", use_container_width=True, type="primary")
+            if has_p_cum:
+                st.download_button("📦 개인하수 6개소 누적 ZIP 다운로드", zip_p_buf.getvalue(), f"개인하수6개소_누적통합_{sel_cum_year}_{sel_period.split()[0]}.zip", use_container_width=True, type="primary")
             else:
                 st.info("해당 기간의 개인하수 시설 데이터가 없습니다.")
 
@@ -1140,7 +1140,7 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
                 try:
                     if f.name.endswith('.csv'):
                         try: df_raw = pd.read_csv(f, encoding='euc-kr', header=None)
-                        except Exception: f.seek(0); df_raw = pd.read_csv(f, encoding='utf-8', header=None)
+                        except: f.seek(0); df_raw = pd.read_csv(f, encoding='utf-8', header=None)
                     else:
                         df_raw = pd.read_excel(f, header=None)
                     for r in range(len(df_raw)):
