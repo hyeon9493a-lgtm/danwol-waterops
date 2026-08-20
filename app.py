@@ -318,7 +318,7 @@ def universal_main_plant_parser(file_list):
         return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
     return pd.DataFrame()
 
-# [소규모 6개소 24열 서식 및 운영일지 완벽 파서]
+# [소규모 6개소 24열 서식 및 실험실 보고서 완벽 파서]
 def universal_small_plant_parser(file_list):
     facility_aliases = {
         "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
@@ -382,33 +382,15 @@ def universal_small_plant_parser(file_list):
                             if pd.notna(flow_out): rec['방류량'] = float(flow_out)
                             if pd.notna(temp_val): rec['수온'] = float(temp_val)
                             
-                            in_bod = pd.to_numeric(ws.cell(r, 9).value, errors='coerce')
-                            in_toc = pd.to_numeric(ws.cell(r, 10).value, errors='coerce')
-                            in_ss = pd.to_numeric(ws.cell(r, 11).value, errors='coerce')
-                            in_tn = pd.to_numeric(ws.cell(r, 12).value, errors='coerce')
-                            in_tp = pd.to_numeric(ws.cell(r, 13).value, errors='coerce')
-                            in_coli = pd.to_numeric(ws.cell(r, 14).value, errors='coerce')
-                            
-                            out_bod = pd.to_numeric(ws.cell(r, 17).value, errors='coerce')
-                            out_toc = pd.to_numeric(ws.cell(r, 18).value, errors='coerce')
-                            out_ss = pd.to_numeric(ws.cell(r, 19).value, errors='coerce')
-                            out_tn = pd.to_numeric(ws.cell(r, 20).value, errors='coerce')
-                            out_tp = pd.to_numeric(ws.cell(r, 21).value, errors='coerce')
-                            out_coli = pd.to_numeric(ws.cell(r, 22).value, errors='coerce')
-                            
-                            if pd.notna(in_bod): rec['유입BOD'] = float(in_bod)
-                            if pd.notna(in_toc): rec['유입TOC'] = float(in_toc)
-                            if pd.notna(in_ss): rec['유입SS'] = float(in_ss)
-                            if pd.notna(in_tn): rec['유입TN'] = float(in_tn)
-                            if pd.notna(in_tp): rec['유입TP'] = float(in_tp)
-                            if pd.notna(in_coli): rec['유입대장균'] = float(in_coli)
-                            
-                            if pd.notna(out_bod): rec['방류BOD'] = float(out_bod)
-                            if pd.notna(out_toc): rec['방류TOC'] = float(out_toc)
-                            if pd.notna(out_ss): rec['방류SS'] = float(out_ss)
-                            if pd.notna(out_tn): rec['방류TN'] = float(out_tn)
-                            if pd.notna(out_tp): rec['방류TP'] = float(out_tp)
-                            if pd.notna(out_coli): rec['방류대장균'] = float(out_coli)
+                            # Inflow WQ (Cols 8~14)
+                            for col_idx, col_name in [(8, '유입pH'), (9, '유입BOD'), (10, '유입TOC'), (11, '유입SS'), (12, '유입TN'), (13, '유입TP'), (14, '유입대장균')]:
+                                v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
+                                if pd.notna(v): rec[col_name] = float(v)
+                                
+                            # Outflow WQ (Cols 16~22)
+                            for col_idx, col_name in [(16, '방류pH'), (17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'), (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')]:
+                                v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
+                                if pd.notna(v): rec[col_name] = float(v)
                 else:
                     sheet_m = None
                     sm_match = re.search(r'(\d{1,2})월', sname)
@@ -447,18 +429,19 @@ def universal_small_plant_parser(file_list):
                             rec = accumulated_data[cur_fac][d_str]
                             
                             nums = [pd.to_numeric(val, errors='coerce') for val in row if pd.notna(pd.to_numeric(val, errors='coerce'))]
-                            if len(nums) >= 6:
+                            if len(nums) >= 12:
                                 rec.update({
-                                    '유입BOD': nums[0], '유입TOC': nums[1], '유입SS': nums[2],
-                                    '유입TN': nums[3], '유입TP': nums[4],
-                                    '방류BOD': nums[5], '방류TOC': nums[6] if len(nums)>6 else np.nan,
-                                    '방류SS': nums[7] if len(nums)>7 else np.nan, '방류TN': nums[8] if len(nums)>8 else np.nan,
-                                    '방류TP': nums[9] if len(nums)>9 else np.nan
+                                    '유입BOD': nums[0], '유입TOC': nums[1], '유입SS': nums[2], '유입TN': nums[3], '유입TP': nums[4], '유입대장균': nums[5],
+                                    '방류BOD': nums[6], '방류TOC': nums[7], '방류SS': nums[8], '방류TN': nums[9], '방류TP': nums[10], '방류대장균': nums[11]
                                 })
-                            if len(nums) >= 1 and ('유입량' not in rec or pd.isna(rec['유입량'])):
-                                if len(nums) >= 14 and pd.notna(nums[13]):
-                                    rec['유입량'] = float(nums[13])
-                                    rec['방류량'] = float(nums[13])
+                                if len(nums) >= 13 and pd.notna(nums[12]):
+                                    rec['유입량'] = float(nums[12])
+                                    rec['방류량'] = float(nums[12])
+                            elif len(nums) >= 10:
+                                rec.update({
+                                    '유입BOD': nums[0], '유입TOC': nums[1], '유입SS': nums[2], '유입TN': nums[3], '유입TP': nums[4],
+                                    '방류BOD': nums[5], '방류TOC': nums[6], '방류SS': nums[7], '방류TN': nums[8], '방류TP': nums[9]
+                                })
         except Exception:
             pass
             
@@ -510,7 +493,7 @@ def fill_exact_reuse_template(df_data):
     wb.save(buf)
     return buf.getvalue()
 
-# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 유량 + 유입수질 + 방류수질 7일 구간 연속 채우기]
+# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 연속 유량 + 실측일 수질 정밀 매핑]
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -554,78 +537,73 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             if pd.notna(r.get('유입량')) or pd.notna(r.get('유입BOD')):
                 measured_dates.append(pd.to_datetime(d_key))
 
-    # 7일 단위 주간 윈도우 매핑 (유량 및 유입/방류수질 모두 7일 구간 연속 채우기)
-    daily_record_map = {}
+    # 7일 단위 주간 유량 윈도우 매핑
+    daily_flow_in_map = {}
+    daily_flow_out_map = {}
     prev_dt = None
-    
     for m_dt in measured_dates:
         d_str = m_dt.strftime('%Y-%m-%d')
         r_item = lookup[d_str]
+        f_in = r_item.get('유입량', np.nan)
+        f_out = r_item.get('방류량', np.nan)
         
-        cur_vals = {
-            '유입량': float(r_item['유입량']) if pd.notna(r_item.get('유입량')) and 0.001 <= float(r_item['유입량']) <= 2000 else default_f,
-            '방류량': float(r_item['방류량']) if pd.notna(r_item.get('방류량')) and 0.001 <= float(r_item['방류량']) <= 2000 else default_f,
-            '수온': float(r_item['수온']) if pd.notna(r_item.get('수온')) else None,
-            '유입BOD': float(r_item['유입BOD']) if pd.notna(r_item.get('유입BOD')) else None,
-            '유입TOC': float(r_item['유입TOC']) if pd.notna(r_item.get('유입TOC')) else None,
-            '유입SS': float(r_item['유입SS']) if pd.notna(r_item.get('유입SS')) else None,
-            '유입TN': float(r_item['유입TN']) if pd.notna(r_item.get('유입TN')) else None,
-            '유입TP': float(r_item['유입TP']) if pd.notna(r_item.get('유입TP')) else None,
-            '유입대장균': float(r_item['유입대장균']) if pd.notna(r_item.get('유입대장균')) else None,
-            '방류BOD': float(r_item['방류BOD']) if pd.notna(r_item.get('방류BOD')) else None,
-            '방류TOC': float(r_item['방류TOC']) if pd.notna(r_item.get('방류TOC')) else None,
-            '방류SS': float(r_item['방류SS']) if pd.notna(r_item.get('방류SS')) else None,
-            '방류TN': float(r_item['방류TN']) if pd.notna(r_item.get('방류TN')) else None,
-            '방류TP': float(r_item['방류TP']) if pd.notna(r_item.get('방류TP')) else None,
-            '방류대장균': float(r_item['방류대장균']) if pd.notna(r_item.get('방류대장균')) else None,
-        }
+        val_in = float(f_in) if (pd.notna(f_in) and 0.001 <= float(f_in) <= 2000) else default_f
+        val_out = float(f_out) if (pd.notna(f_out) and 0.001 <= float(f_out) <= 2000) else default_f
         
         if prev_dt is None:
-            daily_record_map[d_str] = cur_vals
+            daily_flow_in_map[d_str] = val_in
+            daily_flow_out_map[d_str] = val_out
         else:
             window_days = pd.date_range(prev_dt + pd.Timedelta(days=1), m_dt)
             for w_dt in window_days:
                 w_str = w_dt.strftime('%Y-%m-%d')
-                daily_record_map[w_str] = cur_vals
+                daily_flow_in_map[w_str] = val_in
+                daily_flow_out_map[w_str] = val_out
         prev_dt = m_dt
 
-    last_record = {
-        '유입량': default_f, '방류량': default_f, '수온': None,
-        '유입BOD': None, '유입TOC': None, '유입SS': None, '유입TN': None, '유입TP': None, '유입대장균': None,
-        '방류BOD': None, '방류TOC': None, '방류SS': None, '방류TN': None, '방류TP': None, '방류대장균': None
-    }
+    last_f_in = default_f
+    last_f_out = default_f
 
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
 
-        if d_str in daily_record_map:
-            last_record = daily_record_map[d_str]
-        elif d_str in lookup:
-            r_item = lookup[d_str]
-            for k in last_record.keys():
-                if pd.notna(r_item.get(k)):
-                    last_record[k] = float(r_item[k])
+        # 유량 (B, E, F열)
+        if d_str in daily_flow_in_map:
+            last_f_in = daily_flow_in_map[d_str]
+            last_f_out = daily_flow_out_map[d_str]
+        elif d_str in lookup and pd.notna(lookup[d_str].get('유입량')):
+            last_f_in = float(lookup[d_str].get('유입량'))
+            last_f_out = float(lookup[d_str].get('방류량', last_f_in))
 
-        ws.cell(r_idx, 2, last_record['유입량'])
-        ws.cell(r_idx, 5, last_record['유입량'])
-        ws.cell(r_idx, 6, last_record['방류량'])
+        ws.cell(r_idx, 2, last_f_in)
+        ws.cell(r_idx, 5, last_f_in)  # E열: 고도처리량 = 유입량
+        ws.cell(r_idx, 6, last_f_out) # F열: 방류량
 
-        if last_record.get('수온') is not None: ws.cell(r_idx, 7, last_record['수온'])
-        if last_record.get('유입BOD') is not None: ws.cell(r_idx, 9, last_record['유입BOD'])
-        if last_record.get('유입TOC') is not None: ws.cell(r_idx, 10, last_record['유입TOC'])
-        if last_record.get('유입SS') is not None: ws.cell(r_idx, 11, last_record['유입SS'])
-        if last_record.get('유입TN') is not None: ws.cell(r_idx, 12, last_record['유입TN'])
-        if last_record.get('유입TP') is not None: ws.cell(r_idx, 13, last_record['유입TP'])
-        if last_record.get('유입대장균') is not None: ws.cell(r_idx, 14, last_record['유입대장균'])
+        # 수질 (검사 당일만 입력, 미측정일은 공란)
+        r_match = lookup.get(d_str, None)
+        if r_match is not None:
+            raw_temp = r_match.get('수온', np.nan)
+            if pd.notna(raw_temp): ws.cell(r_idx, 7, float(raw_temp))
 
-        if last_record.get('방류BOD') is not None: ws.cell(r_idx, 17, last_record['방류BOD'])
-        if last_record.get('방류TOC') is not None: ws.cell(r_idx, 18, last_record['방류TOC'])
-        if last_record.get('방류SS') is not None: ws.cell(r_idx, 19, last_record['방류SS'])
-        if last_record.get('방류TN') is not None: ws.cell(r_idx, 20, last_record['방류TN'])
-        if last_record.get('방류TP') is not None: ws.cell(r_idx, 21, last_record['방류TP'])
-        if last_record.get('방류대장균') is not None: ws.cell(r_idx, 22, last_record['방류대장균'])
+            # Inflow WQ (Cols 8~14)
+            if pd.notna(r_match.get('유입pH')): ws.cell(r_idx, 8, float(r_match.get('유입pH')))
+            if pd.notna(r_match.get('유입BOD')): ws.cell(r_idx, 9, float(r_match.get('유입BOD')))
+            if pd.notna(r_match.get('유입TOC')): ws.cell(r_idx, 10, float(r_match.get('유입TOC')))
+            if pd.notna(r_match.get('유입SS')): ws.cell(r_idx, 11, float(r_match.get('유입SS')))
+            if pd.notna(r_match.get('유입TN')): ws.cell(r_idx, 12, float(r_match.get('유입TN')))
+            if pd.notna(r_match.get('유입TP')): ws.cell(r_idx, 13, float(r_match.get('유입TP')))
+            if pd.notna(r_match.get('유입대장균')): ws.cell(r_idx, 14, float(r_match.get('유입대장균')))
+
+            # Outflow WQ (Cols 16~22)
+            if pd.notna(r_match.get('방류pH')): ws.cell(r_idx, 16, float(r_match.get('방류pH')))
+            if pd.notna(r_match.get('방류BOD')): ws.cell(r_idx, 17, float(r_match.get('방류BOD')))
+            if pd.notna(r_match.get('방류TOC')): ws.cell(r_idx, 18, float(r_match.get('방류TOC')))
+            if pd.notna(r_match.get('방류SS')): ws.cell(r_idx, 19, float(r_match.get('방류SS')))
+            if pd.notna(r_match.get('방류TN')): ws.cell(r_idx, 20, float(r_match.get('방류TN')))
+            if pd.notna(r_match.get('방류TP')): ws.cell(r_idx, 21, float(r_match.get('방류TP')))
+            if pd.notna(r_match.get('방류대장균')): ws.cell(r_idx, 22, float(r_match.get('방류대장균')))
 
     buf = io.BytesIO()
     wb.save(buf)
