@@ -510,7 +510,7 @@ def fill_exact_reuse_template(df_data):
     wb.save(buf)
     return buf.getvalue()
 
-# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 일일 연속 유량 + 주간 수질 검사 일자 매칭]
+# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 검사 유량 윈도우 채우기 + 실측 수질 일치]
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -545,35 +545,56 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
 
     lookup = {}
+    measured_dates = []
     if df_data is not None and not df_data.empty and '날짜' in df_data.columns:
-        for _, r in df_data.iterrows():
+        df_sorted = df_data.sort_values(by='날짜').copy()
+        for _, r in df_sorted.iterrows():
             d_key = str(r['날짜']).split()[0]
             lookup[d_key] = r
+            measured_dates.append(pd.to_datetime(d_key))
 
-    last_known_flow_in = default_f
-    last_known_flow_out = default_f
+    # 7일 단위 주간 유량 윈도우 매핑
+    daily_flow_in_map = {}
+    daily_flow_out_map = {}
+    prev_dt = None
+    for m_dt in measured_dates:
+        d_str = m_dt.strftime('%Y-%m-%d')
+        r_item = lookup[d_str]
+        f_in = r_item.get('유입량', np.nan)
+        f_out = r_item.get('방류량', np.nan)
+        
+        val_in = float(f_in) if (pd.notna(f_in) and 0.001 <= float(f_in) <= 2000) else default_f
+        val_out = float(f_out) if (pd.notna(f_out) and 0.001 <= float(f_out) <= 2000) else default_f
+        
+        if prev_dt is None:
+            daily_flow_in_map[d_str] = val_in
+            daily_flow_out_map[d_str] = val_out
+        else:
+            window_days = pd.date_range(prev_dt + pd.Timedelta(days=1), m_dt)
+            for w_dt in window_days:
+                w_str = w_dt.strftime('%Y-%m-%d')
+                daily_flow_in_map[w_str] = val_in
+                daily_flow_out_map[w_str] = val_out
+        prev_dt = m_dt
+
+    last_f_in = default_f
+    last_f_out = default_f
 
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
 
+        if d_str in daily_flow_in_map:
+            last_f_in = daily_flow_in_map[d_str]
+            last_f_out = daily_flow_out_map[d_str]
+
+        ws.cell(r_idx, 2, last_f_in)
+        ws.cell(r_idx, 5, last_f_in)
+        ws.cell(r_idx, 6, last_f_out)
+
         r_match = lookup.get(d_str, None)
         if r_match is not None:
-            raw_in = r_match.get('유입량', np.nan)
-            raw_out = r_match.get('방류량', np.nan)
-            if pd.notna(raw_in) and 0.001 <= float(raw_in) <= 2000:
-                last_known_flow_in = float(raw_in)
-            if pd.notna(raw_out) and 0.001 <= float(raw_out) <= 2000:
-                last_known_flow_out = float(raw_out)
-
-            flow_in = last_known_flow_in
-            flow_out = last_known_flow_out
-
-            ws.cell(r_idx, 2, flow_in)
-            ws.cell(r_idx, 5, flow_in)
-            ws.cell(r_idx, 6, flow_out)
-
             raw_temp = r_match.get('수온', np.nan)
             if pd.notna(raw_temp): ws.cell(r_idx, 7, float(raw_temp))
 
@@ -590,10 +611,6 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             if pd.notna(r_match.get('방류TN')): ws.cell(r_idx, 20, float(r_match.get('방류TN')))
             if pd.notna(r_match.get('방류TP')): ws.cell(r_idx, 21, float(r_match.get('방류TP')))
             if pd.notna(r_match.get('방류대장균')): ws.cell(r_idx, 22, float(r_match.get('방류대장균')))
-        else:
-            ws.cell(r_idx, 2, last_known_flow_in)
-            ws.cell(r_idx, 5, last_known_flow_in)
-            ws.cell(r_idx, 6, last_known_flow_out)
 
     buf = io.BytesIO()
     wb.save(buf)
