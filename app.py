@@ -318,7 +318,7 @@ def universal_main_plant_parser(file_list):
         return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
     return pd.DataFrame()
 
-# [소규모 6개소 24열 서식 및 운영일지 파서]
+# [소규모 6개소 24열 서식 및 운영일지 완벽 파서]
 def universal_small_plant_parser(file_list):
     facility_aliases = {
         "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
@@ -551,7 +551,8 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         for _, r in df_sorted.iterrows():
             d_key = str(r['날짜']).split()[0]
             lookup[d_key] = r
-            measured_dates.append(pd.to_datetime(d_key))
+            if pd.notna(r.get('유입량')) or pd.notna(r.get('유입BOD')):
+                measured_dates.append(pd.to_datetime(d_key))
 
     # 7일 단위 주간 유량 윈도우 매핑
     daily_flow_in_map = {}
@@ -588,6 +589,9 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         if d_str in daily_flow_in_map:
             last_f_in = daily_flow_in_map[d_str]
             last_f_out = daily_flow_out_map[d_str]
+        elif d_str in lookup and pd.notna(lookup[d_str].get('유입량')):
+            last_f_in = float(lookup[d_str].get('유입량'))
+            last_f_out = float(lookup[d_str].get('방류량', last_f_in))
 
         ws.cell(r_idx, 2, last_f_in)
         ws.cell(r_idx, 5, last_f_in)
