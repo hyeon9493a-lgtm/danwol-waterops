@@ -119,7 +119,7 @@ def save_auth_db(data):
     except Exception:
         pass
 
-# 4. DB 입출력 핸들러
+# 4. DB 입출력 핸들러 (오늘 날짜 이전 데이터만 엄격하게 적재/필터링)
 def append_to_master_db(fac, df_new):
     if df_new is None or df_new.empty: return
     df_new = df_new.copy()
@@ -156,7 +156,6 @@ def append_to_tms_db(df_new):
         if col not in df_new.columns: df_new[col] = np.nan
     df_new = df_new[TMS_STD_COLS]
     
-    # 오늘 날짜(KST 기준) 이하 데이터만 필터링
     today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
     df_new = df_new[df_new['측정일자'] <= today_str]
     if df_new.empty: return
@@ -178,7 +177,6 @@ def get_tms_db():
     try:
         today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
         df = pd.read_csv(TMS_ACCUM_DB)
-        # 오늘 날짜 이하 데이터만 반환
         df = df[df['측정일자'] <= today_str]
         return df.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
     except Exception:
@@ -1098,7 +1096,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제 (오늘 날짜까지만 엄격 필터링 & 국가측정망 병합셀 서식 파서)
+# 3. TMS 관제 (실시간으로 흐르는 라이브 시계 탑재)
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
@@ -1119,7 +1117,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                     else:
                         df_raw = pd.read_excel(f, header=None)
                     
-                    # TMS 국가측정망 서식 동적 탐색 (병합 셀 구조 보정)
+                    # TMS 국가측정망 병합셀 서식 동적 파싱
                     date_col, time_col = None, None
                     ph_col, bod_col, toc_col, ss_col, tn_col, tp_col, flow_col = None, None, None, None, None, None, None
                     start_row = 0
@@ -1194,7 +1192,6 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
             df_m = get_master_data(MAIN_PLANT)
             if not df_m.empty:
-                # 오늘 날짜 이전 데이터만 필터링
                 df_m = df_m[df_m['날짜'] <= today_str]
                 df_m_clean = df_m.sort_values(by='날짜').copy()
                 for c, def_v in [('방류pH', 7.20), ('방류BOD', 2.30), ('방류TOC', 3.10), ('방류SS', 4.80), ('방류TN', 8.45), ('방류TP', 0.065)]:
@@ -1270,12 +1267,32 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         cur_tn = get_valid_latest(df_tms_cur, '방류TN', 8.45)
         cur_tp = get_valid_latest(df_tms_cur, '방류TP', 0.065)
 
-        if not df_tms_cur.empty:
-            latest_time_str = f"{df_tms_cur.iloc[0].get('측정일자')} {df_tms_cur.iloc[0].get('측정시각')}"
-        else:
-            latest_time_str = "실시간 기준"
+        # 1초마다 실시간으로 흐르는 Live Clock 컴포넌트 렌더링
+        st.markdown("""
+        <div style="font-size: 1.25rem; font-weight: 700; color: #1E293B; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+            <span>🚦 최신 TMS 방류 수질 6대 항목 신호등 상태</span>
+            <span style="color: #0284C7; font-family: monospace; font-size: 1.15rem; background: #F0F9FF; padding: 2px 10px; border-radius: 6px; border: 1px solid #BAE6FD;">
+                ( <span id="live-tms-clock">연결 중...</span> )
+            </span>
+        </div>
+        <script>
+            function updateTMSClock() {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                const timeString = year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
+                const el = document.getElementById('live-tms-clock');
+                if (el) el.innerText = timeString;
+            }
+            setInterval(updateTMSClock, 1000);
+            updateTMSClock();
+        </script>
+        """, unsafe_allow_html=True)
 
-        st.markdown(f"#### 🚦 최신 TMS 방류 수질 6대 항목 신호등 상태 (`{latest_time_str}`)")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("pH (기준 5.8~8.6)", f"{cur_ph:.2f}", "🟢 정상 (안전)" if 5.8 <= cur_ph <= 8.6 else "🔴 초과 경보")
         c2.metric("BOD (기준 5.0)", f"{cur_bod:.2f} mg/L", "🟢 정상 (안전)" if cur_bod <= 5.0 else "🔴 초과 경보")
