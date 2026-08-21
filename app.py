@@ -155,6 +155,12 @@ def append_to_tms_db(df_new):
     for col in TMS_STD_COLS:
         if col not in df_new.columns: df_new[col] = np.nan
     df_new = df_new[TMS_STD_COLS]
+    
+    # 오늘 날짜(KST 기준) 이하 데이터만 필터링
+    today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
+    df_new = df_new[df_new['측정일자'] <= today_str]
+    if df_new.empty: return
+    
     if os.path.exists(TMS_ACCUM_DB):
         try:
             df_m = pd.read_csv(TMS_ACCUM_DB)
@@ -163,12 +169,18 @@ def append_to_tms_db(df_new):
             df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
     else:
         df_comb = df_new.drop_duplicates(subset=['측정일자', '측정시각'])
+        
+    df_comb = df_comb[df_comb['측정일자'] <= today_str]
     df_comb.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).to_csv(TMS_ACCUM_DB, index=False, encoding='utf-8-sig')
 
 def get_tms_db():
     if not os.path.exists(TMS_ACCUM_DB): return pd.DataFrame()
     try:
-        return pd.read_csv(TMS_ACCUM_DB).sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
+        today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
+        df = pd.read_csv(TMS_ACCUM_DB)
+        # 오늘 날짜 이하 데이터만 반환
+        df = df[df['측정일자'] <= today_str]
+        return df.sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
     except Exception:
         return pd.DataFrame()
 
@@ -321,7 +333,7 @@ def universal_main_plant_parser(file_list):
         return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
     return pd.DataFrame()
 
-# [소규모 6개소 24열 공인서식, 종합운영일지 및 실험실 수질대장 완벽 통합 파서]
+# [소규모 6개소 24열 공인서식 파서]
 def universal_small_plant_parser(file_list):
     facility_aliases = {
         "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
@@ -520,7 +532,6 @@ def fill_exact_reuse_template(df_data):
     wb.save(buf)
     return buf.getvalue()
 
-# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 연속 유량 + 일주일 중 검사일 1회 수질 입력]
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -1087,69 +1098,90 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제 (KST 실시간 일시 완벽 반영)
+# 3. TMS 관제 (오늘 날짜까지만 엄격 필터링 & 국가측정망 병합셀 서식 파서)
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
     tab_t1, tab_t2, tab_t3 = st.tabs(["📝 [입력/과거데이터 업로드] 실시간 수동입력 & 엑셀 적재", "🚦 [관제] 실시간 신호등 & 2·4·6·8h 예측 그래프", "🗂️ [보관소] TMS 누적 데이터"])
     
     with tab_t1:
-        st.markdown("##### 1️⃣ 과거 TMS 원본 엑셀/CSV 대량 일괄 업로드 & 마스터 DB 적재")
+        st.markdown("##### 1️⃣ 과거 TMS 국가측정망 엑셀/CSV 대량 일괄 업로드 & 마스터 DB 적재 (오늘 날짜까지)")
         up_tms_files = st.file_uploader("과거 TMS 측정 엑셀 또는 CSV 파일 업로드", type=["xlsx", "xls", "csv"], accept_multiple_files=True, key="up_tms_batch_direct")
         if up_tms_files:
             tms_parsed_list = []
+            today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
+            
             for f in up_tms_files:
                 try:
                     if f.name.endswith('.csv'):
-                        try: df_raw = pd.read_csv(f, encoding='euc-kr')
-                        except: f.seek(0); df_raw = pd.read_csv(f, encoding='utf-8')
+                        try: df_raw = pd.read_csv(f, encoding='euc-kr', header=None)
+                        except: f.seek(0); df_raw = pd.read_csv(f, encoding='utf-8', header=None)
                     else:
-                        df_raw = pd.read_excel(f)
+                        df_raw = pd.read_excel(f, header=None)
                     
-                    cols = {str(c).replace(' ', '').upper(): c for c in df_raw.columns}
-                    d_col = next((cols[c] for c in cols if '일자' in c or '일시' in c or 'DATE' in c or '날짜' in c), df_raw.columns[0])
-                    t_col = next((cols[c] for c in cols if '시각' in c or '시간' in c or 'TIME' in c), None)
-                    ph_col = next((cols[c] for c in cols if 'PH' in c), None)
-                    bod_col = next((cols[c] for c in cols if 'BOD' in c), None)
-                    toc_col = next((cols[c] for c in cols if 'TOC' in c or 'COD' in c), None)
-                    ss_col = next((cols[c] for c in cols if 'SS' in c), None)
-                    tn_col = next((cols[c] for c in cols if 'TN' in c or 'T-N' in c or '총질소' in c), None)
-                    tp_col = next((cols[c] for c in cols if 'TP' in c or 'T-P' in c or '총인' in c), None)
-                    fl_col = next((cols[c] for c in cols if '유량' in c or 'FLOW' in c), None)
+                    # TMS 국가측정망 서식 동적 탐색 (병합 셀 구조 보정)
+                    date_col, time_col = None, None
+                    ph_col, bod_col, toc_col, ss_col, tn_col, tp_col, flow_col = None, None, None, None, None, None, None
+                    start_row = 0
                     
-                    for r in range(len(df_raw)):
-                        row = df_raw.iloc[r]
-                        raw_d = str(row[d_col])
-                        d_match = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', raw_d)
-                        if d_match:
-                            d_found = f"{int(d_match.group(1)):04d}-{int(d_match.group(2)):02d}-{int(d_match.group(3)):02d}"
-                            t_found = str(row[t_col]) if t_col and pd.notna(row[t_col]) else "12:00:00"
-                            if len(t_found) > 8: t_found = t_found[:8]
+                    for r_idx in range(min(5, len(df_raw))):
+                        row_vals = df_raw.iloc[r_idx].values
+                        for c_idx, val in enumerate(row_vals):
+                            v_str = str(val).strip().upper()
+                            if '측정일자' in v_str: date_col = c_idx
+                            if '측정시간' in v_str or '측정시각' in v_str: time_col = c_idx
                             
-                            val_ph = float(row[ph_col]) if ph_col and pd.notna(row[ph_col]) else 7.20
-                            val_bod = float(row[bod_col]) if bod_col and pd.notna(row[bod_col]) else 2.30
-                            val_toc = float(row[toc_col]) if toc_col and pd.notna(row[toc_col]) else 3.10
-                            val_ss = float(row[ss_col]) if ss_col and pd.notna(row[ss_col]) else 4.80
-                            val_tn = float(row[tn_col]) if tn_col and pd.notna(row[tn_col]) else 8.45
-                            val_tp = float(row[tp_col]) if tp_col and pd.notna(row[tp_col]) else 0.065
-                            val_fl = float(row[fl_col]) if fl_col and pd.notna(row[fl_col]) else 70.5
+                            # 병합된 셀 다음 열이 보통 '측정치'이므로 +1을 적용
+                            if 'PH' in v_str: ph_col = c_idx + 1
+                            if 'BOD' in v_str: bod_col = c_idx + 1
+                            if 'TOC' in v_str: toc_col = c_idx + 1
+                            if 'SS' in v_str: ss_col = c_idx + 1
+                            if 'T-N' in v_str or 'TN' in v_str: tn_col = c_idx + 1
+                            if 'T-P' in v_str or 'TP' in v_str: tp_col = c_idx + 1
+                            if '유량' in v_str: flow_col = c_idx + 1
                             
-                            tms_parsed_list.append({
-                                "측정일자": d_found, "측정시각": t_found,
-                                "방류pH": val_ph, "방류BOD": val_bod, "방류TOC": val_toc,
-                                "방류SS": val_ss, "방류TN": val_tn, "방류TP": val_tp,
-                                "방류유량": val_fl,
-                                "예측pH_4h": round(val_ph * 1.005, 2), "예측BOD_4h": round(val_bod * 1.04, 2),
-                                "예측SS_4h": round(val_ss * 1.03, 2), "예측TN_4h": round(val_tn * 1.02, 2),
-                                "예측TP_4h": round(val_tp * 1.05, 3),
-                                "비고": f"파일({f.name}) 업로드"
-                            })
+                        if date_col is not None and time_col is not None:
+                            start_row = r_idx + 2
+                            break
+                    
+                    if date_col is not None:
+                        for r in range(start_row, len(df_raw)):
+                            row = df_raw.iloc[r]
+                            raw_d = str(row[date_col])
+                            d_match = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', raw_d)
+                            
+                            if d_match:
+                                d_found = f"{int(d_match.group(1)):04d}-{int(d_match.group(2)):02d}-{int(d_match.group(3)):02d}"
+                                if d_found > today_str:
+                                    continue
+                                
+                                t_found = str(row[time_col]) if time_col and pd.notna(row[time_col]) else "12:00:00"
+                                if len(t_found) > 8: t_found = t_found[:8]
+                                
+                                val_ph = float(row[ph_col]) if ph_col is not None and pd.notna(row[ph_col]) and str(row[ph_col]).replace('.','').isdigit() else 7.20
+                                val_bod = float(row[bod_col]) if bod_col is not None and pd.notna(row[bod_col]) and str(row[bod_col]).replace('.','').isdigit() else 2.30
+                                val_toc = float(row[toc_col]) if toc_col is not None and pd.notna(row[toc_col]) and str(row[toc_col]).replace('.','').isdigit() else 3.10
+                                val_ss = float(row[ss_col]) if ss_col is not None and pd.notna(row[ss_col]) and str(row[ss_col]).replace('.','').isdigit() else 4.80
+                                val_tn = float(row[tn_col]) if tn_col is not None and pd.notna(row[tn_col]) and str(row[tn_col]).replace('.','').isdigit() else 8.45
+                                val_tp = float(row[tp_col]) if tp_col is not None and pd.notna(row[tp_col]) and str(row[tp_col]).replace('.','').isdigit() else 0.065
+                                val_fl = float(row[flow_col]) if flow_col is not None and pd.notna(row[flow_col]) and str(row[flow_col]).replace('.','').isdigit() else 70.5
+                                
+                                tms_parsed_list.append({
+                                    "측정일자": d_found, "측정시각": t_found,
+                                    "방류pH": val_ph, "방류BOD": val_bod, "방류TOC": val_toc,
+                                    "방류SS": val_ss, "방류TN": val_tn, "방류TP": val_tp,
+                                    "방류유량": val_fl,
+                                    "예측pH_4h": round(val_ph * 1.005, 2), "예측BOD_4h": round(val_bod * 1.04, 2),
+                                    "예측SS_4h": round(val_ss * 1.03, 2), "예측TN_4h": round(val_tn * 1.02, 2),
+                                    "예측TP_4h": round(val_tp * 1.05, 3),
+                                    "비고": f"파일({f.name}) 업로드"
+                                })
                 except Exception:
                     pass
                     
             if tms_parsed_list:
                 df_tms_up = pd.DataFrame(tms_parsed_list).drop_duplicates(subset=['측정일자', '측정시각']).sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
-                st.write(f"📥 추출된 TMS 데이터 총 **{len(df_tms_up)}건**")
+                st.write(f"📥 추출된 TMS 데이터 (오늘 날짜까지) 총 **{len(df_tms_up)}건**")
                 st.dataframe(df_tms_up, use_container_width=True)
                 if st.button("💾 ⚡ [추출된 TMS 데이터 마스터 DB 일괄 저장]", type="primary", use_container_width=True, key="btn_save_tms_batch"):
                     append_to_tms_db(df_tms_up)
@@ -1157,10 +1189,13 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                     st.rerun()
         
         st.divider()
-        st.markdown("##### 2️⃣ 1번 운영일지 마스터 DB에서 실시간 자동 동기화")
+        st.markdown("##### 2️⃣ 1번 운영일지 마스터 DB에서 실시간 자동 동기화 (오늘 날짜까지)")
         if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ TMS 데이터로 실시간 일괄 동기화]", type="primary", use_container_width=True):
+            today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
             df_m = get_master_data(MAIN_PLANT)
             if not df_m.empty:
+                # 오늘 날짜 이전 데이터만 필터링
+                df_m = df_m[df_m['날짜'] <= today_str]
                 df_m_clean = df_m.sort_values(by='날짜').copy()
                 for c, def_v in [('방류pH', 7.20), ('방류BOD', 2.30), ('방류TOC', 3.10), ('방류SS', 4.80), ('방류TN', 8.45), ('방류TP', 0.065)]:
                     if c in df_m_clean.columns:
@@ -1185,18 +1220,19 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                     })
                 df_tms_synced = pd.DataFrame(tms_list)
                 append_to_tms_db(df_tms_synced)
-                st.success("✅ TMS 데이터 동기화 완료!")
+                st.success("✅ TMS 데이터가 오늘 날짜 기준으로 마스터 DB에 동기화되었습니다!")
                 st.rerun()
             else:
                 st.warning("⚠️ 1번 메뉴에서 본장 운영일지를 먼저 업로드해 주세요.")
                 
         st.divider()
         st.markdown("##### 3️⃣ 실시간 단건 측정치 수동 입력")
+        today_date = datetime.datetime.now(KST).date()
         c_d1, c_d2 = st.columns(2)
         with c_d1:
-            t_d = st.date_input("측정 일자", datetime.date(2026, 8, 16), key="tms_in_d_real")
+            t_d = st.date_input("측정 일자", today_date, key="tms_in_d_real")
         with c_d2:
-            t_t = st.text_input("측정 시각", "12:00:00", key="tms_in_t_real")
+            t_t = st.text_input("측정 시각", datetime.datetime.now(KST).strftime('%H:%M:%S'), key="tms_in_t_real")
         col_in1, col_in2 = st.columns(2)
         with col_in1:
             t_ph = st.number_input("방류 pH", value=7.20)
@@ -1234,8 +1270,10 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         cur_tn = get_valid_latest(df_tms_cur, '방류TN', 8.45)
         cur_tp = get_valid_latest(df_tms_cur, '방류TP', 0.065)
 
-        # 대한민국 표준시(KST, UTC+9) 기준 실시간 현재 시각 반영
-        latest_time_str = datetime.datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
+        if not df_tms_cur.empty:
+            latest_time_str = f"{df_tms_cur.iloc[0].get('측정일자')} {df_tms_cur.iloc[0].get('측정시각')}"
+        else:
+            latest_time_str = "실시간 기준"
 
         st.markdown(f"#### 🚦 최신 TMS 방류 수질 6대 항목 신호등 상태 (`{latest_time_str}`)")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -1270,7 +1308,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
     with tab_t3:
         df_t_all = get_tms_db()
         if not df_t_all.empty:
-            st.write(f"📁 **보관된 TMS 데이터: 총 {len(df_t_all)}건**")
+            st.write(f"📁 **보관된 TMS 데이터 (오늘 날짜까지): 총 {len(df_t_all)}건**")
             st.dataframe(df_t_all, use_container_width=True)
             col_t_d1, col_t_d2 = st.columns(2)
             with col_t_d1:
