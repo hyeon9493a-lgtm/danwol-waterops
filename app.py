@@ -229,7 +229,7 @@ def calculate_ai_process_parameters(flow_m3, bod_mg, tn_mg, tp_mg, facility_name
         if tms_feedback.get('TP', 0.065) > 0.08: tp_f = 1.15
 
     opt_air = (aor / (1.2 * 0.23 * 0.08 * 24 * 60)) * tn_f
-    blowers = max(1, int(np.ceil(opt_air / unit_cap)))
+    blowers = max(1, int(np.ceil(opt_air / max(unit_cap, 0.1))))
     rem_tp = max(0.0, tp_mg - 0.03)
 
     if facility_name == MAIN_PLANT:
@@ -261,64 +261,64 @@ def universal_main_plant_parser(file_list):
             m_m = re.search(r'(\d{1,2})월', fname)
             m_int = int(m_m.group(1)) if m_m else None
             
-            xl = pd.ExcelFile(f)
-            if '수질' in xl.sheet_names:
-                df_sz = pd.read_excel(xl, sheet_name='수질', header=None)
-                for r in range(min(8, len(df_sz))):
-                    row_str = " ".join([str(v) for v in df_sz.iloc[r].dropna().values])
-                    if y_int is None:
-                        tm_y = re.search(r'(20[1-3]\d)년', row_str) or re.search(r'(20[1-3]\d)[-/.]', row_str)
-                        if tm_y: y_int = int(tm_y.group(1))
-                    if m_int is None:
-                        tm_m = re.search(r'(\d{1,2})월', row_str)
-                        if tm_m: m_int = int(tm_m.group(1))
-                
-                if y_int is None or not (2010 <= y_int <= 2035): y_int = 2026
-                if m_int is None: m_int = 1
+            with pd.ExcelFile(f) as xl:
+                if '수질' in xl.sheet_names:
+                    df_sz = pd.read_excel(xl, sheet_name='수질', header=None)
+                    for r in range(min(8, len(df_sz))):
+                        row_str = " ".join([str(v) for v in df_sz.iloc[r].dropna().values])
+                        if y_int is None:
+                            tm_y = re.search(r'(20[1-3]\d)년', row_str) or re.search(r'(20[1-3]\d)[-/.]', row_str)
+                            if tm_y: y_int = int(tm_y.group(1))
+                        if m_int is None:
+                            tm_m = re.search(r'(\d{1,2})월', row_str)
+                            if tm_m: m_int = int(tm_m.group(1))
+                    
+                    if y_int is None or not (2010 <= y_int <= 2035): y_int = 2026
+                    if m_int is None: m_int = 1
 
-                start_r = None
-                for r in range(len(df_sz)):
-                    v = str(df_sz.iloc[r, 0]).strip()
-                    if v in ['1', '1.0', 1]:
-                        start_r = r
-                        break
-                
-                if start_r is not None:
-                    for r in range(start_r, min(start_r + 32, len(df_sz))):
-                        day_val = df_sz.iloc[r, 0]
-                        try:
-                            d_int = int(float(str(day_val).strip()))
+                    start_r = None
+                    for r in range(len(df_sz)):
+                        v = str(df_sz.iloc[r, 0]).strip()
+                        if v in ['1', '1.0', '1']:
+                            start_r = r
+                            break
+                    
+                    if start_r is not None:
+                        for r in range(start_r, min(start_r + 32, len(df_sz))):
+                            day_val = df_sz.iloc[r, 0]
                             try:
-                                valid_dt = datetime.date(y_int, m_int, d_int)
-                                d_str = valid_dt.strftime('%Y-%m-%d')
-                            except ValueError:
-                                continue
-                            
-                            row_vals = df_sz.iloc[r].values
-                            if len(row_vals) >= 19:
-                                rec = {
-                                    '날짜': d_str,
-                                    '유입BOD': pd.to_numeric(row_vals[1], errors='coerce'), '유입TOC': pd.to_numeric(row_vals[2], errors='coerce'),
-                                    '유입SS': pd.to_numeric(row_vals[3], errors='coerce'), '유입TN': pd.to_numeric(row_vals[4], errors='coerce'),
-                                    '유입TP': pd.to_numeric(row_vals[5], errors='coerce'), '유입대장균': pd.to_numeric(row_vals[6], errors='coerce'),
-                                    'MLSS_A': pd.to_numeric(row_vals[7], errors='coerce') if len(row_vals) > 7 else None,
-                                    'MLSS_B': pd.to_numeric(row_vals[8], errors='coerce') if len(row_vals) > 8 else None,
-                                    '방류BOD': pd.to_numeric(row_vals[10], errors='coerce'), '방류TOC': pd.to_numeric(row_vals[11], errors='coerce'),
-                                    '방류SS': pd.to_numeric(row_vals[12], errors='coerce'), '방류TN': pd.to_numeric(row_vals[13], errors='coerce'),
-                                    '방류TP': pd.to_numeric(row_vals[14], errors='coerce'), '방류대장균': pd.to_numeric(row_vals[15], errors='coerce'),
-                                    '유입량': pd.to_numeric(row_vals[16], errors='coerce'), '재이용수': pd.to_numeric(row_vals[17], errors='coerce'),
-                                    '방류량': pd.to_numeric(row_vals[18], errors='coerce'), '수온': pd.to_numeric(row_vals[19], errors='coerce') if len(row_vals) > 19 else None,
-                                }
-                                records_by_date[d_str] = rec
-                        except Exception:
-                            pass
+                                d_int = int(float(str(day_val).strip()))
+                                try:
+                                    valid_dt = datetime.date(y_int, m_int, d_int)
+                                    d_str = valid_dt.strftime('%Y-%m-%d')
+                                except ValueError:
+                                    continue
+                                
+                                row_vals = df_sz.iloc[r].values
+                                if len(row_vals) >= 19:
+                                    rec = {
+                                        '날짜': d_str,
+                                        '유입BOD': pd.to_numeric(row_vals[1], errors='coerce'), '유입TOC': pd.to_numeric(row_vals[2], errors='coerce'),
+                                        '유입SS': pd.to_numeric(row_vals[3], errors='coerce'), '유입TN': pd.to_numeric(row_vals[4], errors='coerce'),
+                                        '유입TP': pd.to_numeric(row_vals[5], errors='coerce'), '유입대장균': pd.to_numeric(row_vals[6], errors='coerce'),
+                                        'MLSS_A': pd.to_numeric(row_vals[7], errors='coerce') if len(row_vals) > 7 else None,
+                                        'MLSS_B': pd.to_numeric(row_vals[8], errors='coerce') if len(row_vals) > 8 else None,
+                                        '방류BOD': pd.to_numeric(row_vals[10], errors='coerce'), '방류TOC': pd.to_numeric(row_vals[11], errors='coerce'),
+                                        '방류SS': pd.to_numeric(row_vals[12], errors='coerce'), '방류TN': pd.to_numeric(row_vals[13], errors='coerce'),
+                                        '방류TP': pd.to_numeric(row_vals[14], errors='coerce'), '방류대장균': pd.to_numeric(row_vals[15], errors='coerce'),
+                                        '유입량': pd.to_numeric(row_vals[16], errors='coerce'), '재이용수': pd.to_numeric(row_vals[17], errors='coerce'),
+                                        '방류량': pd.to_numeric(row_vals[18], errors='coerce'), '수온': pd.to_numeric(row_vals[19], errors='coerce') if len(row_vals) > 19 else None,
+                                    }
+                                    records_by_date[d_str] = rec
+                            except Exception:
+                                pass
         except Exception:
             pass
     if records_by_date:
         return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
     return pd.DataFrame()
 
-# [소규모 6개소 24열 서식 및 실험실 보고서 완벽 파서]
+# 소규모 6개소 파서
 def universal_small_plant_parser(file_list):
     facility_aliases = {
         "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
@@ -442,6 +442,7 @@ def universal_small_plant_parser(file_list):
                                     '유입BOD': nums[0], '유입TOC': nums[1], '유입SS': nums[2], '유입TN': nums[3], '유입TP': nums[4],
                                     '방류BOD': nums[5], '방류TOC': nums[6], '방류SS': nums[7], '방류TN': nums[8], '방류TP': nums[9]
                                 })
+            wb.close()
         except Exception:
             pass
             
@@ -493,7 +494,6 @@ def fill_exact_reuse_template(df_data):
     wb.save(buf)
     return buf.getvalue()
 
-# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 연속 유량 + 실측일 수질 정밀 매핑]
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -537,7 +537,6 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             if pd.notna(r.get('유입량')) or pd.notna(r.get('유입BOD')):
                 measured_dates.append(pd.to_datetime(d_key))
 
-    # 7일 단위 주간 유량 윈도우 매핑
     daily_flow_in_map = {}
     daily_flow_out_map = {}
     prev_dt = None
@@ -569,7 +568,6 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
 
-        # 유량 (B, E, F열)
         if d_str in daily_flow_in_map:
             last_f_in = daily_flow_in_map[d_str]
             last_f_out = daily_flow_out_map[d_str]
@@ -578,32 +576,19 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             last_f_out = float(lookup[d_str].get('방류량', last_f_in))
 
         ws.cell(r_idx, 2, last_f_in)
-        ws.cell(r_idx, 5, last_f_in)  # E열: 고도처리량 = 유입량
-        ws.cell(r_idx, 6, last_f_out) # F열: 방류량
+        ws.cell(r_idx, 5, last_f_in)
+        ws.cell(r_idx, 6, last_f_out)
 
-        # 수질 (검사 당일만 입력, 미측정일은 공란)
         r_match = lookup.get(d_str, None)
         if r_match is not None:
             raw_temp = r_match.get('수온', np.nan)
             if pd.notna(raw_temp): ws.cell(r_idx, 7, float(raw_temp))
 
-            # Inflow WQ (Cols 8~14)
-            if pd.notna(r_match.get('유입pH')): ws.cell(r_idx, 8, float(r_match.get('유입pH')))
-            if pd.notna(r_match.get('유입BOD')): ws.cell(r_idx, 9, float(r_match.get('유입BOD')))
-            if pd.notna(r_match.get('유입TOC')): ws.cell(r_idx, 10, float(r_match.get('유입TOC')))
-            if pd.notna(r_match.get('유입SS')): ws.cell(r_idx, 11, float(r_match.get('유입SS')))
-            if pd.notna(r_match.get('유입TN')): ws.cell(r_idx, 12, float(r_match.get('유입TN')))
-            if pd.notna(r_match.get('유입TP')): ws.cell(r_idx, 13, float(r_match.get('유입TP')))
-            if pd.notna(r_match.get('유입대장균')): ws.cell(r_idx, 14, float(r_match.get('유입대장균')))
+            for col_idx, col_name in [(8, '유입pH'), (9, '유입BOD'), (10, '유입TOC'), (11, '유입SS'), (12, '유입TN'), (13, '유입TP'), (14, '유입대장균')]:
+                if pd.notna(r_match.get(col_name)): ws.cell(r_idx, col_idx, float(r_match.get(col_name)))
 
-            # Outflow WQ (Cols 16~22)
-            if pd.notna(r_match.get('방류pH')): ws.cell(r_idx, 16, float(r_match.get('방류pH')))
-            if pd.notna(r_match.get('방류BOD')): ws.cell(r_idx, 17, float(r_match.get('방류BOD')))
-            if pd.notna(r_match.get('방류TOC')): ws.cell(r_idx, 18, float(r_match.get('방류TOC')))
-            if pd.notna(r_match.get('방류SS')): ws.cell(r_idx, 19, float(r_match.get('방류SS')))
-            if pd.notna(r_match.get('방류TN')): ws.cell(r_idx, 20, float(r_match.get('방류TN')))
-            if pd.notna(r_match.get('방류TP')): ws.cell(r_idx, 21, float(r_match.get('방류TP')))
-            if pd.notna(r_match.get('방류대장균')): ws.cell(r_idx, 22, float(r_match.get('방류대장균')))
+            for col_idx, col_name in [(16, '방류pH'), (17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'), (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')]:
+                if pd.notna(r_match.get(col_name)): ws.cell(r_idx, col_idx, float(r_match.get(col_name)))
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -663,35 +648,6 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
         zf.writestr("Contents/section0.xml", sec_xml.encode('utf-8'))
     return out_buf.getvalue()
 
-def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is_contractor, contractor_name, contractor_manager, contractor_tel, contractor_eval, contractor_edu, risk_rows_html, leader_dept, leader_role, leader_name, sign_img_tag, worker_table_rows, audit_trail_html):
-    parts = [
-        "<!DOCTYPE html><html><head><meta charset='UTF-8'><style>",
-        "body { font-family: 'Malgun Gothic', '맑은 고딕', dotum, sans-serif; margin: 8px 12px; color: #000; font-size: 11px; }",
-        ".title-box { font-size: 17px; font-weight: bold; padding: 4px 0; margin-bottom: 6px; }",
-        "table { width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 11px; }",
-        "th, td { border: 1px solid #000; padding: 4px 5px; }",
-        ".header-td { background-color: #f2f2f2; font-weight: bold; text-align: center; width: 14%; }",
-        "</style></head><body>",
-        "<div class='title-box'>[시설명: 단월처리시설 ] TBM(Tool Box Meeting) 회의록</div>",
-        "<table>",
-        f"<tr><td class='header-td'>TBM 일시</td><td style='width:38%;'>{tbm_date.strftime('%Y년 %m월 %d일')} {tbm_time}</td><td class='header-td'>작업날짜와 동일함</td><td style='width:25%;'>☑예 □아니오</td></tr>",
-        f"<tr><td class='header-td'>작 업 명</td><td style='font-weight:bold;'>{custom_job}</td><td class='header-td' rowspan='2'>TBM 장소</td><td rowspan='2'>{'☑' if tbm_place=='사무실' else '□'}사무실 &nbsp;&nbsp; {'☑' if tbm_place=='작업현장' else '□'}작업현장</td></tr>",
-        f"<tr><td class='header-td'>작업내용</td><td>{job_desc}</td></tr>",
-        f"<tr><td class='header-td' rowspan='4'>외주업체정보</td><td>외주작업 &nbsp;&nbsp; {'☑예 □아니오' if is_contractor else '□예 ☑아니오'}</td><td class='header-td' rowspan='2'>업체 위험성평가 실시</td><td rowspan='2'>{'☑예 □아니오' if is_contractor and contractor_eval else '□예 □아니오'}</td></tr>",
-        f"<tr><td>업체명: <b>{contractor_name}</b></td></tr>",
-        f"<tr><td>책임자: <b>{contractor_manager}</b></td><td class='header-td' rowspan='2'>산업안전보건 교육 확인</td><td rowspan='2'>{'☑예 □아니오' if is_contractor and contractor_edu else '□예 □아니오'}</td></tr>",
-        f"<tr><td>연락처: {contractor_tel}</td></tr>",
-        "</table>",
-        f"<table><tr style='background:#e9ecef;'><th style='width:45%;'>■ 유해·위험요인 파악 내용</th><th style='width:55%;'>■ 파악된 유해·위험요인의 감소대책 수립 및 이행</th></tr>{risk_rows_html}</table>",
-        "<table><tr><th colspan='5' style='text-align:left; background:#e9ecef;'>■ TBM 리더 정보</th></tr>",
-        f"<tr style='text-align:center; font-weight:bold; background:#fafafa;'><td style='width:18%;'>소속</td><td style='width:20%;'>직책</td><td style='width:20%;'>관리감독자</td><td style='width:18%;'>성명</td><td rowspan='2' style='width:24%; vertical-align:middle;'>{sign_img_tag}</td></tr>",
-        f"<tr style='text-align:center;'><td>{leader_dept}</td><td>{leader_role}</td><td>☑예 □아니오</td><td><b>{leader_name}</b></td></tr></table>",
-        f"<table><tr><th colspan='6' style='text-align:left; background:#e9ecef;'>■ 참석자 확인</th></tr><tr style='text-align:center; background:#fafafa; font-weight:bold;'><td style='width:18%;'>성 명</td><td style='width:15%;'>서 명</td><td style='width:18%;'>성 명</td><td style='width:15%;'>서 명</td><td style='width:18%;'>업 체 성 명</td><td style='width:16%;'>업 체 서 명</td></tr>{worker_table_rows}</table>",
-        audit_trail_html,
-        "</body></html>"
-    ]
-    return "".join(parts)
-
 # -------------------------------------------------------------
 # 사용자 로그인 검증 함수
 # -------------------------------------------------------------
@@ -705,7 +661,7 @@ def check_login_system():
         return True
 
     admin_master_pw = "yp1311!"
-    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "1234", "danwol360!", "yp1311!"]
+    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "yp1311!"]
 
     st.markdown("""
     <div style="text-align: center; padding: 25px 20px 10px 20px;">
@@ -723,7 +679,7 @@ def check_login_system():
             if login_type == "시스템 관리자 (승인 대시보드)":
                 admin_pw = st.text_input("관리자 마스터 비밀번호", type="password", key="admin_pw_input")
                 if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True):
-                    if admin_pw in [admin_master_pw, "danwol360!", "1234"]:
+                    if admin_pw == admin_master_pw:
                         st.session_state.logged_in = True
                         st.session_state.user_role = "admin"
                         st.session_state.user_name = "최고관리자"
@@ -928,7 +884,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
         else:
             st.info("💡 아직 보관함에 저장된 엑셀 파일이 없습니다. 1단계 작업대에서 [마스터 DB 및 보관함 저장]을 실행해 주세요.")
 
-    # 1-3. 누적 통합 엑셀 일괄 생성 (하수도정보시스템 공인 365일/90일 연속 데이터 매핑)
+    # 1-3. 누적 통합 엑셀 일괄 생성
     with tab_accum:
         st.subheader("📊 ⚡ [분기별 / 상하반기 / 연간 통합] 누적 엑셀 일괄 생성")
         
@@ -1177,20 +1133,21 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         df_m_main = get_master_data(sel_p)
         if not df_m_main.empty:
             eff_cols = []
+            eps = 1e-6
             if '유입BOD' in df_m_main.columns and '방류BOD' in df_m_main.columns:
-                df_m_main['BOD_효율(%)'] = ((df_m_main['유입BOD'] - df_m_main['방류BOD']) / df_m_main['유입BOD'] * 100).clip(0, 100)
+                df_m_main['BOD_효율(%)'] = ((df_m_main['유입BOD'] - df_m_main['방류BOD']) / (df_m_main['유입BOD'] + eps) * 100).clip(0, 100)
                 eff_cols.append('BOD_효율(%)')
             if '유입TOC' in df_m_main.columns and '방류TOC' in df_m_main.columns:
-                df_m_main['TOC_효율(%)'] = ((df_m_main['유입TOC'] - df_m_main['방류TOC']) / df_m_main['유입TOC'] * 100).clip(0, 100)
+                df_m_main['TOC_효율(%)'] = ((df_m_main['유입TOC'] - df_m_main['방류TOC']) / (df_m_main['유입TOC'] + eps) * 100).clip(0, 100)
                 eff_cols.append('TOC_효율(%)')
             if '유입SS' in df_m_main.columns and '방류SS' in df_m_main.columns:
-                df_m_main['SS_효율(%)'] = ((df_m_main['유입SS'] - df_m_main['방류SS']) / df_m_main['유입SS'] * 100).clip(0, 100)
+                df_m_main['SS_효율(%)'] = ((df_m_main['유입SS'] - df_m_main['방류SS']) / (df_m_main['유입SS'] + eps) * 100).clip(0, 100)
                 eff_cols.append('SS_효율(%)')
             if '유입TN' in df_m_main.columns and '방류TN' in df_m_main.columns:
-                df_m_main['T-N_효율(%)'] = ((df_m_main['유입TN'] - df_m_main['방류TN']) / df_m_main['유입TN'] * 100).clip(0, 100)
+                df_m_main['T-N_효율(%)'] = ((df_m_main['유입TN'] - df_m_main['방류TN']) / (df_m_main['유입TN'] + eps) * 100).clip(0, 100)
                 eff_cols.append('T-N_효율(%)')
             if '유입TP' in df_m_main.columns and '방류TP' in df_m_main.columns:
-                df_m_main['T-P_효율(%)'] = ((df_m_main['유입TP'] - df_m_main['방류TP']) / df_m_main['유입TP'] * 100).clip(0, 100)
+                df_m_main['T-P_효율(%)'] = ((df_m_main['유입TP'] - df_m_main['방류TP']) / (df_m_main['유입TP'] + eps) * 100).clip(0, 100)
                 eff_cols.append('T-P_효율(%)')
 
             if eff_cols:
