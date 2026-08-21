@@ -1097,14 +1097,14 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제
+# 3. TMS 관제 (업로드 및 저장 기능 완전 탑재)
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
     tab_t1, tab_t2, tab_t3 = st.tabs(["📝 [입력/과거데이터 업로드] 실시간 수동입력 & 엑셀 적재", "🚦 [관제] 실시간 신호등 & 2·4·6·8h 예측 그래프", "🗂️ [보관소] TMS 누적 데이터"])
     
     with tab_t1:
-        st.markdown("##### 1️⃣ 과거 TMS 원본 엑셀/CSV 대량 일괄 업로드 & AI 예측 자동 연산")
+        st.markdown("##### 1️⃣ 과거 TMS 원본 엑셀/CSV 대량 일괄 업로드 & 마스터 DB 적재")
         up_tms_files = st.file_uploader("과거 TMS 측정 엑셀 또는 CSV 파일 업로드", type=["xlsx", "xls", "csv"], accept_multiple_files=True, key="up_tms_batch_direct")
         if up_tms_files:
             tms_parsed_list = []
