@@ -1096,7 +1096,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제 (Streamlit components iframe으로 1초 주기 실시간 시계 완벽 연동)
+# 3. TMS 관제
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
@@ -1265,7 +1265,6 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         cur_tn = get_valid_latest(df_tms_cur, '방류TN', 8.45)
         cur_tp = get_valid_latest(df_tms_cur, '방류TP', 0.065)
 
-        # Streamlit 공식 iframe 컴포넌트로 1초마다 실시간으로 흐르는 Live Clock 완벽 렌더링
         st.components.v1.html("""
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; display: flex; align-items: center; gap: 10px; font-size: 1.15rem; font-weight: 700; color: #1E293B;">
             <span>🚦 최신 TMS 방류 수질 6대 항목 신호등 상태</span>
@@ -1397,21 +1396,71 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                 eff_cols.append('T-P_효율(%)')
 
             if eff_cols:
-                fig_eff = px.line(
-                    df_m_main, x='날짜', y=eff_cols,
-                    title=f"[{sel_p} - {target_spec['method']}] 주요 수질 지표별 처리효율 변동 추이 (%)",
-                    color_discrete_map={
-                        'BOD_효율(%)': '#0284C7',
-                        'TOC_효율(%)': '#0EA5E9',
-                        'SS_효율(%)': '#6366F1',
-                        'T-N_효율(%)': '#10B981',
-                        'T-P_효율(%)': '#F59E0B'
-                    }
-                )
+                st.markdown("##### 📈 주요 수질 지표별 처리효율 분석")
+                col_v1, col_v2 = st.columns([1.5, 2.5])
+                with col_v1:
+                    view_mode = st.radio(
+                        "표시 방식 선택", 
+                        ["✨ 부드러운 추세선 (7일 이동평균)", "📊 지표별 분할 보기 (Subplots)", "🔍 원본 일별 데이터"],
+                        horizontal=True
+                    )
+                
+                df_plot = df_m_main.copy()
+                df_plot['날짜_dt'] = pd.to_datetime(df_plot['날짜'])
+                df_plot = df_plot.sort_values(by='날짜_dt')
+                
+                color_map = {
+                    'BOD_효율(%)': '#0284C7',
+                    'TOC_효율(%)': '#0EA5E9',
+                    'SS_효율(%)': '#6366F1',
+                    'T-N_효율(%)': '#10B981',
+                    'T-P_효율(%)': '#F59E0B'
+                }
+
+                if "7일 이동평균" in view_mode:
+                    for col in eff_cols:
+                        df_plot[f'{col}_smooth'] = df_plot[col].rolling(window=7, min_periods=1).mean()
+                    
+                    smooth_cols = [f'{col}_smooth' for col in eff_cols]
+                    smooth_rename = {f'{col}_smooth': col for col in eff_cols}
+                    df_smooth = df_plot[['날짜'] + smooth_cols].rename(columns=smooth_rename)
+                    
+                    fig_eff = px.line(
+                        df_smooth, x='날짜', y=eff_cols,
+                        title=f"[{sel_p} - {target_spec['method']}] 수질 지표별 처리효율 주간 추세 (7일 이동평균)",
+                        color_discrete_map=color_map
+                    )
+                    fig_eff.add_hline(y=90, line_dash="dash", line_color="#10B981", annotation_text="우수 기준 (90%)", annotation_position="top right")
+                    fig_eff.add_hline(y=80, line_dash="dot", line_color="#EF4444", annotation_text="관리 기준 (80%)", annotation_position="bottom right")
+
+                elif "지표별 분할 보기" in view_mode:
+                    fig_eff = make_subplots(rows=len(eff_cols), cols=1, shared_xaxes=True, subplot_titles=eff_cols, vertical_spacing=0.06)
+                    for idx, col in enumerate(eff_cols, start=1):
+                        smooth_series = df_plot[col].rolling(window=7, min_periods=1).mean()
+                        fig_eff.add_trace(
+                            go.Scatter(
+                                x=df_plot['날짜'], y=smooth_series,
+                                mode='lines', name=col,
+                                line=dict(color=color_map.get(col, '#0284C7'), width=2)
+                            ),
+                            row=idx, col=1
+                        )
+                        fig_eff.add_hline(y=90, line_dash="dash", line_color="rgba(16, 185, 129, 0.5)", row=idx, col=1)
+                    
+                    fig_eff.update_layout(height=180 * len(eff_cols), showlegend=False)
+
+                else:
+                    fig_eff = px.line(
+                        df_plot, x='날짜', y=eff_cols,
+                        title=f"[{sel_p} - {target_spec['method']}] 수질 지표별 원본 처리효율 변동 추이 (%)",
+                        color_discrete_map=color_map
+                    )
+
                 fig_eff.update_layout(
                     template="plotly_white",
-                    yaxis=dict(range=[60, 100], title="처리효율 (%)"),
-                    xaxis=dict(title="날짜"),
+                    yaxis=dict(range=[60, 101], title="처리효율 (%)"),
+                    xaxis=dict(title=""),
+                    hovermode="x unified",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
                 st.plotly_chart(fig_eff, use_container_width=True)
