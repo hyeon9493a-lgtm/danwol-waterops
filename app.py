@@ -525,7 +525,7 @@ def fill_exact_reuse_template(df_data):
     wb.save(buf)
     return buf.getvalue()
 
-# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 연속 유량 + 일주일 단위 유입/방류 수질 연속 매핑]
+# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 연속 유량 + 일주일(7일) 단위 중 검사일 1회만 수질 입력]
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -569,88 +569,73 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             if pd.notna(r.get('유입량')) or pd.notna(r.get('유입BOD')):
                 measured_dates.append(pd.to_datetime(d_key))
 
-    # 7일(일주일) 단위 윈도우 매핑 (유량 및 유입수질/방류수질 주간 윈도우 구축)
-    daily_record_map = {}
+    # 7일 단위 주간 유량 윈도우 매핑 (유량만 7일간 매일 연속 채우기)
+    daily_flow_in_map = {}
+    daily_flow_out_map = {}
     prev_dt = None
-    
     for m_dt in measured_dates:
         d_str = m_dt.strftime('%Y-%m-%d')
         r_item = lookup[d_str]
-        
         f_in = r_item.get('유입량', np.nan)
         f_out = r_item.get('방류량', np.nan)
+        
         val_in = float(f_in) if (pd.notna(f_in) and 0.001 <= float(f_in) <= 2000) else default_f
         val_out = float(f_out) if (pd.notna(f_out) and 0.001 <= float(f_out) <= 2000) else (val_in if fac_name != '삼가리' else default_f * 0.83)
         
-        cur_vals = {
-            '유입량': val_in,
-            '방류량': val_out,
-            '수온': float(r_item['수온']) if pd.notna(r_item.get('수온')) else None,
-            '유입pH': float(r_item['유입pH']) if pd.notna(r_item.get('유입pH')) else None,
-            '유입BOD': float(r_item['유입BOD']) if pd.notna(r_item.get('유입BOD')) else None,
-            '유입TOC': float(r_item['유입TOC']) if pd.notna(r_item.get('유입TOC')) else None,
-            '유입SS': float(r_item['유입SS']) if pd.notna(r_item.get('유입SS')) else None,
-            '유입TN': float(r_item['유입TN']) if pd.notna(r_item.get('유입TN')) else None,
-            '유입TP': float(r_item['유입TP']) if pd.notna(r_item.get('유입TP')) else None,
-            '유입대장균': float(r_item['유입대장균']) if pd.notna(r_item.get('유입대장균')) else None,
-            '방류pH': float(r_item['방류pH']) if pd.notna(r_item.get('방류pH')) else None,
-            '방류BOD': float(r_item['방류BOD']) if pd.notna(r_item.get('방류BOD')) else None,
-            '방류TOC': float(r_item['방류TOC']) if pd.notna(r_item.get('방류TOC')) else None,
-            '방류SS': float(r_item['방류SS']) if pd.notna(r_item.get('방류SS')) else None,
-            '방류TN': float(r_item['방류TN']) if pd.notna(r_item.get('방류TN')) else None,
-            '방류TP': float(r_item['방류TP']) if pd.notna(r_item.get('방류TP')) else None,
-            '방류대장균': float(r_item['방류대장균']) if pd.notna(r_item.get('방류대장균')) else None,
-        }
-        
         if prev_dt is None:
-            daily_record_map[d_str] = cur_vals
+            daily_flow_in_map[d_str] = val_in
+            daily_flow_out_map[d_str] = val_out
         else:
             window_days = pd.date_range(prev_dt + pd.Timedelta(days=1), m_dt)
             for w_dt in window_days:
                 w_str = w_dt.strftime('%Y-%m-%d')
-                daily_record_map[w_str] = cur_vals
+                daily_flow_in_map[w_str] = val_in
+                daily_flow_out_map[w_str] = val_out
         prev_dt = m_dt
 
-    last_record = {
-        '유입량': default_f, '방류량': default_f if fac_name != '삼가리' else 49.1, '수온': None,
-        '유입pH': None, '유입BOD': None, '유입TOC': None, '유입SS': None, '유입TN': None, '유입TP': None, '유입대장균': None,
-        '방류pH': None, '방류BOD': None, '방류TOC': None, '방류SS': None, '방류TN': None, '방류TP': None, '방류대장균': None
-    }
+    last_f_in = default_f
+    last_f_out = default_f if fac_name != '삼가리' else 49.1
 
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
 
-        if d_str in daily_record_map:
-            last_record = daily_record_map[d_str]
-        elif d_str in lookup:
-            r_item = lookup[d_str]
-            for k in last_record.keys():
-                if pd.notna(r_item.get(k)):
-                    last_record[k] = float(r_item[k])
+        # 유량 (B, E, F열) - 7일 매일 연속 입력
+        if d_str in daily_flow_in_map:
+            last_f_in = daily_flow_in_map[d_str]
+            last_f_out = daily_flow_out_map[d_str]
+        elif d_str in lookup and pd.notna(lookup[d_str].get('유입량')):
+            last_f_in = float(lookup[d_str].get('유입량'))
+            last_f_out = float(lookup[d_str].get('방류량', last_f_in if fac_name != '삼가리' else last_f_in * 0.83))
 
-        ws.cell(r_idx, 2, last_record['유입량'])
-        ws.cell(r_idx, 5, last_record['유입량']) # E열: 고도처리량 = 유입량
-        ws.cell(r_idx, 6, last_record['방류량']) # F열: 방류량
+        ws.cell(r_idx, 2, last_f_in)
+        ws.cell(r_idx, 5, last_f_in)  # E열: 고도처리량 = 유입량
+        ws.cell(r_idx, 6, last_f_out) # F열: 방류량
 
-        # 유입수질 (H~N열) 및 방류수질 (P~V열) 일주일 단위 연속 매핑
-        if last_record.get('수온') is not None: ws.cell(r_idx, 7, last_record['수온'])
-        if last_record.get('유입pH') is not None: ws.cell(r_idx, 8, last_record['유입pH'])
-        if last_record.get('유입BOD') is not None: ws.cell(r_idx, 9, last_record['유입BOD'])
-        if last_record.get('유입TOC') is not None: ws.cell(r_idx, 10, last_record['유입TOC'])
-        if last_record.get('유입SS') is not None: ws.cell(r_idx, 11, last_record['유입SS'])
-        if last_record.get('유입TN') is not None: ws.cell(r_idx, 12, last_record['유입TN'])
-        if last_record.get('유입TP') is not None: ws.cell(r_idx, 13, last_record['유입TP'])
-        if last_record.get('유입대장균') is not None: ws.cell(r_idx, 14, last_record['유입대장균'])
+        # 수질 (유입수질 및 방류수질) -> 일주일 중 실측 검사 당일 1번만 입력! 나머지 날짜는 공란(None)
+        r_match = lookup.get(d_str, None)
+        if r_match is not None:
+            raw_temp = r_match.get('수온', np.nan)
+            if pd.notna(raw_temp): ws.cell(r_idx, 7, float(raw_temp))
 
-        if last_record.get('방류pH') is not None: ws.cell(r_idx, 16, last_record['방류pH'])
-        if last_record.get('방류BOD') is not None: ws.cell(r_idx, 17, last_record['방류BOD'])
-        if last_record.get('방류TOC') is not None: ws.cell(r_idx, 18, last_record['방류TOC'])
-        if last_record.get('방류SS') is not None: ws.cell(r_idx, 19, last_record['방류SS'])
-        if last_record.get('방류TN') is not None: ws.cell(r_idx, 20, last_record['방류TN'])
-        if last_record.get('방류TP') is not None: ws.cell(r_idx, 21, last_record['방류TP'])
-        if last_record.get('방류대장균') is not None: ws.cell(r_idx, 22, last_record['방류대장균'])
+            # Inflow WQ (Cols 8~14)
+            if pd.notna(r_match.get('유입pH')): ws.cell(r_idx, 8, float(r_match.get('유입pH')))
+            if pd.notna(r_match.get('유입BOD')): ws.cell(r_idx, 9, float(r_match.get('유입BOD')))
+            if pd.notna(r_match.get('유입TOC')): ws.cell(r_idx, 10, float(r_match.get('유입TOC')))
+            if pd.notna(r_match.get('유입SS')): ws.cell(r_idx, 11, float(r_match.get('유입SS')))
+            if pd.notna(r_match.get('유입TN')): ws.cell(r_idx, 12, float(r_match.get('유입TN')))
+            if pd.notna(r_match.get('유입TP')): ws.cell(r_idx, 13, float(r_match.get('유입TP')))
+            if pd.notna(r_match.get('유입대장균')): ws.cell(r_idx, 14, float(r_match.get('유입대장균')))
+
+            # Outflow WQ (Cols 16~22)
+            if pd.notna(r_match.get('방류pH')): ws.cell(r_idx, 16, float(r_match.get('방류pH')))
+            if pd.notna(r_match.get('방류BOD')): ws.cell(r_idx, 17, float(r_match.get('방류BOD')))
+            if pd.notna(r_match.get('방류TOC')): ws.cell(r_idx, 18, float(r_match.get('방류TOC')))
+            if pd.notna(r_match.get('방류SS')): ws.cell(r_idx, 19, float(r_match.get('방류SS')))
+            if pd.notna(r_match.get('방류TN')): ws.cell(r_idx, 20, float(r_match.get('방류TN')))
+            if pd.notna(r_match.get('방류TP')): ws.cell(r_idx, 21, float(r_match.get('방류TP')))
+            if pd.notna(r_match.get('방류대장균')): ws.cell(r_idx, 22, float(r_match.get('방류대장균')))
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -894,7 +879,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
 
         elif fac_grp == "🏡 소규모 처리시설 (6개소)":
             st.subheader("🏡 소규모 6개소 (산음/삼가리/진목/몰운/단월마을/당의)")
-            st.caption("📌 **소규모 종합운영일지 엑셀과 실험실 수질대장 엑셀을 함께 업로드하시면 7일(일주일) 단위 유량과 유입수질/방류수질이 365일 전체에 걸쳐 일주일 주기로 자동 연속 매핑됩니다.**")
+            st.caption("📌 **소규모 종합운영일지 엑셀과 실험실 수질대장 엑셀을 함께 업로드하시면 7일 주기 유량과 유입/방류 수질(검사일 1회 기입)이 원본 서식과 100% 동일하게 자동 통합 매핑됩니다.**")
             files_s = st.file_uploader("소규모 6개소 운영일지 및 수질 엑셀 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="up_small_all")
             if files_s:
                 s_dict = universal_small_plant_parser(files_s)
@@ -902,7 +887,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
 
             if "s_dict_parsed" in st.session_state:
                 s_dict = st.session_state["s_dict_parsed"]
-                st.success("✅ 소규모 6개소 데이터 파싱 및 일주일(7일) 단위 유량/수질 통합 매핑 완료!")
+                st.success("✅ 소규모 6개소 데이터 파싱 및 7일 주기 통합 매핑 완료!")
                 
                 if st.button("💾 ⚡ [소규모 6개소 전체 데이터 마스터 DB 및 보관함 일괄 저장]", type="primary", use_container_width=True, key="btn_save_small_all_master"):
                     saved_count = 0
