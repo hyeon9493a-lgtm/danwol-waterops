@@ -318,7 +318,7 @@ def universal_main_plant_parser(file_list):
         return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
     return pd.DataFrame()
 
-# 소규모 6개소 파서
+# [소규모 6개소 24열 공인서식, 종합운영일지 및 실험실 수질대장 완벽 통합 파서]
 def universal_small_plant_parser(file_list):
     facility_aliases = {
         "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
@@ -350,7 +350,9 @@ def universal_small_plant_parser(file_list):
                 r1_val = str(ws.cell(1, 1).value or '')
                 r2_val = str(ws.cell(2, 1).value or '')
                 is_24_col = ('유량및수질' in r1_val or '업로드양식' in r1_val or '날짜' in r2_val)
+                is_comp_log = ('종합운영일지' in r1_val or '1. 유량현황' in str(ws.cell(4, 1).value or ''))
                 
+                # 1) 24열 국가하수도정보시스템 공인 서식
                 if is_24_col and sheet_fac:
                     for r in range(4, min(ws.max_row + 1, 1000)):
                         c1_val = ws.cell(r, 1).value
@@ -391,57 +393,86 @@ def universal_small_plant_parser(file_list):
                             for col_idx, col_name in [(16, '방류pH'), (17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'), (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')]:
                                 v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                 if pd.notna(v): rec[col_name] = float(v)
-                else:
-                    sheet_m = None
-                    sm_match = re.search(r'(\d{1,2})월', sname)
-                    if sm_match: sheet_m = int(sm_match.group(1))
-
-                    for r in range(1, min(ws.max_row + 1, 600)):
-                        row = [ws.cell(r, c).value for c in range(1, min(ws.max_column + 1, 40))]
-                        if not any(row): continue
-                        c0_clean = str(row[0] or "").replace(" ", "")
-                        cur_fac = sheet_fac
-                        for std_fac, aliases in facility_aliases.items():
-                            for al in aliases:
-                                if al.replace(" ", "") in c0_clean: cur_fac = std_fac; break
-                        
-                        dt_val = None
-                        for c_idx in [0, 1, 2]:
-                            if c_idx < len(row):
-                                v = row[c_idx]
-                                if isinstance(v, (datetime.datetime, datetime.date)):
-                                    dt_val = datetime.date(file_year_anchor, v.month, v.day); break
-                                elif isinstance(v, str) and re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', v):
-                                    m = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', v)
-                                    dt_val = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3))); break
-                                elif isinstance(v, str) and re.search(r'(\d{1,2})[-/.](\d{1,2})', v):
-                                    m = re.search(r'(\d{1,2})[-/.](\d{1,2})', v)
-                                    dt_val = datetime.date(file_year_anchor, int(m.group(1)), int(m.group(2))); break
-                                elif isinstance(v, (int, float)) and sheet_m and (1 <= int(v) <= 31):
-                                    try:
-                                        dt_val = datetime.date(file_year_anchor, sheet_m, int(v)); break
-                                    except Exception: pass
-
-                        if cur_fac and dt_val:
-                            d_str = dt_val.strftime('%Y-%m-%d')
-                            if d_str not in accumulated_data[cur_fac]:
-                                accumulated_data[cur_fac][d_str] = {'날짜': d_str}
-                            rec = accumulated_data[cur_fac][d_str]
+                                
+                # 2) 소규모 종합운영일지 서식 (일평균 유량 및 점검일지 추출)
+                elif is_comp_log and sheet_fac:
+                    cur_date = None
+                    in_flow_sec = False
+                    in_wq_sec = False
+                    for r in range(1, min(ws.max_row + 1, 2000)):
+                        c0 = ws.cell(r, 1).value
+                        if isinstance(c0, (datetime.datetime, datetime.date)) or (isinstance(c0, str) and re.search(r'202[4-6]', c0)):
+                            cur_date = c0 if isinstance(c0, (datetime.datetime, datetime.date)) else pd.to_datetime(c0).date()
+                            if isinstance(cur_date, datetime.datetime): cur_date = cur_date.date()
+                            d_str = cur_date.strftime('%Y-%m-%d')
+                            if d_str not in accumulated_data[sheet_fac]:
+                                accumulated_data[sheet_fac][d_str] = {'날짜': d_str}
+                            in_flow_sec = False
+                            in_wq_sec = False
                             
-                            nums = [pd.to_numeric(val, errors='coerce') for val in row if pd.notna(pd.to_numeric(val, errors='coerce'))]
-                            if len(nums) >= 12:
-                                rec.update({
-                                    '유입BOD': nums[0], '유입TOC': nums[1], '유입SS': nums[2], '유입TN': nums[3], '유입TP': nums[4], '유입대장균': nums[5],
-                                    '방류BOD': nums[6], '방류TOC': nums[7], '방류SS': nums[8], '방류TN': nums[9], '방류TP': nums[10], '방류대장균': nums[11]
-                                })
-                                if len(nums) >= 13 and pd.notna(nums[12]):
-                                    rec['유입량'] = float(nums[12])
-                                    rec['방류량'] = float(nums[12])
-                            elif len(nums) >= 10:
-                                rec.update({
-                                    '유입BOD': nums[0], '유입TOC': nums[1], '유입SS': nums[2], '유입TN': nums[3], '유입TP': nums[4],
-                                    '방류BOD': nums[5], '방류TOC': nums[6], '방류SS': nums[7], '방류TN': nums[8], '방류TP': nums[9]
-                                })
+                        c0_str = str(c0 or '').replace(' ', '')
+                        if '1.유량현황' in c0_str:
+                            in_flow_sec = True; in_wq_sec = False; continue
+                        elif '2.전력량' in c0_str or '3.수질현황' in c0_str:
+                            in_flow_sec = False; in_wq_sec = ('3.수질현황' in c0_str); continue
+                        elif '4.시설현황' in c0_str:
+                            in_flow_sec = False; in_wq_sec = False; continue
+                            
+                        if cur_date and in_flow_sec:
+                            d_str = cur_date.strftime('%Y-%m-%d')
+                            rec = accumulated_data[sheet_fac][d_str]
+                            val5 = pd.to_numeric(ws.cell(r, 5).value, errors='coerce')
+                            if '처리장' in c0_str and pd.notna(val5):
+                                rec['유입량'] = float(val5)
+                                rec['방류량'] = float(val5)
+                            elif '유입량' in c0_str and pd.notna(val5):
+                                rec['유입량'] = float(val5)
+                            elif '방류량' in c0_str and pd.notna(val5):
+                                rec['방류량'] = float(val5)
+                                
+                        if cur_date and in_wq_sec:
+                            d_str = cur_date.strftime('%Y-%m-%d')
+                            rec = accumulated_data[sheet_fac][d_str]
+                            if '유입수' in c0_str:
+                                for col_idx, col_name in [(2, '유입BOD'), (3, '유입TOC'), (4, '유입SS'), (5, '유입TN'), (6, '유입TP'), (7, '유입대장균')]:
+                                    v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
+                                    if pd.notna(v): rec[col_name] = float(v)
+                            elif '방류수' in c0_str:
+                                for col_idx, col_name in [(2, '방류BOD'), (3, '방류TOC'), (4, '방류SS'), (5, '방류TN'), (6, '방류TP'), (7, '방류대장균')]:
+                                    v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
+                                    if pd.notna(v): rec[col_name] = float(v)
+
+                # 3) 소규모 월별 수질대장 (1월~12월 탭)
+                else:
+                    cur_tab_fac = sheet_fac
+                    for r in range(2, min(ws.max_row + 1, 100)):
+                        c0 = ws.cell(r, 1).value
+                        c1 = ws.cell(r, 2).value
+                        if c0:
+                            c0_clean = str(c0).replace('\n', '').replace(' ', '')
+                            cur_tab_fac = None
+                            for std_fac, aliases in facility_aliases.items():
+                                for al in aliases:
+                                    if al.replace(" ", "") in c0_clean:
+                                        cur_tab_fac = std_fac; break
+                                if cur_tab_fac: break
+                                
+                        if cur_tab_fac and isinstance(c1, (datetime.datetime, datetime.date)):
+                            dt_val = datetime.date(file_year_anchor, c1.month, c1.day)
+                            d_str = dt_val.strftime('%Y-%m-%d')
+                            if d_str not in accumulated_data[cur_tab_fac]:
+                                accumulated_data[cur_tab_fac][d_str] = {'날짜': d_str}
+                            rec = accumulated_data[cur_tab_fac][d_str]
+                            
+                            # Inflow: Cols 3(BOD), 4(TOC), 5(SS), 6(TN), 7(TP), 8(대장균)
+                            for col_idx, col_name in [(3, '유입BOD'), (4, '유입TOC'), (5, '유입SS'), (6, '유입TN'), (7, '유입TP'), (8, '유입대장균')]:
+                                v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
+                                if pd.notna(v): rec[col_name] = float(v)
+                                
+                            # Outflow: Cols 9(BOD), 10(TOC), 11(SS), 12(TN), 13(TP), 14(대장균)
+                            for col_idx, col_name in [(9, '방류BOD'), (10, '방류TOC'), (11, '방류SS'), (12, '방류TN'), (13, '방류TP'), (14, '방류대장균')]:
+                                v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
+                                if pd.notna(v): rec[col_name] = float(v)
             wb.close()
         except Exception:
             pass
@@ -494,6 +525,7 @@ def fill_exact_reuse_template(df_data):
     wb.save(buf)
     return buf.getvalue()
 
+# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 연속 유량 + 실측일 수질 정밀 매핑 (삼가리 분리 유량 지원)]
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -537,6 +569,7 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             if pd.notna(r.get('유입량')) or pd.notna(r.get('유입BOD')):
                 measured_dates.append(pd.to_datetime(d_key))
 
+    # 7일 단위 주간 유량 윈도우 매핑
     daily_flow_in_map = {}
     daily_flow_out_map = {}
     prev_dt = None
@@ -547,7 +580,7 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         f_out = r_item.get('방류량', np.nan)
         
         val_in = float(f_in) if (pd.notna(f_in) and 0.001 <= float(f_in) <= 2000) else default_f
-        val_out = float(f_out) if (pd.notna(f_out) and 0.001 <= float(f_out) <= 2000) else default_f
+        val_out = float(f_out) if (pd.notna(f_out) and 0.001 <= float(f_out) <= 2000) else (val_in if fac_name != '삼가리' else default_f * 0.83)
         
         if prev_dt is None:
             daily_flow_in_map[d_str] = val_in
@@ -561,34 +594,48 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         prev_dt = m_dt
 
     last_f_in = default_f
-    last_f_out = default_f
+    last_f_out = default_f if fac_name != '삼가리' else 49.1
 
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
 
+        # 유량 (B, E, F열)
         if d_str in daily_flow_in_map:
             last_f_in = daily_flow_in_map[d_str]
             last_f_out = daily_flow_out_map[d_str]
         elif d_str in lookup and pd.notna(lookup[d_str].get('유입량')):
             last_f_in = float(lookup[d_str].get('유입량'))
-            last_f_out = float(lookup[d_str].get('방류량', last_f_in))
+            last_f_out = float(lookup[d_str].get('방류량', last_f_in if fac_name != '삼가리' else last_f_in * 0.83))
 
         ws.cell(r_idx, 2, last_f_in)
-        ws.cell(r_idx, 5, last_f_in)
-        ws.cell(r_idx, 6, last_f_out)
+        ws.cell(r_idx, 5, last_f_in)  # E열: 고도처리량 = 유입량
+        ws.cell(r_idx, 6, last_f_out) # F열: 방류량
 
+        # 수질 (검사 당일만 입력, 미측정일은 공란)
         r_match = lookup.get(d_str, None)
         if r_match is not None:
             raw_temp = r_match.get('수온', np.nan)
             if pd.notna(raw_temp): ws.cell(r_idx, 7, float(raw_temp))
 
-            for col_idx, col_name in [(8, '유입pH'), (9, '유입BOD'), (10, '유입TOC'), (11, '유입SS'), (12, '유입TN'), (13, '유입TP'), (14, '유입대장균')]:
-                if pd.notna(r_match.get(col_name)): ws.cell(r_idx, col_idx, float(r_match.get(col_name)))
+            # Inflow WQ (Cols 8~14)
+            if pd.notna(r_match.get('유입pH')): ws.cell(r_idx, 8, float(r_match.get('유입pH')))
+            if pd.notna(r_match.get('유입BOD')): ws.cell(r_idx, 9, float(r_match.get('유입BOD')))
+            if pd.notna(r_match.get('유입TOC')): ws.cell(r_idx, 10, float(r_match.get('유입TOC')))
+            if pd.notna(r_match.get('유입SS')): ws.cell(r_idx, 11, float(r_match.get('유입SS')))
+            if pd.notna(r_match.get('유입TN')): ws.cell(r_idx, 12, float(r_match.get('유입TN')))
+            if pd.notna(r_match.get('유입TP')): ws.cell(r_idx, 13, float(r_match.get('유입TP')))
+            if pd.notna(r_match.get('유입대장균')): ws.cell(r_idx, 14, float(r_match.get('유입대장균')))
 
-            for col_idx, col_name in [(16, '방류pH'), (17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'), (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')]:
-                if pd.notna(r_match.get(col_name)): ws.cell(r_idx, col_idx, float(r_match.get(col_name)))
+            # Outflow WQ (Cols 16~22)
+            if pd.notna(r_match.get('방류pH')): ws.cell(r_idx, 16, float(r_match.get('방류pH')))
+            if pd.notna(r_match.get('방류BOD')): ws.cell(r_idx, 17, float(r_match.get('방류BOD')))
+            if pd.notna(r_match.get('방류TOC')): ws.cell(r_idx, 18, float(r_match.get('방류TOC')))
+            if pd.notna(r_match.get('방류SS')): ws.cell(r_idx, 19, float(r_match.get('방류SS')))
+            if pd.notna(r_match.get('방류TN')): ws.cell(r_idx, 20, float(r_match.get('방류TN')))
+            if pd.notna(r_match.get('방류TP')): ws.cell(r_idx, 21, float(r_match.get('방류TP')))
+            if pd.notna(r_match.get('방류대장균')): ws.cell(r_idx, 22, float(r_match.get('방류대장균')))
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -647,6 +694,35 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
         zf.writestr("version.xml", "<?xml version='1.0' encoding='UTF-8'?><hh:version xmlns:hh='http://www.hancom.co.kr/hwpml/2011/head' version='1.0'/>")
         zf.writestr("Contents/section0.xml", sec_xml.encode('utf-8'))
     return out_buf.getvalue()
+
+def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is_contractor, contractor_name, contractor_manager, contractor_tel, contractor_eval, contractor_edu, risk_rows_html, leader_dept, leader_role, leader_name, sign_img_tag, worker_table_rows, audit_trail_html):
+    parts = [
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'><style>",
+        "body { font-family: 'Malgun Gothic', '맑은 고딕', dotum, sans-serif; margin: 8px 12px; color: #000; font-size: 11px; }",
+        ".title-box { font-size: 17px; font-weight: bold; padding: 4px 0; margin-bottom: 6px; }",
+        "table { width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 11px; }",
+        "th, td { border: 1px solid #000; padding: 4px 5px; }",
+        ".header-td { background-color: #f2f2f2; font-weight: bold; text-align: center; width: 14%; }",
+        "</style></head><body>",
+        "<div class='title-box'>[시설명: 단월처리시설 ] TBM(Tool Box Meeting) 회의록</div>",
+        "<table>",
+        f"<tr><td class='header-td'>TBM 일시</td><td style='width:38%;'>{tbm_date.strftime('%Y년 %m월 %d일')} {tbm_time}</td><td class='header-td'>작업날짜와 동일함</td><td style='width:25%;'>☑예 □아니오</td></tr>",
+        f"<tr><td class='header-td'>작 업 명</td><td style='font-weight:bold;'>{custom_job}</td><td class='header-td' rowspan='2'>TBM 장소</td><td rowspan='2'>{'☑' if tbm_place=='사무실' else '□'}사무실 &nbsp;&nbsp; {'☑' if tbm_place=='작업현장' else '□'}작업현장</td></tr>",
+        f"<tr><td class='header-td'>작업내용</td><td>{job_desc}</td></tr>",
+        f"<tr><td class='header-td' rowspan='4'>외주업체정보</td><td>외주작업 &nbsp;&nbsp; {'☑예 □아니오' if is_contractor else '□예 ☑아니오'}</td><td class='header-td' rowspan='2'>업체 위험성평가 실시</td><td rowspan='2'>{'☑예 □아니오' if is_contractor and contractor_eval else '□예 □아니오'}</td></tr>",
+        f"<tr><td>업체명: <b>{contractor_name}</b></td></tr>",
+        f"<tr><td>책임자: <b>{contractor_manager}</b></td><td class='header-td' rowspan='2'>산업안전보건 교육 확인</td><td rowspan='2'>{'☑예 □아니오' if is_contractor and contractor_edu else '□예 □아니오'}</td></tr>",
+        f"<tr><td>연락처: {contractor_tel}</td></tr>",
+        "</table>",
+        f"<table><tr style='background:#e9ecef;'><th style='width:45%;'>■ 유해·위험요인 파악 내용</th><th style='width:55%;'>■ 파악된 유해·위험요인의 감소대책 수립 및 이행</th></tr>{risk_rows_html}</table>",
+        "<table><tr><th colspan='5' style='text-align:left; background:#e9ecef;'>■ TBM 리더 정보</th></tr>",
+        f"<tr style='text-align:center; font-weight:bold; background:#fafafa;'><td style='width:18%;'>소속</td><td style='width:20%;'>직책</td><td style='width:20%;'>관리감독자</td><td style='width:18%;'>성명</td><td rowspan='2' style='width:24%; vertical-align:middle;'>{sign_img_tag}</td></tr>",
+        f"<tr style='text-align:center;'><td>{leader_dept}</td><td>{leader_role}</td><td>☑예 □아니오</td><td><b>{leader_name}</b></td></tr></table>",
+        f"<table><tr><th colspan='6' style='text-align:left; background:#e9ecef;'>■ 참석자 확인</th></tr><tr style='text-align:center; background:#fafafa; font-weight:bold;'><td style='width:18%;'>성 명</td><td style='width:15%;'>서 명</td><td style='width:18%;'>성 명</td><td style='width:15%;'>서 명</td><td style='width:18%;'>업 체 성 명</td><td style='width:16%;'>업 체 서 명</td></tr>{worker_table_rows}</table>",
+        audit_trail_html,
+        "</body></html>"
+    ]
+    return "".join(parts)
 
 # -------------------------------------------------------------
 # 사용자 로그인 검증 함수
@@ -803,6 +879,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
 
         elif fac_grp == "🏡 소규모 처리시설 (6개소)":
             st.subheader("🏡 소규모 6개소 (산음/삼가리/진목/몰운/단월마을/당의)")
+            st.caption("📌 **소규모 종합운영일지 엑셀과 실험실 수질대장 엑셀을 함께 업로드하시면 7일 주기 유량과 유입/방류 수질이 자동으로 정확히 통합 매핑됩니다.**")
             files_s = st.file_uploader("소규모 6개소 운영일지 및 수질 엑셀 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="up_small_all")
             if files_s:
                 s_dict = universal_small_plant_parser(files_s)
@@ -810,7 +887,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
 
             if "s_dict_parsed" in st.session_state:
                 s_dict = st.session_state["s_dict_parsed"]
-                st.success("✅ 소규모 6개소 데이터 파싱 완료!")
+                st.success("✅ 소규모 6개소 데이터 파싱 및 7일 주기 통합 매핑 완료!")
                 
                 if st.button("💾 ⚡ [소규모 6개소 전체 데이터 마스터 DB 및 보관함 일괄 저장]", type="primary", use_container_width=True, key="btn_save_small_all_master"):
                     saved_count = 0
