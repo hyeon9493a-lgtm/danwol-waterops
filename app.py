@@ -77,7 +77,7 @@ SMALL_PLANTS = ["산음", "삼가리", "진목", "몰운", "단월마을", "당�
 PRIVATE_PLANTS = ["석산리", "음지", "양지", "복지회관", "인이피", "돌고개"]
 
 PLANT_DESIGN_SPECS = {
-    MAIN_PLANT: {"cap": 1700.0, "method": "KNR + IPR", "blower_cap": 25.0, "has_chem": True, "chem_type": "염화제이철 & PAC", "desc": "연속회분식 고도처리 + 생물반응조 염화제이철 & 종침 PAC"},
+    MAIN_PLANT: {"cap": 1700.0, "method": "KNR + IPR", "blower_cap": 25.0, "has_chem": True, "chem_type": "염화제이철 & PAC", "desc": "연속회분식 고도처리 + IPR 공정(염화제이철) & 종침 PAC"},
     "산음": {"cap": 100.0, "method": "SWPP", "blower_cap": 3.0, "has_chem": False, "chem_type": "무약품", "desc": "수중포기 침전일체형 (무약품 생물학적 처리)"},
     "삼가리": {"cap": 120.0, "method": "SBR", "blower_cap": 3.5, "has_chem": False, "chem_type": "무약품", "desc": "회분식 활성슬러지 공정 (무약품 생물학적 처리)"},
     "진목": {"cap": 23.0, "method": "고효율오수정화 + SOD", "blower_cap": 1.5, "has_chem": False, "chem_type": "무약품", "desc": "미생물 접촉산화 및 고효율 탈질 (무약품)"},
@@ -116,7 +116,7 @@ def save_auth_db(data):
     except Exception:
         pass
 
-# 4. DB 입출력 핸들러 (데이터 영구 보존)
+# 4. DB 입출력 핸들러
 def append_to_master_db(fac, df_new):
     if df_new is None or df_new.empty: return
     df_new = df_new.copy()
@@ -384,17 +384,15 @@ def universal_small_plant_parser(file_list):
                             if pd.notna(flow_out): rec['방류량'] = float(flow_out)
                             if pd.notna(temp_val): rec['수온'] = float(temp_val)
                             
-                            # Inflow WQ (Cols 8~14)
                             for col_idx, col_name in [(8, '유입pH'), (9, '유입BOD'), (10, '유입TOC'), (11, '유입SS'), (12, '유입TN'), (13, '유입TP'), (14, '유입대장균')]:
                                 v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                 if pd.notna(v): rec[col_name] = float(v)
                                 
-                            # Outflow WQ (Cols 16~22)
                             for col_idx, col_name in [(16, '방류pH'), (17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'), (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')]:
                                 v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                 if pd.notna(v): rec[col_name] = float(v)
                                 
-                # 2) 소규모 종합운영일지 서식 (일평균 유량 및 점검일지 추출)
+                # 2) 소규모 종합운영일지 서식
                 elif is_comp_log and sheet_fac:
                     cur_date = None
                     in_flow_sec = False
@@ -464,12 +462,10 @@ def universal_small_plant_parser(file_list):
                                 accumulated_data[cur_tab_fac][d_str] = {'날짜': d_str}
                             rec = accumulated_data[cur_tab_fac][d_str]
                             
-                            # Inflow: Cols 3(BOD), 4(TOC), 5(SS), 6(TN), 7(TP), 8(대장균)
                             for col_idx, col_name in [(3, '유입BOD'), (4, '유입TOC'), (5, '유입SS'), (6, '유입TN'), (7, '유입TP'), (8, '유입대장균')]:
                                 v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                 if pd.notna(v): rec[col_name] = float(v)
                                 
-                            # Outflow: Cols 9(BOD), 10(TOC), 11(SS), 12(TN), 13(TP), 14(대장균)
                             for col_idx, col_name in [(9, '방류BOD'), (10, '방류TOC'), (11, '방류SS'), (12, '방류TN'), (13, '방류TP'), (14, '방류대장균')]:
                                 v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                 if pd.notna(v): rec[col_name] = float(v)
@@ -525,7 +521,7 @@ def fill_exact_reuse_template(df_data):
     wb.save(buf)
     return buf.getvalue()
 
-# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 연속 유량 + 일주일(7일) 단위 중 검사일 1회만 수질 입력]
+# [소규모 6개소 24열 공인 서식 원본 100% 매핑: 7일 주기 연속 유량 + 일주일 중 검사일 1회 수질 입력]
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -569,7 +565,6 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             if pd.notna(r.get('유입량')) or pd.notna(r.get('유입BOD')):
                 measured_dates.append(pd.to_datetime(d_key))
 
-    # 7일 단위 주간 유량 윈도우 매핑 (유량만 7일간 매일 연속 채우기)
     daily_flow_in_map = {}
     daily_flow_out_map = {}
     prev_dt = None
@@ -601,7 +596,6 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
 
-        # 유량 (B, E, F열) - 7일 매일 연속 입력
         if d_str in daily_flow_in_map:
             last_f_in = daily_flow_in_map[d_str]
             last_f_out = daily_flow_out_map[d_str]
@@ -610,16 +604,14 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             last_f_out = float(lookup[d_str].get('방류량', last_f_in if fac_name != '삼가리' else last_f_in * 0.83))
 
         ws.cell(r_idx, 2, last_f_in)
-        ws.cell(r_idx, 5, last_f_in)  # E열: 고도처리량 = 유입량
-        ws.cell(r_idx, 6, last_f_out) # F열: 방류량
+        ws.cell(r_idx, 5, last_f_in)
+        ws.cell(r_idx, 6, last_f_out)
 
-        # 수질 (유입수질 및 방류수질) -> 일주일 중 실측 검사 당일 1번만 입력! 나머지 날짜는 공란(None)
         r_match = lookup.get(d_str, None)
         if r_match is not None:
             raw_temp = r_match.get('수온', np.nan)
             if pd.notna(raw_temp): ws.cell(r_idx, 7, float(raw_temp))
 
-            # Inflow WQ (Cols 8~14)
             if pd.notna(r_match.get('유입pH')): ws.cell(r_idx, 8, float(r_match.get('유입pH')))
             if pd.notna(r_match.get('유입BOD')): ws.cell(r_idx, 9, float(r_match.get('유입BOD')))
             if pd.notna(r_match.get('유입TOC')): ws.cell(r_idx, 10, float(r_match.get('유입TOC')))
@@ -628,7 +620,6 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             if pd.notna(r_match.get('유입TP')): ws.cell(r_idx, 13, float(r_match.get('유입TP')))
             if pd.notna(r_match.get('유입대장균')): ws.cell(r_idx, 14, float(r_match.get('유입대장균')))
 
-            # Outflow WQ (Cols 16~22)
             if pd.notna(r_match.get('방류pH')): ws.cell(r_idx, 16, float(r_match.get('방류pH')))
             if pd.notna(r_match.get('방류BOD')): ws.cell(r_idx, 17, float(r_match.get('방류BOD')))
             if pd.notna(r_match.get('방류TOC')): ws.cell(r_idx, 18, float(r_match.get('방류TOC')))
@@ -1171,7 +1162,6 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ TMS 데이터로 실시간 일괄 동기화]", type="primary", use_container_width=True):
             df_m = get_master_data(MAIN_PLANT)
             if not df_m.empty:
-                # Fill missing BOD/TOC/SS/TN/TP using forward/backward fill then default benchmarks
                 df_m_clean = df_m.sort_values(by='날짜').copy()
                 for c, def_v in [('방류pH', 7.20), ('방류BOD', 2.30), ('방류TOC', 3.10), ('방류SS', 4.80), ('방류TN', 8.45), ('방류TP', 0.065)]:
                     if c in df_m_clean.columns:
@@ -1245,10 +1235,8 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         cur_tn = get_valid_latest(df_tms_cur, '방류TN', 8.45)
         cur_tp = get_valid_latest(df_tms_cur, '방류TP', 0.065)
 
-        if not df_tms_cur.empty:
-            latest_time_str = f"{df_tms_cur.iloc[0].get('측정일자')} {df_tms_cur.iloc[0].get('측정시각')}"
-        else:
-            latest_time_str = "실시간 기준"
+        # 실시간 현재 일시를 명확히 표기
+        latest_time_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         st.markdown(f"#### 🚦 최신 TMS 방류 수질 6대 항목 신호등 상태 (`{latest_time_str}`)")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -1328,7 +1316,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         k2.metric("AI 권장 송풍량", f"{res['권장송풍량_m3min']} ㎥/min", f"송풍기 {res['송풍기가동대수']}대 가동")
         
         if sel_p == MAIN_PLANT:
-            k3.metric("최적 염화제이철 주입량", f"{res['권장염화제이철_L']} L/일", "생물반응조")
+            k3.metric("최적 염화제이철 주입량", f"{res['권장염화제이철_L']} L/일", "IPR 공정(인제거)")
             k4.metric("종침 전단 PAC 주입량", f"{res['종침전PAC주입량_L']} L/일", "응집보조")
         elif sel_p == "몰운":
             k3.metric("반응조 PAC 최적 주입량", f"{res['종침전PAC주입량_L']} L/일", "반응조 직접투입")
@@ -1540,7 +1528,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
             return (
                 "💡 **[총인(T-P) 제거 및 약품 주입 제어 지침]**\n\n"
                 "1. **단월 본장 약품 투입 체계**:\n"
-                "   - **생물반응조**: 염화제이철(FeCl3 38%)을 유입 TP 대비 몰비 1.5 수준으로 선 투입 (일 평균 약 25~30 L)\n"
+                "   - **IPR 공정(급속혼화)**: 염화제이철(FeCl3 38%)을 유입 TP 대비 몰비 1.5 수준으로 선 투입 (일 평균 약 25~30 L)\n"
                 "   - **2차 침전조 전단**: PAC(17%)를 보조 투입하여 잔류 콜로이드성 인 미세 플록 형성 (일 평균 약 40~50 L)\n"
                 "2. **소규모 몰운 시설**: 반응조 내 직접 PAC 단독 투입을 유지하십시오."
             )
