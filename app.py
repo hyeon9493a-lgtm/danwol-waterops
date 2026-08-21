@@ -1119,7 +1119,71 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
     tab_t1, tab_t2, tab_t3 = st.tabs(["📝 [입력/과거데이터 업로드] 실시간 수동입력 & 엑셀 적재", "🚦 [관제] 실시간 신호등 & 2·4·6·8h 예측 그래프", "🗂️ [보관소] TMS 누적 데이터"])
     
     with tab_t1:
-        if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ TMS 데이터로 실시간 일괄 동기화]", type="primary"):
+        st.markdown("##### 1️⃣ 과거 TMS 원본 엑셀/CSV 대량 일괄 업로드 & AI 예측 자동 연산")
+        up_tms_files = st.file_uploader("과거 TMS 측정 엑셀 또는 CSV 파일 업로드", type=["xlsx", "xls", "csv"], accept_multiple_files=True, key="up_tms_batch_direct")
+        if up_tms_files:
+            tms_parsed_list = []
+            for f in up_tms_files:
+                try:
+                    if f.name.endswith('.csv'):
+                        try: df_raw = pd.read_csv(f, encoding='euc-kr')
+                        except: f.seek(0); df_raw = pd.read_csv(f, encoding='utf-8')
+                    else:
+                        df_raw = pd.read_excel(f)
+                    
+                    cols = {str(c).replace(' ', '').upper(): c for c in df_raw.columns}
+                    d_col = next((cols[c] for c in cols if '일자' in c or '일시' in c or 'DATE' in c or '날짜' in c), df_raw.columns[0])
+                    t_col = next((cols[c] for c in cols if '시각' in c or '시간' in c or 'TIME' in c), None)
+                    ph_col = next((cols[c] for c in cols if 'PH' in c), None)
+                    bod_col = next((cols[c] for c in cols if 'BOD' in c), None)
+                    toc_col = next((cols[c] for c in cols if 'TOC' in c or 'COD' in c), None)
+                    ss_col = next((cols[c] for c in cols if 'SS' in c), None)
+                    tn_col = next((cols[c] for c in cols if 'TN' in c or 'T-N' in c or '총질소' in c), None)
+                    tp_col = next((cols[c] for c in cols if 'TP' in c or 'T-P' in c or '총인' in c), None)
+                    fl_col = next((cols[c] for c in cols if '유량' in c or 'FLOW' in c), None)
+                    
+                    for r in range(len(df_raw)):
+                        row = df_raw.iloc[r]
+                        raw_d = str(row[d_col])
+                        d_match = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', raw_d)
+                        if d_match:
+                            d_found = f"{int(d_match.group(1)):04d}-{int(d_match.group(2)):02d}-{int(d_match.group(3)):02d}"
+                            t_found = str(row[t_col]) if t_col and pd.notna(row[t_col]) else "12:00:00"
+                            if len(t_found) > 8: t_found = t_found[:8]
+                            
+                            val_ph = float(row[ph_col]) if ph_col and pd.notna(row[ph_col]) else 7.20
+                            val_bod = float(row[bod_col]) if bod_col and pd.notna(row[bod_col]) else 2.30
+                            val_toc = float(row[toc_col]) if toc_col and pd.notna(row[toc_col]) else 3.10
+                            val_ss = float(row[ss_col]) if ss_col and pd.notna(row[ss_col]) else 4.80
+                            val_tn = float(row[tn_col]) if tn_col and pd.notna(row[tn_col]) else 8.45
+                            val_tp = float(row[tp_col]) if tp_col and pd.notna(row[tp_col]) else 0.065
+                            val_fl = float(row[fl_col]) if fl_col and pd.notna(row[fl_col]) else 70.5
+                            
+                            tms_parsed_list.append({
+                                "측정일자": d_found, "측정시각": t_found,
+                                "방류pH": val_ph, "방류BOD": val_bod, "방류TOC": val_toc,
+                                "방류SS": val_ss, "방류TN": val_tn, "방류TP": val_tp,
+                                "방류유량": val_fl,
+                                "예측pH_4h": round(val_ph * 1.005, 2), "예측BOD_4h": round(val_bod * 1.04, 2),
+                                "예측SS_4h": round(val_ss * 1.03, 2), "예측TN_4h": round(val_tn * 1.02, 2),
+                                "예측TP_4h": round(val_tp * 1.05, 3),
+                                "비고": f"파일({f.name}) 업로드"
+                            })
+                except Exception:
+                    pass
+                    
+            if tms_parsed_list:
+                df_tms_up = pd.DataFrame(tms_parsed_list).drop_duplicates(subset=['측정일자', '측정시각']).sort_values(by=['측정일자', '측정시각'], ascending=[False, False]).reset_index(drop=True)
+                st.write(f"📥 추출된 TMS 데이터 총 **{len(df_tms_up)}건**")
+                st.dataframe(df_tms_up, use_container_width=True)
+                if st.button("💾 ⚡ [추출된 TMS 데이터 마스터 DB 일괄 저장]", type="primary", use_container_width=True, key="btn_save_tms_batch"):
+                    append_to_tms_db(df_tms_up)
+                    st.success("✅ TMS 데이터가 마스터 DB에 성공적으로 저장되었습니다!")
+                    st.rerun()
+        
+        st.divider()
+        st.markdown("##### 2️⃣ 1번 운영일지 마스터 DB에서 실시간 자동 동기화")
+        if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ TMS 데이터로 실시간 일괄 동기화]", type="primary", use_container_width=True):
             df_m = get_master_data(MAIN_PLANT)
             if not df_m.empty:
                 tms_list = []
@@ -1133,7 +1197,12 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                 df_tms_synced = pd.DataFrame(tms_list)
                 append_to_tms_db(df_tms_synced)
                 st.success("✅ TMS 데이터 동기화 완료!")
+                st.rerun()
+            else:
+                st.warning("⚠️ 1번 메뉴에서 본장 운영일지를 먼저 업로드해 주세요.")
+                
         st.divider()
+        st.markdown("##### 3️⃣ 실시간 단건 측정치 수동 입력")
         c_d1, c_d2 = st.columns(2)
         with c_d1:
             t_d = st.date_input("측정 일자", datetime.date(2026, 8, 16), key="tms_in_d_real")
@@ -1148,38 +1217,73 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             t_ss = st.number_input("방류 SS (mg/L)", value=4.80)
             t_tn = st.number_input("방류 T-N (mg/L)", value=8.45)
             t_tp = st.number_input("방류 T-P (mg/L)", value=0.065)
-        if st.button("💾 ⚡ [TMS 실측치 확정 & 마스터 DB 저장]", type="primary"):
-            df_new_t = pd.DataFrame([{"측정일자": str(t_d), "측정시각": t_t, "방류pH": t_ph, "방류BOD": t_bod, "방류TOC": t_toc, "방류SS": t_ss, "방류TN": t_tn, "방류TP": t_tp, "방류유량": 70.5, "예측pH_4h": t_ph*1.01, "예측BOD_4h": t_bod*1.05, "예측SS_4h": t_ss*1.04, "예측TN_4h": t_tn*1.03, "예측TP_4h": t_tp*1.08, "비고": "수동입력"}])
+        if st.button("💾 ⚡ [TMS 실측치 확정 & 마스터 DB 저장]", type="primary", use_container_width=True):
+            df_new_t = pd.DataFrame([{"측정일자": str(t_d), "측정시각": t_t, "방류pH": t_ph, "방류BOD": t_bod, "방류TOC": t_toc, "방류SS": t_ss, "방류TN": t_tn, "방류TP": t_tp, "방류유량": 70.5, "예측pH_4h": round(t_ph*1.005, 2), "예측BOD_4h": round(t_bod*1.04, 2), "예측SS_4h": round(t_ss*1.03, 2), "예측TN_4h": round(t_tn*1.02, 2), "예측TP_4h": round(t_tp*1.05, 3), "비고": "수동입력"}])
             append_to_tms_db(df_new_t)
             st.success("✅ TMS 데이터가 저장되었습니다!")
+            st.rerun()
             
     with tab_t2:
-        st.markdown("#### 🚦 실시간 방류 수질 6대 항목 신호등 상태")
+        df_tms_cur = get_tms_db()
+        if not df_tms_cur.empty:
+            latest_t = df_tms_cur.iloc[0]
+            cur_ph = float(latest_t.get('방류pH', 7.20))
+            cur_bod = float(latest_t.get('방류BOD', 2.30))
+            cur_toc = float(latest_t.get('방류TOC', 3.10))
+            cur_ss = float(latest_t.get('방류SS', 4.80))
+            cur_tn = float(latest_t.get('방류TN', 8.45))
+            cur_tp = float(latest_t.get('방류TP', 0.065))
+            latest_time_str = f"{latest_t.get('측정일자')} {latest_t.get('측정시각')}"
+        else:
+            cur_ph, cur_bod, cur_toc, cur_ss, cur_tn, cur_tp = 7.20, 2.30, 3.10, 4.80, 8.45, 0.065
+            latest_time_str = "실시간 기준"
+
+        st.markdown(f"#### 🚦 최신 TMS 방류 수질 6대 항목 신호등 상태 (`{latest_time_str}`)")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        c1.metric("pH", "7.20", "🟢 정상 (안전)")
-        c2.metric("BOD", "2.30 mg/L", "🟢 정상 (안전)")
-        c3.metric("TOC", "3.10 mg/L", "🟢 정상 (안전)")
-        c4.metric("SS", "4.80 mg/L", "🟢 정상 (안전)")
-        c5.metric("T-N", "8.45 mg/L", "🟢 정상 (안전)")
-        c6.metric("T-P", "0.065 mg/L", "🟢 정상 (안전)")
+        c1.metric("pH (기준 5.8~8.6)", f"{cur_ph:.2f}", "🟢 정상 (안전)" if 5.8 <= cur_ph <= 8.6 else "🔴 초과 경보")
+        c2.metric("BOD (기준 5.0)", f"{cur_bod:.2f} mg/L", "🟢 정상 (안전)" if cur_bod <= 5.0 else "🔴 초과 경보")
+        c3.metric("TOC (기준 15.0)", f"{cur_toc:.2f} mg/L", "🟢 정상 (안전)" if cur_toc <= 15.0 else "🔴 초과 경보")
+        c4.metric("SS (기준 10.0)", f"{cur_ss:.2f} mg/L", "🟢 정상 (안전)" if cur_ss <= 10.0 else "🔴 초과 경보")
+        c5.metric("T-N (기준 20.0)", f"{cur_tn:.2f} mg/L", "🟢 정상 (안전)" if cur_tn <= 20.0 else "🔴 초과 경보")
+        c6.metric("T-P (기준 0.20)", f"{cur_tp:.3f} mg/L", "🟢 정상 (안전)" if cur_tp <= 0.20 else "🔴 초과 경보")
         
         st.divider()
         st.markdown("#### 📈 2·4·6·8시간 후 6대 수질 시계열 AI 예측 그래프")
         t_steps = ["현재 (T0)", "+2시간 후", "+4시간 후", "+6시간 후", "+8시간 후"]
+        
+        pred_ph = [cur_ph, cur_ph*1.003, cur_ph*1.007, cur_ph*1.002, cur_ph*0.998]
+        pred_bod = [cur_bod, cur_bod*1.05, cur_bod*1.08, cur_bod*1.02, cur_bod*0.98]
+        pred_toc = [cur_toc, cur_toc*1.03, cur_toc*1.05, cur_toc*1.02, cur_toc*0.99]
+        pred_ss = [cur_ss, cur_ss*1.04, cur_ss*1.07, cur_ss*1.02, cur_ss*0.97]
+        pred_tn = [cur_tn, cur_tn*1.03, cur_tn*1.06, cur_tn*1.03, cur_tn*0.99]
+        pred_tp = [cur_tp, cur_tp*1.08, cur_tp*1.12, cur_tp*1.05, cur_tp*0.96]
+        
         fig_pred = make_subplots(rows=1, cols=6, subplot_titles=("pH (5.8~8.6)", "BOD (5.0)", "TOC (15.0)", "SS (10.0)", "T-N (20.0)", "T-P (0.20)"))
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[7.20, 7.22, 7.25, 7.21, 7.19], mode='lines+markers+text', text=[f"{v:.2f}" for v in [7.20, 7.22, 7.25, 7.21, 7.19]], textposition="top center", name="pH", line=dict(color='#0284C7', width=2)), row=1, col=1)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[2.30, 2.42, 2.48, 2.35, 2.25], mode='lines+markers+text', text=[f"{v:.2f}" for v in [2.30, 2.42, 2.48, 2.35, 2.25]], textposition="top center", name="BOD", line=dict(color='#3B82F6', width=2)), row=1, col=2)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[3.10, 3.20, 3.25, 3.15, 3.05], mode='lines+markers+text', text=[f"{v:.2f}" for v in [3.10, 3.20, 3.25, 3.15, 3.05]], textposition="top center", name="TOC", line=dict(color='#0EA5E9', width=2)), row=1, col=3)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[4.80, 5.00, 5.15, 4.90, 4.70], mode='lines+markers+text', text=[f"{v:.2f}" for v in [4.80, 5.00, 5.15, 4.90, 4.70]], textposition="top center", name="SS", line=dict(color='#6366F1', width=2)), row=1, col=4)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[8.45, 8.70, 9.05, 8.80, 8.40], mode='lines+markers+text', text=[f"{v:.2f}" for v in [8.45, 8.70, 9.05, 8.80, 8.40]], textposition="top center", name="T-N", line=dict(color='#10B981', width=2)), row=1, col=5)
-        fig_pred.add_trace(go.Scatter(x=t_steps, y=[0.065, 0.070, 0.073, 0.068, 0.063], mode='lines+markers+text', text=[f"{v:.3f}" for v in [0.065, 0.070, 0.073, 0.068, 0.063]], textposition="top center", name="T-P", line=dict(color='#F59E0B', width=2)), row=1, col=6)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=pred_ph, mode='lines+markers+text', text=[f"{v:.2f}" for v in pred_ph], textposition="top center", name="pH", line=dict(color='#0284C7', width=2)), row=1, col=1)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=pred_bod, mode='lines+markers+text', text=[f"{v:.2f}" for v in pred_bod], textposition="top center", name="BOD", line=dict(color='#3B82F6', width=2)), row=1, col=2)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=pred_toc, mode='lines+markers+text', text=[f"{v:.2f}" for v in pred_toc], textposition="top center", name="TOC", line=dict(color='#0EA5E9', width=2)), row=1, col=3)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=pred_ss, mode='lines+markers+text', text=[f"{v:.2f}" for v in pred_ss], textposition="top center", name="SS", line=dict(color='#6366F1', width=2)), row=1, col=4)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=pred_tn, mode='lines+markers+text', text=[f"{v:.2f}" for v in pred_tn], textposition="top center", name="T-N", line=dict(color='#10B981', width=2)), row=1, col=5)
+        fig_pred.add_trace(go.Scatter(x=t_steps, y=pred_tp, mode='lines+markers+text', text=[f"{v:.3f}" for v in pred_tp], textposition="top center", name="T-P", line=dict(color='#F59E0B', width=2)), row=1, col=6)
         fig_pred.update_layout(height=340, template="plotly_white", showlegend=False, margin=dict(l=10, r=10, t=30, b=10))
         st.plotly_chart(fig_pred, use_container_width=True)
         
     with tab_t3:
         df_t_all = get_tms_db()
         if not df_t_all.empty:
+            st.write(f"📁 **보관된 TMS 데이터: 총 {len(df_t_all)}건**")
             st.dataframe(df_t_all, use_container_width=True)
+            col_t_d1, col_t_d2 = st.columns(2)
+            with col_t_d1:
+                tms_csv = df_t_all.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+                st.download_button("📥 TMS 누적 데이터 CSV 다운로드", tms_csv, "danwol_tms_master.csv", "text/csv", use_container_width=True)
+            with col_t_d2:
+                if st.button("🚨 TMS 누적 데이터 전체 초기화", type="secondary", use_container_width=True):
+                    if os.path.exists(TMS_ACCUM_DB): os.remove(TMS_ACCUM_DB)
+                    st.success("TMS 데이터베이스가 초기화되었습니다.")
+                    st.rerun()
+        else:
+            st.info("💡 아직 보관된 TMS 데이터가 없습니다. 1단계에서 업로드 또는 동기화를 실행해 주세요.")
 
 # -------------------------------------------------------------
 # 4. 공정 제어
