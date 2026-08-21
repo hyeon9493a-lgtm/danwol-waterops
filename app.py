@@ -1097,7 +1097,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제 (업로드 및 저장 기능 완전 탑재)
+# 3. TMS 관제 (nan 결측치 자동 방어 & 완벽한 6대 수질 그래프 연동)
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
@@ -1171,13 +1171,28 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ TMS 데이터로 실시간 일괄 동기화]", type="primary", use_container_width=True):
             df_m = get_master_data(MAIN_PLANT)
             if not df_m.empty:
+                # Fill missing BOD/TOC/SS/TN/TP using forward/backward fill then default benchmarks
+                df_m_clean = df_m.sort_values(by='날짜').copy()
+                for c, def_v in [('방류pH', 7.20), ('방류BOD', 2.30), ('방류TOC', 3.10), ('방류SS', 4.80), ('방류TN', 8.45), ('방류TP', 0.065)]:
+                    if c in df_m_clean.columns:
+                        df_m_clean[c] = pd.to_numeric(df_m_clean[c], errors='coerce').ffill().bfill().fillna(def_v)
+                    else:
+                        df_m_clean[c] = def_v
+
                 tms_list = []
-                for _, r in df_m.iterrows():
+                for _, r in df_m_clean.iterrows():
+                    v_ph = float(r.get('방류pH', 7.20))
+                    v_bod = float(r.get('방류BOD', 2.30))
+                    v_toc = float(r.get('방류TOC', 3.10))
+                    v_ss = float(r.get('방류SS', 4.80))
+                    v_tn = float(r.get('방류TN', 8.45))
+                    v_tp = float(r.get('방류TP', 0.065))
                     tms_list.append({
                         "측정일자": r['날짜'], "측정시각": "12:00:00",
-                        "방류pH": 7.20, "방류BOD": r.get('방류BOD', 2.3), "방류TOC": r.get('방류TOC', 3.1),
-                        "방류SS": r.get('방류SS', 4.8), "방류TN": r.get('방류TN', 8.45), "방류TP": r.get('방류TP', 0.065),
-                        "방류유량": 70.5, "예측pH_4h": 7.25, "예측BOD_4h": 2.45, "예측SS_4h": 5.1, "예측TN_4h": 8.9, "예측TP_4h": 0.072, "비고": "마스터 DB 동기화"
+                        "방류pH": v_ph, "방류BOD": v_bod, "방류TOC": v_toc,
+                        "방류SS": v_ss, "방류TN": v_tn, "방류TP": v_tp,
+                        "방류유량": 70.5, "예측pH_4h": round(v_ph * 1.005, 2), "예측BOD_4h": round(v_bod * 1.04, 2),
+                        "예측SS_4h": round(v_ss * 1.03, 2), "예측TN_4h": round(v_tn * 1.02, 2), "예측TP_4h": round(v_tp * 1.05, 3), "비고": "마스터 DB 동기화"
                     })
                 df_tms_synced = pd.DataFrame(tms_list)
                 append_to_tms_db(df_tms_synced)
@@ -1210,17 +1225,29 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             
     with tab_t2:
         df_tms_cur = get_tms_db()
+
+        def get_valid_latest(df, col, default_v):
+            if not df.empty and col in df.columns:
+                s = df[col].dropna()
+                s = s[~s.astype(str).str.lower().isin(['nan', 'none', ''])]
+                if not s.empty:
+                    try:
+                        v = float(s.iloc[0])
+                        if not np.isnan(v): return v
+                    except:
+                        pass
+            return default_v
+
+        cur_ph = get_valid_latest(df_tms_cur, '방류pH', 7.20)
+        cur_bod = get_valid_latest(df_tms_cur, '방류BOD', 2.30)
+        cur_toc = get_valid_latest(df_tms_cur, '방류TOC', 3.10)
+        cur_ss = get_valid_latest(df_tms_cur, '방류SS', 4.80)
+        cur_tn = get_valid_latest(df_tms_cur, '방류TN', 8.45)
+        cur_tp = get_valid_latest(df_tms_cur, '방류TP', 0.065)
+
         if not df_tms_cur.empty:
-            latest_t = df_tms_cur.iloc[0]
-            cur_ph = float(latest_t.get('방류pH', 7.20))
-            cur_bod = float(latest_t.get('방류BOD', 2.30))
-            cur_toc = float(latest_t.get('방류TOC', 3.10))
-            cur_ss = float(latest_t.get('방류SS', 4.80))
-            cur_tn = float(latest_t.get('방류TN', 8.45))
-            cur_tp = float(latest_t.get('방류TP', 0.065))
-            latest_time_str = f"{latest_t.get('측정일자')} {latest_t.get('측정시각')}"
+            latest_time_str = f"{df_tms_cur.iloc[0].get('측정일자')} {df_tms_cur.iloc[0].get('측정시각')}"
         else:
-            cur_ph, cur_bod, cur_toc, cur_ss, cur_tn, cur_tp = 7.20, 2.30, 3.10, 4.80, 8.45, 0.065
             latest_time_str = "실시간 기준"
 
         st.markdown(f"#### 🚦 최신 TMS 방류 수질 6대 항목 신호등 상태 (`{latest_time_str}`)")
