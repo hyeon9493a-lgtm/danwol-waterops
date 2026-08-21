@@ -1096,7 +1096,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제 (실시간으로 흐르는 라이브 시계 탑재)
+# 3. TMS 관제 (Streamlit components iframe으로 1초 주기 실시간 시계 완벽 연동)
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
@@ -1117,7 +1117,6 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                     else:
                         df_raw = pd.read_excel(f, header=None)
                     
-                    # TMS 국가측정망 병합셀 서식 동적 파싱
                     date_col, time_col = None, None
                     ph_col, bod_col, toc_col, ss_col, tn_col, tp_col, flow_col = None, None, None, None, None, None, None
                     start_row = 0
@@ -1129,7 +1128,6 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                             if '측정일자' in v_str: date_col = c_idx
                             if '측정시간' in v_str or '측정시각' in v_str: time_col = c_idx
                             
-                            # 병합된 셀 다음 열이 보통 '측정치'이므로 +1을 적용
                             if 'PH' in v_str: ph_col = c_idx + 1
                             if 'BOD' in v_str: bod_col = c_idx + 1
                             if 'TOC' in v_str: toc_col = c_idx + 1
@@ -1267,31 +1265,29 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         cur_tn = get_valid_latest(df_tms_cur, '방류TN', 8.45)
         cur_tp = get_valid_latest(df_tms_cur, '방류TP', 0.065)
 
-        # 1초마다 실시간으로 흐르는 Live Clock 컴포넌트 렌더링
-        st.markdown("""
-        <div style="font-size: 1.25rem; font-weight: 700; color: #1E293B; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        # Streamlit 공식 iframe 컴포넌트로 1초마다 실시간으로 흐르는 Live Clock 완벽 렌더링
+        st.components.v1.html("""
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; display: flex; align-items: center; gap: 10px; font-size: 1.15rem; font-weight: 700; color: #1E293B;">
             <span>🚦 최신 TMS 방류 수질 6대 항목 신호등 상태</span>
-            <span style="color: #0284C7; font-family: monospace; font-size: 1.15rem; background: #F0F9FF; padding: 2px 10px; border-radius: 6px; border: 1px solid #BAE6FD;">
-                ( <span id="live-tms-clock">연결 중...</span> )
+            <span style="color: #0284C7; font-family: monospace; font-size: 1.1rem; background: #F0F9FF; padding: 3px 12px; border-radius: 6px; border: 1px solid #BAE6FD;">
+                ( <span id="clock-display">로딩 중...</span> )
             </span>
         </div>
         <script>
-            function updateTMSClock() {
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const day = String(now.getDate()).padStart(2, '0');
-                const hours = String(now.getHours()).padStart(2, '0');
-                const minutes = String(now.getMinutes()).padStart(2, '0');
-                const seconds = String(now.getSeconds()).padStart(2, '0');
-                const timeString = year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
-                const el = document.getElementById('live-tms-clock');
-                if (el) el.innerText = timeString;
+            function updateClock() {
+                const d = new Date();
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const hours = String(d.getHours()).padStart(2, '0');
+                const minutes = String(d.getMinutes()).padStart(2, '0');
+                const seconds = String(d.getSeconds()).padStart(2, '0');
+                document.getElementById('clock-display').innerText = year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
             }
-            setInterval(updateTMSClock, 1000);
-            updateTMSClock();
+            updateClock();
+            setInterval(updateClock, 1000);
         </script>
-        """, unsafe_allow_html=True)
+        """, height=42)
 
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("pH (기준 5.8~8.6)", f"{cur_ph:.2f}", "🟢 정상 (안전)" if 5.8 <= cur_ph <= 8.6 else "🔴 초과 경보")
