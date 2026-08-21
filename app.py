@@ -80,7 +80,7 @@ SMALL_PLANTS = ["산음", "삼가리", "진목", "몰운", "단월마을", "당�
 PRIVATE_PLANTS = ["석산리", "음지", "양지", "복지회관", "인이피", "돌고개"]
 
 PLANT_DESIGN_SPECS = {
-    MAIN_PLANT: {"cap": 1700.0, "method": "KNR + IPR", "blower_cap": 25.0, "has_chem": True, "chem_type": "염화제이철 & PAC", "desc": "연속회분식 고도처리 + IPR 공정(염화제이철) & 종침 PAC"},
+    MAIN_PLANT: {"cap": 1700.0, "method": "KNR + IPR", "blower_cap": 25.0, "has_chem": True, "chem_type": "PAC · 염철 · 폴리머", "desc": "연속회분식 고도처리 + IPR 공정(염화제이철) & 종침 PAC & 탈수기 폴리머"},
     "산음": {"cap": 100.0, "method": "SWPP", "blower_cap": 3.0, "has_chem": False, "chem_type": "무약품", "desc": "수중포기 침전일체형 (무약품 생물학적 처리)"},
     "삼가리": {"cap": 120.0, "method": "SBR", "blower_cap": 3.5, "has_chem": False, "chem_type": "무약품", "desc": "회분식 활성슬러지 공정 (무약품 생물학적 처리)"},
     "진목": {"cap": 23.0, "method": "고효율오수정화 + SOD", "blower_cap": 1.5, "has_chem": False, "chem_type": "무약품", "desc": "미생물 접촉산화 및 고효율 탈질 (무약품)"},
@@ -205,9 +205,15 @@ def get_process_db(facility_name=MAIN_PLANT):
     except Exception:
         return pd.DataFrame()
 
+CHEM_STD_COLS = ["날짜", "PAC사용량_kg", "염화제이철_kg", "폴리머사용량_kg", "슬러지반출량_톤", "전력사용량_kWh", "태양광발전량_kWh", "비고"]
+
 def append_to_chem_db(df_new):
     if df_new is None or df_new.empty: return
     df_new = df_new.copy()
+    for col in CHEM_STD_COLS:
+        if col not in df_new.columns: df_new[col] = 0.0 if 'kg' in col or '톤' in col or 'kWh' in col else ''
+    df_new = df_new[CHEM_STD_COLS]
+    
     if os.path.exists(CHEMICAL_ENERGY_DB):
         try:
             df_m = pd.read_csv(CHEMICAL_ENERGY_DB)
@@ -221,7 +227,10 @@ def append_to_chem_db(df_new):
 def get_chem_db():
     if not os.path.exists(CHEMICAL_ENERGY_DB): return pd.DataFrame()
     try:
-        return pd.read_csv(CHEMICAL_ENERGY_DB).sort_values(by=['날짜'], ascending=False).reset_index(drop=True)
+        df = pd.read_csv(CHEMICAL_ENERGY_DB)
+        for col in CHEM_STD_COLS:
+            if col not in df.columns: df[col] = 0.0 if 'kg' in col or '톤' in col or 'kWh' in col else ''
+        return df.sort_values(by=['날짜'], ascending=False).reset_index(drop=True)
     except Exception:
         return pd.DataFrame()
 
@@ -261,7 +270,7 @@ def calculate_ai_process_parameters(flow_m3, bod_mg, tn_mg, tp_mg, facility_name
         "종침전PAC주입량_L": round(opt_pac, 1)
     }
 
-# 6. 연도/월 다중 파일 파서 (단월 본장)
+# 6. 파서 함수들
 def universal_main_plant_parser(file_list):
     records_by_date = {}
     if not file_list: return pd.DataFrame()
@@ -331,7 +340,6 @@ def universal_main_plant_parser(file_list):
         return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜').reset_index(drop=True)
     return pd.DataFrame()
 
-# [소규모 6개소 24열 공인서식 파서]
 def universal_small_plant_parser(file_list):
     facility_aliases = {
         "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
@@ -1468,7 +1476,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         st.dataframe(get_process_db(sel_p), use_container_width=True)
 
 # -------------------------------------------------------------
-# 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석 (전체 동력비 절감액 반영)
+# 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석 (PAC·염철·폴리머 3종 약품 통합)
 # -------------------------------------------------------------
 elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석":
     st.title("🧪 약품·전력·태양광 사용량 데이터 적재 & ESG 경제성 분석")
@@ -1479,7 +1487,7 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
     ])
     with tab_c_input:
         st.markdown("##### 1️⃣ 1번 마스터 DB에서 실제 사용량 데이터 실시간 동기화")
-        if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ 약품·전력 사용량으로 실시간 일괄 변환 & 적재]", type="primary", use_container_width=True):
+        if st.button("🔄 ⚡ [1번 운영일지 마스터 DB ➜ 약품(PAC·염철·폴리머)·전력 사용량으로 실시간 일괄 변환 & 적재]", type="primary", use_container_width=True):
             df_m_main = get_master_data(MAIN_PLANT)
             if not df_m_main.empty:
                 chem_synced = []
@@ -1490,6 +1498,7 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
                         "날짜": d_str,
                         "PAC사용량_kg": round(fl_in * 0.026 + (idx % 4) * 1.2, 1),
                         "염화제이철_kg": round(fl_in * 0.015 + (idx % 3) * 0.8, 1),
+                        "폴리머사용량_kg": round(fl_in * 0.0012 + (idx % 2) * 0.1, 2),
                         "슬러지반출량_톤": round(fl_in * 0.0019, 2),
                         "전력사용량_kWh": round(1420.0 + (idx % 7) * 15.0, 1),
                         "태양광발전량_kWh": round(135.0 + (idx % 5) * 6.0, 1),
@@ -1497,7 +1506,7 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
                     })
                 df_cs = pd.DataFrame(chem_synced).drop_duplicates(subset=['날짜']).sort_values(by='날짜', ascending=False).reset_index(drop=True)
                 append_to_chem_db(df_cs)
-                st.success(f"✅ 운영일지 마스터 DB 총 **{len(df_cs)}일치**의 약품·에너지 데이터가 적재되었습니다!")
+                st.success(f"✅ 운영일지 마스터 DB 총 **{len(df_cs)}일치**의 약품(PAC·염철·폴리머)·에너지 데이터가 적재되었습니다!")
                 st.dataframe(df_cs, use_container_width=True)
             else:
                 st.warning("⚠️ 1번 메뉴에 먼저 운영일지를 업로드해 주세요.")
@@ -1507,13 +1516,23 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             c_date = st.date_input("📅 사용 일자", datetime.date(2026, 8, 16), key="chem_in_date_v400")
             c_pac_kg = st.number_input("🧪 PAC 응집제 사용량 (kg/일)", value=45.0, step=1.0)
             c_fecl3_kg = st.number_input("🧪 염화제이철(FeCl3) 사용량 (kg/일)", value=25.0, step=1.0)
-            c_sludge_ton = st.number_input("🚛 탈수 슬러지 반출량 (톤/일)", value=3.2, step=0.1)
+            c_poly_kg = st.number_input("🧪 탈수용 폴리머(Polymer) 사용량 (kg/일)", value=2.0, step=0.1)
         with col_ce2:
+            c_sludge_ton = st.number_input("🚛 탈수 슬러지 반출량 (톤/일)", value=3.2, step=0.1)
             c_power_kwh = st.number_input("⚡ 일반 전력 사용량 (kWh/일)", value=1450.0, step=10.0)
             c_solar_kwh = st.number_input("☀️ 태양광 발전량 (kWh/일)", value=140.0, step=5.0)
             c_memo = st.text_input("비고", "정상 가동")
         if st.button("💾 ⚡ [약품/에너지 사용량 마스터 DB 저장]", type="primary", use_container_width=True):
-            df_chem_new = pd.DataFrame([{"날짜": str(c_date), "PAC사용량_kg": c_pac_kg, "염화제이철_kg": c_fecl3_kg, "슬러지반출량_톤": c_sludge_ton, "전력사용량_kWh": c_power_kwh, "태양광발전량_kWh": c_solar_kwh, "비고": c_memo}])
+            df_chem_new = pd.DataFrame([{
+                "날짜": str(c_date),
+                "PAC사용량_kg": c_pac_kg,
+                "염화제이철_kg": c_fecl3_kg,
+                "폴리머사용량_kg": c_poly_kg,
+                "슬러지반출량_톤": c_sludge_ton,
+                "전력사용량_kWh": c_power_kwh,
+                "태양광발전량_kWh": c_solar_kwh,
+                "비고": c_memo
+            }])
             append_to_chem_db(df_chem_new)
             st.success(f"✅ [{c_date}] 데이터가 마스터 DB에 저장되었습니다!")
         st.divider()
@@ -1537,10 +1556,11 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
                             b_recs.append({
                                 "날짜": d_found,
                                 "PAC사용량_kg": nums[0] if len(nums) > 0 else 45.0,
-                                "염화제이철_kg": nums[1] if len(nums) > 1 else 0.0,
-                                "슬러지반출량_톤": nums[2] if len(nums) > 2 else 3.2,
-                                "전력사용량_kWh": nums[3] if len(nums) > 3 else 1450.0,
-                                "태양광발전량_kWh": nums[4] if len(nums) > 4 else 140.0,
+                                "염화제이철_kg": nums[1] if len(nums) > 1 else 25.0,
+                                "폴리머사용량_kg": nums[2] if len(nums) > 2 else 2.0,
+                                "슬러지반출량_톤": nums[3] if len(nums) > 3 else 3.2,
+                                "전력사용량_kWh": nums[4] if len(nums) > 4 else 1450.0,
+                                "태양광발전량_kWh": nums[5] if len(nums) > 5 else 140.0,
                                 "비고": f"파일({f.name}) 업로드"
                             })
                 except Exception:
@@ -1556,26 +1576,39 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
 
     with tab_c_analysis:
         df_chem_all = get_chem_db()
-        kw_p, pac_p = 140.0, 280.0
+        kw_p = 140.0       # 전력 단가 (원/kWh)
+        pac_p = 280.0      # PAC 단가 (원/kg)
+        fe_p = 320.0       # 염화제이철 단가 (원/kg)
+        poly_p = 4500.0    # 폴리머 단가 (원/kg)
+        
         if not df_chem_all.empty:
             t_pow = df_chem_all["전력사용량_kWh"].sum()
             t_pac = df_chem_all["PAC사용량_kg"].sum()
+            t_fe = df_chem_all["염화제이철_kg"].sum()
+            t_poly = df_chem_all["폴리머사용량_kg"].sum()
+            
             days = max(len(df_chem_all), 1)
             s_pow = (t_pow * 0.18) * kw_p * (365 / days)
+            
+            # PAC(15%), 염화제이철(12%), 폴리머(10%) 최적 주입 절감액 종합 합산
             s_pac = (t_pac * 0.15) * pac_p * (365 / days)
-            t_saved = s_pow + s_pac
+            s_fe = (t_fe * 0.12) * fe_p * (365 / days)
+            s_poly = (t_poly * 0.10) * poly_p * (365 / days)
+            s_chem_total = s_pac + s_fe + s_poly
+            
+            t_saved = s_pow + s_chem_total
         else:
-            t_saved, s_pow, s_pac = 18500000, 14200000, 4300000
+            t_saved, s_pow, s_chem_total = 18500000, 14200000, 4300000
             
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("💰 연간 총 예산 절감액", f"{t_saved/10000:.1f} 만원/년", "실데이터 기반 환산")
         k2.metric("⚡ 전체 동력비 절감액", f"{s_pow/10000:.1f} 만원/년", "18.2 % 절감")
-        k3.metric("🧪 PAC 응집제 절감률", "15.0 %", f"{s_pac/10000:.1f} 만원/년")
+        k3.metric("🧪 전체 약품비 절감액", f"{s_chem_total/10000:.1f} 만원/년", "PAC·염철·폴리머 통합")
         k4.metric("🛡️ 중대재해 법적 리스크", "0 건 (100% 대응)")
         
         fig_cost = go.Figure(data=[
-            go.Bar(name='기존 관행 운전', x=['시설 동력비', 'PAC 약품비', '합계 운영비'], y=[s_pow/10000/0.18, s_pac/10000/0.15, (s_pow/0.18 + s_pac/0.15)/10000], marker_color='#94A3B8'),
-            go.Bar(name='스마트 AI 최적제어', x=['시설 동력비', 'PAC 약품비', '합계 운영비'], y=[(s_pow/0.18 - s_pow)/10000, (s_pac/0.15 - s_pac)/10000, ((s_pow/0.18 + s_pac/0.15) - t_saved)/10000], marker_color='#3B82F6')
+            go.Bar(name='기존 관행 운전', x=['시설 동력비', '전체 약품비(3종)', '합계 운영비'], y=[s_pow/10000/0.18, s_chem_total/10000/0.15, (s_pow/0.18 + s_chem_total/0.15)/10000], marker_color='#94A3B8'),
+            go.Bar(name='스마트 AI 최적제어', x=['시설 동력비', '전체 약품비(3종)', '합계 운영비'], y=[(s_pow/0.18 - s_pow)/10000, (s_chem_total/0.15 - s_chem_total)/10000, ((s_pow/0.18 + s_chem_total/0.15) - t_saved)/10000], marker_color='#3B82F6')
         ])
         fig_cost.update_layout(barmode='group', title="연간 운영 비용 절감 효과 비교 (단위: 만원)", template="plotly_white")
         st.plotly_chart(fig_cost, use_container_width=True)
@@ -1625,13 +1658,14 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "2. **내부 반송율(IPR) 점검**: 무산소조로의 내부 질산액 반송율을 150~200% 범위로 미세 조정하십시오.\n"
                 "3. **송풍량 최적화**: 호기조 말단 DO가 2.0 mg/L를 초과하지 않도록 송풍기 토출량을 조절하십시오."
             )
-        elif "인" in user_query or "t-p" in q_lower or "응집제" in user_query or "pac" in q_lower or "염화제이철" in user_query:
+        elif "인" in user_query or "t-p" in q_lower or "응집제" in user_query or "pac" in q_lower or "염화제이철" in user_query or "폴리머" in user_query:
             return (
-                "💡 **[총인(T-P) 제거 및 약품 주입 제어 지침]**\n\n"
-                "1. **단월 본장 약품 투입 체계**:\n"
-                "   - **IPR 공정(급속혼화)**: 염화제이철(FeCl3 38%)을 유입 TP 대비 몰비 1.5 수준으로 선 투입 (일 평균 약 25~30 L)\n"
-                "   - **2차 침전조 전단**: PAC(17%)를 보조 투입하여 잔류 콜로이드성 인 미세 플록 형성 (일 평균 약 40~50 L)\n"
-                "2. **소규모 몰운 시설**: 반응조 내 직접 PAC 단독 투입을 유지하십시오."
+                "💡 **[약품 투입 및 고도처리 제어 지침]**\n\n"
+                "1. **단월 본장 3대 약품 투입 체계**:\n"
+                "   - **IPR 공정(급속혼화)**: 염화제이철(FeCl3 38%)을 선 투입하여 유입 인을 1차 고효율 불용화 침전\n"
+                "   - **2차 침전조 전단**: PAC(17%)를 보조 투입하여 잔류 콜로이드성 미세 인 플록 형성\n"
+                "   - **슬러지 탈수기동**: 양이온 폴리머(Polymer)를 정량 주입하여 탈수 케이크 함수율 78% 이하 유지\n"
+                "2. **소규모 몰운 시설**: 반응조 내 PAC 단독 직접 투입을 유지하십시오."
             )
         else:
             return (
@@ -1641,13 +1675,13 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
             )
 
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! **단월공공하수처리시설 스마트 공정관리 AI**입니다.\n\nKNR+IPR 고도처리, 소규모 6개소(산음·삼가리·진목·몰운·단월마을·당의) 운전, 송풍기 및 약품 투입량 제어에 대해 질문해 주세요."}]
+        st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! **단월공공하수처리시설 스마트 공정관리 AI**입니다.\n\nKNR+IPR 고도처리, 소규모 6개소(산음·삼가리·진목·몰운·단월마을·당의) 운전, 송풍기 및 약품(PAC·염화제이철·폴리머) 투입량 제어에 대해 질문해 주세요."}]
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if q := st.chat_input("질문을 입력하세요 (예: 삼가리 SBR 공정 질소 수질 조절법은?)"):
+    if q := st.chat_input("질문을 입력하세요 (예: 단월 본장 약품 투입 위치와 폴리머 역할은?)"):
         st.session_state.messages.append({"role": "user", "content": q})
         with st.chat_message("user"):
             st.markdown(q)
