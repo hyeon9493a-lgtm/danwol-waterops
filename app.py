@@ -21,6 +21,9 @@ import warnings
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
+# 한국 표준시(KST, UTC+9) 타임존 정의
+KST = datetime.timezone(datetime.timedelta(hours=9))
+
 # 1. 페이지 설정 & 프리미엄 블루 테마 CSS
 st.set_page_config(
     page_title="DANWOL AI-WaterOps 360 | 단월 스마트 자율운전 관제 플랫폼",
@@ -352,7 +355,6 @@ def universal_small_plant_parser(file_list):
                 is_24_col = ('유량및수질' in r1_val or '업로드양식' in r1_val or '날짜' in r2_val)
                 is_comp_log = ('종합운영일지' in r1_val or '1. 유량현황' in str(ws.cell(4, 1).value or ''))
                 
-                # 1) 24열 국가하수도정보시스템 공인 서식
                 if is_24_col and sheet_fac:
                     for r in range(4, min(ws.max_row + 1, 1000)):
                         c1_val = ws.cell(r, 1).value
@@ -392,7 +394,6 @@ def universal_small_plant_parser(file_list):
                                 v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                 if pd.notna(v): rec[col_name] = float(v)
                                 
-                # 2) 소규모 종합운영일지 서식
                 elif is_comp_log and sheet_fac:
                     cur_date = None
                     in_flow_sec = False
@@ -439,8 +440,6 @@ def universal_small_plant_parser(file_list):
                                 for col_idx, col_name in [(2, '방류BOD'), (3, '방류TOC'), (4, '방류SS'), (5, '방류TN'), (6, '방류TP'), (7, '방류대장균')]:
                                     v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                     if pd.notna(v): rec[col_name] = float(v)
-
-                # 3) 소규모 월별 수질대장 (1월~12월 탭)
                 else:
                     cur_tab_fac = sheet_fac
                     for r in range(2, min(ws.max_row + 1, 100)):
@@ -1088,7 +1087,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제 (nan 결측치 자동 방어 & 완벽한 6대 수질 그래프 연동)
+# 3. TMS 관제 (KST 실시간 일시 완벽 반영)
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
@@ -1235,8 +1234,8 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
         cur_tn = get_valid_latest(df_tms_cur, '방류TN', 8.45)
         cur_tp = get_valid_latest(df_tms_cur, '방류TP', 0.065)
 
-        # 실시간 현재 일시를 명확히 표기
-        latest_time_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # 대한민국 표준시(KST, UTC+9) 기준 실시간 현재 시각 반영
+        latest_time_str = datetime.datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
 
         st.markdown(f"#### 🚦 최신 TMS 방류 수질 6대 항목 신호등 상태 (`{latest_time_str}`)")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -1688,8 +1687,8 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         img.save(buffered, format="PNG")
         sign_img_base64 = base64.b64encode(buffered.getvalue()).decode()
 
-    exact_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    unique_doc_id = f"DW-TBM-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+    exact_timestamp = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+    unique_doc_id = f"DW-TBM-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
     raw_hash_data = f"{unique_doc_id}|{tbm_date}|{custom_job}|{leader_name}|{','.join(workers)}|{','.join(c_workers)}|{exact_timestamp}"
     doc_hash_sha256 = hashlib.sha256(raw_hash_data.encode('utf-8')).hexdigest()
 
