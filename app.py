@@ -524,6 +524,7 @@ def parse_private_plant_multi_files(file_list):
     return res
 
 # [단월 본장 51개 열(A~AY) 공인 서식 원본 100% 일치 생성 엔진]
+# 유입량(반류수 포함) [B열] = 실제 유입량 [D열] = 처리량(고도) [G열] 완벽 연동
 def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -553,10 +554,15 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
         
     subheaders_r3 = {
         'E3': '물리적\n(㎥/일)', 'F3': '생물학적\n(㎥/일)', 'G3': '고도\n(㎥/일)',
+        # 유입수질(연계전) K~R (11~18)
         'K3': 'pH\n(-)', 'L3': 'BOD\n(㎎/L)', 'M3': 'TOC\n(㎎/L)', 'N3': 'SS\n(㎎/L)', 'O3': 'T-N\n(㎎/L)', 'P3': 'T-P\n(㎎/L)', 'Q3': '총대장균군\n(개/㎖)', 'R3': '생태독성\n(TU)',
+        # 총인시설 유입수질 S~Z (19~26)
         'S3': 'pH\n(-)', 'T3': 'BOD\n(㎎/L)', 'U3': 'TOC\n(㎎/L)', 'V3': 'SS\n(㎎/L)', 'W3': 'T-N\n(㎎/L)', 'X3': 'T-P\n(㎎/L)', 'Y3': '총대장균군\n(개/㎖)', 'Z3': '생태독성\n(TU)',
+        # 강우시 유입수질 AA~AH (27~34)
         'AA3': 'pH\n(-)', 'AB3': 'BOD\n(㎎/L)', 'AC3': 'TOC\n(㎎/L)', 'AD3': 'SS\n(㎎/L)', 'AE3': 'T-N\n(㎎/L)', 'AF3': 'T-P\n(㎎/L)', 'AG3': '총대장균군\n(개/㎖)', 'AH3': '생태독성\n(TU)',
+        # 방류수질 AI~AP (35~42)
         'AI3': 'pH\n(-)', 'AJ3': 'BOD\n(㎎/L)', 'AK3': 'TOC\n(㎎/L)', 'AL3': 'SS\n(㎎/L)', 'AM3': 'T-N\n(㎎/L)', 'AN3': 'T-P\n(㎎/L)', 'AO3': '총대장균군\n(개/㎖)', 'AP3': '생태독성\n(TU)',
+        # 방류수질 by-pass AQ~AX (43~50)
         'AQ3': 'pH\n(-)', 'AR3': 'BOD\n(㎎/L)', 'AS3': 'TOC\n(㎎/L)', 'AT3': 'SS\n(㎎/L)', 'AU3': 'T-N\n(㎎/L)', 'AV3': 'T-P\n(㎎/L)', 'AW3': '총대장균군\n(개/㎖)', 'AX3': '생태독성\n(TU)',
     }
     for k, v in subheaders_r3.items():
@@ -972,8 +978,8 @@ def check_login_system():
 
     cfg = load_system_config()
     is_maintenance = cfg.get("maintenance_mode", True)
-    admin_master_pw = "yp1311!"
-    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "DANWOL-2026!", "yp1311!"]
+    admin_master_pw = "yp1311!!"
+    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "DANWOL-2026!", "yp1311!!"]
 
     if st.session_state.logged_in:
         if is_maintenance and st.session_state.user_role != "admin":
@@ -1072,7 +1078,7 @@ def render_maintenance_screen(cfg, is_logged_in_user=False):
             with st.expander("🔒 관리자 전용 인증 접속"):
                 admin_pw_m = st.text_input("관리자 마스터 비밀번호", type="password", key="m_admin_pw")
                 if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True, key="btn_m_admin_login"):
-                    if admin_pw_m == "yp1311!":
+                    if admin_pw_m == "yp1311!!":
                         st.session_state.logged_in = True
                         st.session_state.user_role = "admin"
                         st.session_state.user_name = "최고관리자"
@@ -1639,7 +1645,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             st.info("💡 아직 보관된 TMS 데이터가 없습니다. 1단계에서 업로드 또는 동기화를 실행해 주세요.")
 
 # -------------------------------------------------------------
-# 4. 공정 제어
+# 4. 공정 제어 (처리효율 시각화 업그레이드)
 # -------------------------------------------------------------
 elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
     st.title("⚙️ AI 기반 최적 운전조건 제안 & 공정 정밀진단")
