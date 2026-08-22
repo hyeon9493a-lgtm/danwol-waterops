@@ -554,15 +554,10 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
         
     subheaders_r3 = {
         'E3': '물리적\n(㎥/일)', 'F3': '생물학적\n(㎥/일)', 'G3': '고도\n(㎥/일)',
-        # 유입수질(연계전) K~R (11~18)
         'K3': 'pH\n(-)', 'L3': 'BOD\n(㎎/L)', 'M3': 'TOC\n(㎎/L)', 'N3': 'SS\n(㎎/L)', 'O3': 'T-N\n(㎎/L)', 'P3': 'T-P\n(㎎/L)', 'Q3': '총대장균군\n(개/㎖)', 'R3': '생태독성\n(TU)',
-        # 총인시설 유입수질 S~Z (19~26)
         'S3': 'pH\n(-)', 'T3': 'BOD\n(㎎/L)', 'U3': 'TOC\n(㎎/L)', 'V3': 'SS\n(㎎/L)', 'W3': 'T-N\n(㎎/L)', 'X3': 'T-P\n(㎎/L)', 'Y3': '총대장균군\n(개/㎖)', 'Z3': '생태독성\n(TU)',
-        # 강우시 유입수질 AA~AH (27~34)
         'AA3': 'pH\n(-)', 'AB3': 'BOD\n(㎎/L)', 'AC3': 'TOC\n(㎎/L)', 'AD3': 'SS\n(㎎/L)', 'AE3': 'T-N\n(㎎/L)', 'AF3': 'T-P\n(㎎/L)', 'AG3': '총대장균군\n(개/㎖)', 'AH3': '생태독성\n(TU)',
-        # 방류수질 AI~AP (35~42)
         'AI3': 'pH\n(-)', 'AJ3': 'BOD\n(㎎/L)', 'AK3': 'TOC\n(㎎/L)', 'AL3': 'SS\n(㎎/L)', 'AM3': 'T-N\n(㎎/L)', 'AN3': 'T-P\n(㎎/L)', 'AO3': '총대장균군\n(개/㎖)', 'AP3': '생태독성\n(TU)',
-        # 방류수질 by-pass AQ~AX (43~50)
         'AQ3': 'pH\n(-)', 'AR3': 'BOD\n(㎎/L)', 'AS3': 'TOC\n(㎎/L)', 'AT3': 'SS\n(㎎/L)', 'AU3': 'T-N\n(㎎/L)', 'AV3': 'T-P\n(㎎/L)', 'AW3': '총대장균군\n(개/㎖)', 'AX3': '생태독성\n(TU)',
     }
     for k, v in subheaders_r3.items():
@@ -615,21 +610,13 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
         r_match = lookup.get(d_str, None)
         
         if r_match is not None:
-            # ⭐️ [핵심 3개소 동시 연동] Col 2(B: 유입량), Col 4(D: 실제 유입량), Col 7(G: 처리량-고도)
+            # Col 2(B: 유입량), Col 4(D: 실제 유입량), Col 7(G: 처리량-고도)
             val_in = r_match.get('유입량', None)
             if pd.notna(val_in) and str(val_in).strip() != '':
                 in_float = float(val_in)
-                # 1. B열: 유입량(반류수 포함)(㎥/일)
-                c_b = ws.cell(r_idx, 2, in_float)
-                c_b.font = font_data; c_b.alignment = align_data_right
-                
-                # 2. D열: 실제 유입량(㎥/일)
-                c_d = ws.cell(r_idx, 4, in_float)
-                c_d.font = font_data; c_d.alignment = align_data_right
-                
-                # 3. G열: 처리량 - 고도(㎥/일)
-                c_g = ws.cell(r_idx, 7, in_float)
-                c_g.font = font_data; c_g.alignment = align_data_right
+                for col_target in [2, 4, 7]:
+                    c = ws.cell(r_idx, col_target, in_float)
+                    c.font = font_data; c.alignment = align_data_right
 
             # Col 8 (H): 방류량
             val_out = r_match.get('방류량', None)
@@ -669,10 +656,84 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
     wb.save(buf)
     return buf.getvalue()
 
-def fill_exact_reuse_template(df_data):
+# [단월 본장 재이용수 20개 열(A~T) 공인 서식 원본 100% 일치 생성 엔진]
+# 재이용수 값 ➔ B열(합계) = C열(장내용수 소계) = D열(세척수) 완벽 자동 기입, 나머지 E~T열 공란 유지
+def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws['A1'] = "재이용수 양식"
+    ws.title = "Sheet1"
+    
+    # 1행 타이틀
+    ws['A1'] = "재이용수 업로드양식"
+    ws.merge_cells('A1:T1')
+    
+    # 2행 헤더
+    ws['A2'] = "날짜"
+    ws['B2'] = "합계(㎥)"
+    ws['C2'] = "장내용수(㎥)"
+    ws['K2'] = "장외용수(㎥)"
+    ws['T2'] = "사유"
+    
+    # 3행 소분류 헤더
+    subheaders = {
+        'C3': '소계', 'D3': '세척수', 'E3': '냉각수', 'F3': '청소수', 'G3': '식수대', 'H3': '희석용수', 'I3': '중수도', 'J3': '기타',
+        'K3': '소계', 'L3': '청소화장실용수', 'M3': '세척살수용수', 'N3': '조경용수', 'O3': '친수용수', 'P3': '지하수충전', 'Q3': '농업용수', 'R3': '하천등유지용수', 'S3': '공업용수'
+    }
+    for k, v in subheaders.items():
+        ws[k] = v
+        
+    merges = ['A2:A3', 'B2:B3', 'C2:J2', 'K2:S2', 'T2:T3']
+    for m in merges:
+        ws.merge_cells(m)
+        
+    align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    font_header = Font(name='dotum', size=9, bold=True)
+    
+    for r in range(1, 4):
+        for c in range(1, 21):
+            cell = ws.cell(r, c)
+            cell.alignment = align_center
+            cell.font = font_header
+
+    if start_date and end_date:
+        d_range = pd.date_range(start_date, end_date)
+    elif df_data is not None and not df_data.empty and '날짜' in df_data.columns:
+        min_d = df_data['날짜'].min()
+        max_d = df_data['날짜'].max()
+        d_range = pd.date_range(min_d, max_d)
+    else:
+        d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+        
+    lookup = {}
+    if df_data is not None and not df_data.empty and '날짜' in df_data.columns:
+        for _, r in df_data.iterrows():
+            d_key = str(r['날짜']).split()[0]
+            lookup[d_key] = r
+
+    font_data = Font(name='맑은 고딕', size=11, bold=False)
+    align_data_center = Alignment(horizontal='center', vertical='center')
+    align_data_right = Alignment(horizontal='right', vertical='center')
+
+    for r_idx, dt in enumerate(d_range, start=4):
+        d_str = dt.strftime('%Y-%m-%d')
+        
+        # Col 1 (A열): 날짜
+        c1 = ws.cell(r_idx, 1, dt.date())
+        c1.number_format = 'yyyy-mm-dd'
+        c1.font = font_data
+        c1.alignment = align_data_center
+        
+        r_match = lookup.get(d_str, None)
+        if r_match is not None:
+            # ⭐️ [재이용수 3개소 동시 연동] Col 2(B열: 합계), Col 3(C열: 장내용수 소계), Col 4(D열: 세척수)
+            val_reuse = r_match.get('재이용수', None)
+            if pd.notna(val_reuse) and str(val_reuse).strip() != '':
+                reuse_float = float(val_reuse)
+                for col_target in [2, 3, 4]: # B, C, D열
+                    c = ws.cell(r_idx, col_target, reuse_float)
+                    c.font = font_data
+                    c.alignment = align_data_right
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -1548,7 +1609,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             st.info("💡 아직 보관된 TMS 데이터가 없습니다. 1단계에서 업로드 또는 동기화를 실행해 주세요.")
 
 # -------------------------------------------------------------
-# 4. 공정 제어 (처리효율 시각화 업그레이드)
+# 4. 공정 제어
 # -------------------------------------------------------------
 elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
     st.title("⚙️ AI 기반 최적 운전조건 제안 & 공정 정밀진단")
