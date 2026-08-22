@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from streamlit_drawable_canvas import st_canvas
-from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.styles import Font, Alignment
 import datetime
 import os
 import re
@@ -103,6 +103,24 @@ SYSTEM_CONFIG_FILE = "system_config.json"
 for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, HWPX_RECORD_DIR]:
     if not os.path.exists(p):
         os.makedirs(p)
+
+def sanitize_filename(filename):
+    """[보안 패치] 경로 조작(Path Traversal) 방지 함수"""
+    clean_name = os.path.basename(str(filename))
+    return re.sub(r'[^a-zA-Z0-9가-힣._\-\(\)\s]', '', clean_name)
+
+def hash_pw(pw_str):
+    """[보안 패치] 비밀번호 SHA-256 단방향 해시 암호화"""
+    return hashlib.sha256(pw_str.encode('utf-8')).hexdigest()
+
+# 관리자 마스터 비밀번호 해시 (yp1311!!)
+ADMIN_PW_HASH = hash_pw("yp1311!!")
+WHITELIST_HASHES = [
+    hash_pw("DW-PASS-2026"),
+    hash_pw("WATER-ADMIN"),
+    hash_pw("DANWOL-2026!"),
+    hash_pw("yp1311!!")
+]
 
 def load_system_config():
     if os.path.exists(SYSTEM_CONFIG_FILE):
@@ -296,7 +314,6 @@ def universal_main_plant_parser(file_list):
             fname = getattr(f, 'name', str(f))
             y_m = re.search(r'(20[1-3]\d)', fname)
             y_int = int(y_m.group(1)) if y_m else None
-            
             m_m = re.search(r'(\d{1,2})월', fname)
             m_int = int(m_m.group(1)) if m_m else None
             
@@ -524,7 +541,6 @@ def parse_private_plant_multi_files(file_list):
     return res
 
 # [단월 본장 51개 열(A~AY) 공인 서식 원본 100% 일치 생성 엔진]
-# 유입량(반류수 포함) [B열] = 실제 유입량 [D열] = 처리량(고도) [G열] 완벽 연동
 def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -554,15 +570,10 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
         
     subheaders_r3 = {
         'E3': '물리적\n(㎥/일)', 'F3': '생물학적\n(㎥/일)', 'G3': '고도\n(㎥/일)',
-        # 유입수질(연계전) K~R (11~18)
         'K3': 'pH\n(-)', 'L3': 'BOD\n(㎎/L)', 'M3': 'TOC\n(㎎/L)', 'N3': 'SS\n(㎎/L)', 'O3': 'T-N\n(㎎/L)', 'P3': 'T-P\n(㎎/L)', 'Q3': '총대장균군\n(개/㎖)', 'R3': '생태독성\n(TU)',
-        # 총인시설 유입수질 S~Z (19~26)
         'S3': 'pH\n(-)', 'T3': 'BOD\n(㎎/L)', 'U3': 'TOC\n(㎎/L)', 'V3': 'SS\n(㎎/L)', 'W3': 'T-N\n(㎎/L)', 'X3': 'T-P\n(㎎/L)', 'Y3': '총대장균군\n(개/㎖)', 'Z3': '생태독성\n(TU)',
-        # 강우시 유입수질 AA~AH (27~34)
         'AA3': 'pH\n(-)', 'AB3': 'BOD\n(㎎/L)', 'AC3': 'TOC\n(㎎/L)', 'AD3': 'SS\n(㎎/L)', 'AE3': 'T-N\n(㎎/L)', 'AF3': 'T-P\n(㎎/L)', 'AG3': '총대장균군\n(개/㎖)', 'AH3': '생태독성\n(TU)',
-        # 방류수질 AI~AP (35~42)
         'AI3': 'pH\n(-)', 'AJ3': 'BOD\n(㎎/L)', 'AK3': 'TOC\n(㎎/L)', 'AL3': 'SS\n(㎎/L)', 'AM3': 'T-N\n(㎎/L)', 'AN3': 'T-P\n(㎎/L)', 'AO3': '총대장균군\n(개/㎖)', 'AP3': '생태독성\n(TU)',
-        # 방류수질 by-pass AQ~AX (43~50)
         'AQ3': 'pH\n(-)', 'AR3': 'BOD\n(㎎/L)', 'AS3': 'TOC\n(㎎/L)', 'AT3': 'SS\n(㎎/L)', 'AU3': 'T-N\n(㎎/L)', 'AV3': 'T-P\n(㎎/L)', 'AW3': '총대장균군\n(개/㎖)', 'AX3': '생태독성\n(TU)',
     }
     for k, v in subheaders_r3.items():
@@ -606,7 +617,6 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
         
-        # Col 1 (A): 날짜
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
         c1.font = font_data
@@ -615,7 +625,6 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
         r_match = lookup.get(d_str, None)
         
         if r_match is not None:
-            # Col 2(B: 유입량), Col 4(D: 실제 유입량), Col 7(G: 처리량-고도)
             val_in = r_match.get('유입량', None)
             if pd.notna(val_in) and str(val_in).strip() != '':
                 in_float = float(val_in)
@@ -623,19 +632,16 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
                     c = ws.cell(r_idx, col_target, in_float)
                     c.font = font_data; c.alignment = align_data_right
 
-            # Col 8 (H): 방류량
             val_out = r_match.get('방류량', None)
             if pd.notna(val_out) and str(val_out).strip() != '':
                 c = ws.cell(r_idx, 8, float(val_out))
                 c.font = font_data; c.alignment = align_data_right
                 
-            # Col 10 (J): 수온
             val_temp = r_match.get('수온', None)
             if pd.notna(val_temp) and str(val_temp).strip() != '':
                 c = ws.cell(r_idx, 10, float(val_temp))
                 c.font = font_data; c.alignment = align_data_right
                 
-            # 유입수질(연계전) L~Q (Cols 12~17)
             col_map_in = [
                 (12, '유입BOD'), (13, '유입TOC'), (14, '유입SS'),
                 (15, '유입TN'), (16, '유입TP'), (17, '유입대장균')
@@ -646,7 +652,6 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
                     c = ws.cell(r_idx, col_idx, float(v))
                     c.font = font_data; c.alignment = align_data_right
                     
-            # 방류수질 AJ~AO (Cols 36~41)
             col_map_out = [
                 (36, '방류BOD'), (37, '방류TOC'), (38, '방류SS'),
                 (39, '방류TN'), (40, '방류TP'), (41, '방류대장균')
@@ -738,7 +743,6 @@ def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026
     return buf.getvalue()
 
 # [소규모 6개소 24개 열(A~X) 공인 서식 원본 100% 일치 생성 엔진]
-# 7일 주기 연속 유량(B열 유입량 = E열 고도처리량 / F열 방류량) + 주 1회 수질 입력, 나머지 8개 열 100% 공란 유지
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
@@ -978,8 +982,6 @@ def check_login_system():
 
     cfg = load_system_config()
     is_maintenance = cfg.get("maintenance_mode", True)
-    admin_master_pw = "yp1311!!"
-    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "DANWOL-2026!", "yp1311!!"]
 
     if st.session_state.logged_in:
         if is_maintenance and st.session_state.user_role != "admin":
@@ -1007,7 +1009,7 @@ def check_login_system():
             if login_type == "시스템 관리자 (승인 대시보드)":
                 admin_pw = st.text_input("관리자 마스터 비밀번호", type="password", key="admin_pw_input")
                 if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True):
-                    if admin_pw == admin_master_pw:
+                    if hash_pw(admin_pw) == ADMIN_PW_HASH:
                         st.session_state.logged_in = True
                         st.session_state.user_role = "admin"
                         st.session_state.user_name = "최고관리자"
@@ -1017,7 +1019,7 @@ def check_login_system():
             else:
                 passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="DANWOL-2026!")
                 if st.button("🚀 접속하기", type="primary", use_container_width=True):
-                    if passcode in whitelist_codes:
+                    if hash_pw(passcode) in WHITELIST_HASHES:
                         st.session_state.logged_in = True
                         st.session_state.user_role = "user"
                         st.session_state.user_name = "인증 사용자"
@@ -1033,7 +1035,7 @@ def check_login_system():
                 if req_id and req_pw and req_name:
                     auth_db = load_auth_db()
                     users = auth_db.get("users", {})
-                    users[req_id] = {"name": req_name, "dept": req_dept, "password": req_pw, "status": "pending"}
+                    users[req_id] = {"name": req_name, "dept": req_dept, "password": hash_pw(req_pw), "status": "pending"}
                     auth_db["users"] = users
                     save_auth_db(auth_db)
                     st.success("승인 요청이 완료되었습니다. 관리자 승인을 기다려주세요.")
@@ -1078,7 +1080,7 @@ def render_maintenance_screen(cfg, is_logged_in_user=False):
             with st.expander("🔒 관리자 전용 인증 접속"):
                 admin_pw_m = st.text_input("관리자 마스터 비밀번호", type="password", key="m_admin_pw")
                 if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True, key="btn_m_admin_login"):
-                    if admin_pw_m == "yp1311!!":
+                    if hash_pw(admin_pw_m) == ADMIN_PW_HASH:
                         st.session_state.logged_in = True
                         st.session_state.user_role = "admin"
                         st.session_state.user_name = "최고관리자"
@@ -1243,7 +1245,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
     # 1-2. 월별 공인 엑셀 보관함
     with tab_archive:
         st.subheader("🗂️ 월별 공인 업로드 엑셀 보관함")
-        saved_files = [f for f in os.listdir(KHAS_RECORD_DIR) if f.endswith(".xlsx") or f.endswith(".xls")]
+        saved_files = [sanitize_filename(f) for f in os.listdir(KHAS_RECORD_DIR) if f.endswith(".xlsx") or f.endswith(".xls")]
         
         if saved_files:
             col_arch_y, col_arch_m = st.columns(2)
@@ -1259,14 +1261,16 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
             with col_del:
                 st.write(""); st.write("")
                 if st.button("🗑️ 선택 파일 삭제", type="secondary", use_container_width=True, key="btn_del_arch_file"):
-                    os.remove(os.path.join(KHAS_RECORD_DIR, target_f))
-                    st.success(f"🗑️ '{target_f}' 파일이 삭제되었습니다.")
+                    clean_del_target = sanitize_filename(target_f)
+                    os.remove(os.path.join(KHAS_RECORD_DIR, clean_del_target))
+                    st.success(f"🗑️ '{clean_del_target}' 파일이 삭제되었습니다.")
                     st.rerun()
 
             if target_f:
-                with open(os.path.join(KHAS_RECORD_DIR, target_f), "rb") as f:
+                clean_target = sanitize_filename(target_f)
+                with open(os.path.join(KHAS_RECORD_DIR, clean_target), "rb") as f:
                     f_bytes = f.read()
-                st.download_button(f"📥 선택된 문서 다시 다운로드 ({target_f})", f_bytes, file_name=target_f, use_container_width=True)
+                st.download_button(f"📥 선택된 문서 다시 다운로드 ({clean_target})", f_bytes, file_name=clean_target, use_container_width=True)
         else:
             st.info("💡 아직 보관함에 저장된 엑셀 파일이 없습니다. 1단계 작업대에서 [마스터 DB 및 보관함 저장]을 실행해 주세요.")
 
@@ -1370,15 +1374,15 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             so_data = {"current_month": solar_kwh}
             bytes_hwpx = generate_hwpx_monthly_report(sel_report_month, hwpx_file_up, sl_data, so_data, task_memo, sel_report_year)
             
-            save_name = f"공공하수도시설_대행사업_월간보고서({sel_report_month}월)_{sel_report_year}.hwpx"
-            with open(os.path.join(HWPX_RECORD_DIR, save_name), "wb") as f:
+            clean_save_name = sanitize_filename(f"공공하수도시설_대행사업_월간보고서({sel_report_month}월)_{sel_report_year}.hwpx")
+            with open(os.path.join(HWPX_RECORD_DIR, clean_save_name), "wb") as f:
                 f.write(bytes_hwpx)
                 
             st.success(f"✅ [{sel_report_year}년 {sel_report_month}월] 월간보고서가 자동 편철되어 보관함에 저장되었습니다!")
             st.download_button(
-                label=f"📥 {save_name} 다운로드",
+                label=f"📥 {clean_save_name} 다운로드",
                 data=bytes_hwpx,
-                file_name=save_name,
+                file_name=clean_save_name,
                 mime="application/hwp+zip",
                 type="primary",
                 use_container_width=True
@@ -1386,7 +1390,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
 
     with tab_hw_a:
         st.subheader("🗂️ 보관된 HWPX 월간보고서 관리")
-        saved_hwpxs = [f for f in os.listdir(HWPX_RECORD_DIR) if f.endswith(".hwpx")]
+        saved_hwpxs = [sanitize_filename(f) for f in os.listdir(HWPX_RECORD_DIR) if f.endswith(".hwpx")]
         if saved_hwpxs:
             st.write(f"📁 **보관된 월간보고서: 총 {len(saved_hwpxs)}건**")
             col_hw1, col_hw2 = st.columns([3, 1])
@@ -1395,13 +1399,15 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
             with col_hw2:
                 st.write(""); st.write("")
                 if st.button("🗑️ 선택 보고서 삭제", type="secondary", use_container_width=True):
-                    os.remove(os.path.join(HWPX_RECORD_DIR, target_hw))
-                    st.success(f"🗑️ '{target_hw}' 보고서가 보관함에서 삭제되었습니다.")
+                    clean_del_hw = sanitize_filename(target_hw)
+                    os.remove(os.path.join(HWPX_RECORD_DIR, clean_del_hw))
+                    st.success(f"🗑️ '{clean_del_hw}' 보고서가 보관함에서 삭제되었습니다.")
                     st.rerun()
             if target_hw:
-                with open(os.path.join(HWPX_RECORD_DIR, target_hw), "rb") as f:
+                clean_hw = sanitize_filename(target_hw)
+                with open(os.path.join(HWPX_RECORD_DIR, clean_hw), "rb") as f:
                     hw_data = f.read()
-                st.download_button(f"📥 선택 보고서 다시 다운로드 ({target_hw})", hw_data, file_name=target_hw, mime="application/hwp+zip", use_container_width=True)
+                st.download_button(f"📥 선택 보고서 다시 다운로드 ({clean_hw})", hw_data, file_name=clean_hw, mime="application/hwp+zip", use_container_width=True)
         else:
             st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
@@ -1645,7 +1651,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             st.info("💡 아직 보관된 TMS 데이터가 없습니다. 1단계에서 업로드 또는 동기화를 실행해 주세요.")
 
 # -------------------------------------------------------------
-# 4. 공정 제어 (처리효율 시각화 업그레이드)
+# 4. 공정 제어
 # -------------------------------------------------------------
 elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
     st.title("⚙️ AI 기반 최적 운전조건 제안 & 공정 정밀진단")
@@ -1924,9 +1930,10 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             with col_cd2:
                 st.write(""); st.write("")
                 if st.button("🗑️ 선택 일자 삭제", type="secondary", use_container_width=True):
-                    df_rem = df_chem_all[df_chem_all["날짜"] != sel_chem_del].reset_index(drop=True)
+                    clean_del_d = sanitize_filename(sel_chem_del)
+                    df_rem = df_chem_all[df_chem_all["날짜"] != clean_del_d].reset_index(drop=True)
                     df_rem.to_csv(CHEMICAL_ENERGY_DB, index=False, encoding='utf-8-sig')
-                    st.success(f"🗑️ [{sel_chem_del}] 데이터가 삭제되었습니다.")
+                    st.success(f"🗑️ [{clean_del_d}] 데이터가 삭제되었습니다.")
                     st.rerun()
             if st.button("🚨 약품·에너지 DB 전체 초기화", type="secondary", key="btn_del_chem_all_v400"):
                 if os.path.exists(CHEMICAL_ENERGY_DB): os.remove(CHEMICAL_ENERGY_DB)
@@ -2336,7 +2343,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     """
 
     active_html = tbm_weekly_html if is_weekly else tbm_standard_html
-    safe_job_name = custom_job.replace('/', '_').replace(' ', '_')[:12]
+    safe_job_name = sanitize_filename(custom_job.replace('/', '_').replace(' ', '_')[:12])
     active_filename = f"TBM회의록_{tbm_date}_{safe_job_name}.html"
 
     st.components.v1.html(active_html, height=650, scrolling=True)
@@ -2365,7 +2372,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
                 pass
         return "2024년", "01월 1주차", datetime.date(2024, 1, 1)
 
-    saved_files = [f for f in os.listdir(record_dir) if f.endswith(".html")]
+    saved_files = [sanitize_filename(f) for f in os.listdir(record_dir) if f.endswith(".html")]
     if saved_files:
         file_meta = [{"filename": f, "year": parse_file_info(f)[0], "week": parse_file_info(f)[1], "date": parse_file_info(f)[2]} for f in saved_files]
         df_files = pd.DataFrame(file_meta)
@@ -2385,13 +2392,15 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         with col_del:
             st.write(""); st.write("")
             if st.button("🗑️ 선택 문서 영구 삭제", type="secondary", use_container_width=True, key="tbm_btn_del_v250"):
-                file_to_delete = os.path.join(record_dir, selected_file_to_view)
+                clean_tbm_del = sanitize_filename(selected_file_to_view)
+                file_to_delete = os.path.join(record_dir, clean_tbm_del)
                 if os.path.exists(file_to_delete): os.remove(file_to_delete)
-                st.success(f"🗑️ '{selected_file_to_view}' 문서가 삭제되었습니다.")
+                st.success(f"🗑️ '{clean_tbm_del}' 문서가 삭제되었습니다.")
                 st.rerun()
 
         if selected_file_to_view:
-            file_full_path = os.path.join(record_dir, selected_file_to_view)
+            clean_tbm_view = sanitize_filename(selected_file_to_view)
+            file_full_path = os.path.join(record_dir, clean_tbm_view)
             if os.path.exists(file_full_path):
                 with open(file_full_path, "r", encoding="utf-8") as f: view_html_data = f.read()
                 st.components.v1.html(view_html_data, height=650, scrolling=True)
