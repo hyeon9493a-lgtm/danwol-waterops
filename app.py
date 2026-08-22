@@ -111,7 +111,6 @@ def load_system_config():
                 return json.load(f)
         except Exception:
             pass
-    # 기본값: 점검 모드 활성화 (True)
     return {"maintenance_mode": True, "maintenance_msg": "단월 스마트 자율운전 관제 플랫폼 고도화 및 DB 최적화 작업이 진행 중입니다."}
 
 def save_system_config(cfg):
@@ -761,22 +760,18 @@ def check_login_system():
     cfg = load_system_config()
     is_maintenance = cfg.get("maintenance_mode", True)
     admin_master_pw = "yp1311!"
-    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "DANWOL-2027!", "yp1311!"]
+    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "DANWOL-2026!", "yp1311!"]
 
-    # 1. 이미 로그인된 상태 확인
     if st.session_state.logged_in:
-        # 일반 사용자로 로그인되어 있는데 점검 모드인 경우 차단
         if is_maintenance and st.session_state.user_role != "admin":
             render_maintenance_screen(cfg, is_logged_in_user=True)
             return False
         return True
 
-    # 2. 미로그인 상태에서 점검 모드가 켜져 있을 때 (일반 사용자 차단 화면)
     if is_maintenance:
         render_maintenance_screen(cfg, is_logged_in_user=False)
         return False
 
-    # 3. 점검 모드가 꺼져 있을 때의 정상 로그인 화면
     st.markdown("""
     <div style="text-align: center; padding: 25px 20px 10px 20px;">
         <div style="font-size: 44px;">💧</div>
@@ -801,7 +796,7 @@ def check_login_system():
                     else:
                         st.error("관리자 비밀번호가 일치하지 않습니다.")
             else:
-                passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="DANWOL-2027!")
+                passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="DANWOL-2026!")
                 if st.button("🚀 접속하기", type="primary", use_container_width=True):
                     if passcode in whitelist_codes:
                         st.session_state.logged_in = True
@@ -859,7 +854,6 @@ def render_maintenance_screen(cfg, is_logged_in_user=False):
                 st.session_state.user_role = None
                 st.rerun()
     else:
-        # 점검 중에도 관리자는 접근할 수 있는 마스터 로그인 접이식 창
         col1, col2, col3 = st.columns([1, 1.2, 1])
         with col2:
             with st.expander("🔒 관리자 전용 인증 접속"):
@@ -879,13 +873,12 @@ def render_maintenance_screen(cfg, is_logged_in_user=False):
 if not check_login_system():
     st.stop()
 
-# 관리자 사이드바 제어 패널 (점검 모드 온/오프 스위치 포함)
+# 관리자 사이드바 제어 패널
 if st.session_state.get("user_role") == "admin":
     cfg = load_system_config()
     st.sidebar.markdown("---")
     st.sidebar.markdown("##### ⚙️ 관리자 시스템 제어")
     
-    # 점검 모드 토글 스위치
     cur_m_state = cfg.get("maintenance_mode", True)
     new_m_state = st.sidebar.toggle("🚧 일반 사용자 점검 모드 활성화", value=cur_m_state)
     if new_m_state != cur_m_state:
@@ -1433,7 +1426,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             st.info("💡 아직 보관된 TMS 데이터가 없습니다. 1단계에서 업로드 또는 동기화를 실행해 주세요.")
 
 # -------------------------------------------------------------
-# 4. 공정 제어
+# 4. 공정 제어 (처리효율 시각화 업그레이드)
 # -------------------------------------------------------------
 elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
     st.title("⚙️ AI 기반 최적 운전조건 제안 & 공정 정밀진단")
@@ -1724,7 +1717,7 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             st.info("💡 아직 누적된 약품·에너지 데이터가 없습니다.")
 
 # -------------------------------------------------------------
-# 6. Q&A 챗봇 (Gemini API 정식 연동 & 20+ 세부 공정 심층 지식 엔진)
+# 6. Q&A 챗봇
 # -------------------------------------------------------------
 elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
     st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미 (Gemini 연동)")
@@ -1756,7 +1749,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
             except Exception as e:
                 pass
 
-        # 내장 고정밀 공정 제어 지식 엔진
         if any(k in q for k in ["약품 효율", "약품 절감", "효율성", "약품비", "약품 최적화", "주입량 최적화", "약품 관리"]):
             return (
                 "💡 **[단월 본장 3대 약품(PAC·염화제이철·폴리머) 효율성 극대화 및 절감 전략]**\n\n"
