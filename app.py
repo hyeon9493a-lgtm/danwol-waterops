@@ -783,6 +783,7 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             cell.alignment = align_center
             cell.font = font_header
 
+    # Date range
     if start_date and end_date:
         d_range = pd.date_range(start_date, end_date)
     elif df_data is not None and not df_data.empty and '날짜' in df_data.columns:
