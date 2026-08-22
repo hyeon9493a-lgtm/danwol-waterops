@@ -554,10 +554,15 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
         
     subheaders_r3 = {
         'E3': '물리적\n(㎥/일)', 'F3': '생물학적\n(㎥/일)', 'G3': '고도\n(㎥/일)',
+        # 유입수질(연계전) K~R (11~18)
         'K3': 'pH\n(-)', 'L3': 'BOD\n(㎎/L)', 'M3': 'TOC\n(㎎/L)', 'N3': 'SS\n(㎎/L)', 'O3': 'T-N\n(㎎/L)', 'P3': 'T-P\n(㎎/L)', 'Q3': '총대장균군\n(개/㎖)', 'R3': '생태독성\n(TU)',
+        # 총인시설 유입수질 S~Z (19~26)
         'S3': 'pH\n(-)', 'T3': 'BOD\n(㎎/L)', 'U3': 'TOC\n(㎎/L)', 'V3': 'SS\n(㎎/L)', 'W3': 'T-N\n(㎎/L)', 'X3': 'T-P\n(㎎/L)', 'Y3': '총대장균군\n(개/㎖)', 'Z3': '생태독성\n(TU)',
+        # 강우시 유입수질 AA~AH (27~34)
         'AA3': 'pH\n(-)', 'AB3': 'BOD\n(㎎/L)', 'AC3': 'TOC\n(㎎/L)', 'AD3': 'SS\n(㎎/L)', 'AE3': 'T-N\n(㎎/L)', 'AF3': 'T-P\n(㎎/L)', 'AG3': '총대장균군\n(개/㎖)', 'AH3': '생태독성\n(TU)',
+        # 방류수질 AI~AP (35~42)
         'AI3': 'pH\n(-)', 'AJ3': 'BOD\n(㎎/L)', 'AK3': 'TOC\n(㎎/L)', 'AL3': 'SS\n(㎎/L)', 'AM3': 'T-N\n(㎎/L)', 'AN3': 'T-P\n(㎎/L)', 'AO3': '총대장균군\n(개/㎖)', 'AP3': '생태독성\n(TU)',
+        # 방류수질 by-pass AQ~AX (43~50)
         'AQ3': 'pH\n(-)', 'AR3': 'BOD\n(㎎/L)', 'AS3': 'TOC\n(㎎/L)', 'AT3': 'SS\n(㎎/L)', 'AU3': 'T-N\n(㎎/L)', 'AV3': 'T-P\n(㎎/L)', 'AW3': '총대장균군\n(개/㎖)', 'AX3': '생태독성\n(TU)',
     }
     for k, v in subheaders_r3.items():
@@ -663,18 +668,15 @@ def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026
     ws = wb.active
     ws.title = "Sheet1"
     
-    # 1행 타이틀
     ws['A1'] = "재이용수 업로드양식"
     ws.merge_cells('A1:T1')
     
-    # 2행 헤더
     ws['A2'] = "날짜"
     ws['B2'] = "합계(㎥)"
     ws['C2'] = "장내용수(㎥)"
     ws['K2'] = "장외용수(㎥)"
     ws['T2'] = "사유"
     
-    # 3행 소분류 헤더
     subheaders = {
         'C3': '소계', 'D3': '세척수', 'E3': '냉각수', 'F3': '청소수', 'G3': '식수대', 'H3': '희석용수', 'I3': '중수도', 'J3': '기타',
         'K3': '소계', 'L3': '청소화장실용수', 'M3': '세척살수용수', 'N3': '조경용수', 'O3': '친수용수', 'P3': '지하수충전', 'Q3': '농업용수', 'R3': '하천등유지용수', 'S3': '공업용수'
@@ -717,7 +719,6 @@ def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
         
-        # Col 1 (A열): 날짜
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
         c1.font = font_data
@@ -725,11 +726,10 @@ def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026
         
         r_match = lookup.get(d_str, None)
         if r_match is not None:
-            # ⭐️ [재이용수 3개소 동시 연동] Col 2(B열: 합계), Col 3(C열: 장내용수 소계), Col 4(D열: 세척수)
             val_reuse = r_match.get('재이용수', None)
             if pd.notna(val_reuse) and str(val_reuse).strip() != '':
                 reuse_float = float(val_reuse)
-                for col_target in [2, 3, 4]: # B, C, D열
+                for col_target in [2, 3, 4]:
                     c = ws.cell(r_idx, col_target, reuse_float)
                     c.font = font_data
                     c.alignment = align_data_right
@@ -738,29 +738,50 @@ def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026
     wb.save(buf)
     return buf.getvalue()
 
+# [소규모 6개소 24개 열(A~X) 공인 서식 원본 100% 일치 생성 엔진]
+# 7일 주기 연속 유량(B열 유입량 = E열 고도처리량 / F열 방류량) + 주 1회 수질 입력, 나머지 8개 열 100% 공란 유지
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
     default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
     default_f = default_flows.get(fac_name, 35.0)
+    default_out_f = default_f if fac_name != '삼가리' else 49.1
     
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sheet1"
+    
+    # 1행 타이틀
     ws['A1'] = "유량및수질관리 업로드양식"
     ws.merge_cells('A1:X1')
     
-    headers_r1 = {
+    # 2행 헤더
+    headers_r2 = {
         'A2': '날짜', 'B2': '유입량\n(㎥/일)', 'C2': '처리량', 'F2': '방류량\n(㎥)/일',
         'G2': '수온\n(℃)', 'H2': '유입수질', 'P2': '방류수질', 'X2': '비고'
     }
-    for k, v in headers_r1.items(): ws[k] = v
-    for m in ['A2:A3', 'B2:B3', 'C2:E2', 'F2:F3', 'G2:G3', 'H2:O2', 'P2:W2', 'X2:X3']: ws.merge_cells(m)
-    
-    subheaders = {
+    for k, v in headers_r2.items():
+        ws[k] = v
+        
+    # 3행 소분류 헤더
+    subheaders_r3 = {
         'C3': '물리적\n(㎥/일)', 'D3': '생물학적\n(㎥/일)', 'E3': '고도\n(㎥/일)',
         'H3': 'pH\n(-)', 'I3': 'BOD\n(㎎/L)', 'J3': 'TOC\n(㎎/L)', 'K3': 'SS\n(㎎/L)', 'L3': 'T-N\n(㎎/L)', 'M3': 'T-P\n(㎎/L)', 'N3': '총대장균군\n(개/㎖)', 'O3': '생태독성\n(TU)',
         'P3': 'pH\n(-)', 'Q3': 'BOD\n(㎎/L)', 'R3': 'TOC\n(㎎/L)', 'S3': 'SS\n(㎎/L)', 'T3': 'T-N\n(㎎/L)', 'U3': 'T-P\n(㎎/L)', 'V3': '총대장균군\n(개/㎖)', 'W3': '생태독성\n(TU)'
     }
-    for k, v in subheaders.items(): ws[k] = v
+    for k, v in subheaders_r3.items():
+        ws[k] = v
+        
+    merges = ['A2:A3', 'B2:B3', 'C2:E2', 'F2:F3', 'G2:G3', 'H2:O2', 'P2:W2', 'X2:X3']
+    for m in merges:
+        ws.merge_cells(m)
+        
+    align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    font_header = Font(name='dotum', size=9, bold=True)
+    
+    for r in range(1, 4):
+        for c in range(1, 25):
+            cell = ws.cell(r, c)
+            cell.alignment = align_center
+            cell.font = font_header
 
     if start_date and end_date:
         d_range = pd.date_range(start_date, end_date)
@@ -781,6 +802,7 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             if pd.notna(r.get('유입량')) or pd.notna(r.get('유입BOD')):
                 measured_dates.append(pd.to_datetime(d_key))
 
+    # 7일 주기 유량 맵 구축
     daily_flow_in_map = {}
     daily_flow_out_map = {}
     prev_dt = None
@@ -791,7 +813,7 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         f_out = r_item.get('방류량', np.nan)
         
         val_in = float(f_in) if (pd.notna(f_in) and 0.001 <= float(f_in) <= 2000) else default_f
-        val_out = float(f_out) if (pd.notna(f_out) and 0.001 <= float(f_out) <= 2000) else (val_in if fac_name != '삼가리' else default_f * 0.83)
+        val_out = float(f_out) if (pd.notna(f_out) and 0.001 <= float(f_out) <= 2000) else (val_in if fac_name != '삼가리' else default_out_f)
         
         if prev_dt is None:
             daily_flow_in_map[d_str] = val_in
@@ -805,44 +827,58 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
         prev_dt = m_dt
 
     last_f_in = default_f
-    last_f_out = default_f if fac_name != '삼가리' else 49.1
+    last_f_out = default_out_f
+
+    font_data = Font(name='맑은 고딕', size=11, bold=False)
+    align_data_center = Alignment(horizontal='center', vertical='center')
+    align_data_right = Alignment(horizontal='right', vertical='center')
 
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
+        
+        # Col 1 (A): 날짜
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
+        c1.font = font_data
+        c1.alignment = align_data_center
 
         if d_str in daily_flow_in_map:
             last_f_in = daily_flow_in_map[d_str]
             last_f_out = daily_flow_out_map[d_str]
         elif d_str in lookup and pd.notna(lookup[d_str].get('유입량')):
             last_f_in = float(lookup[d_str].get('유입량'))
-            last_f_out = float(lookup[d_str].get('방류량', last_f_in if fac_name != '삼가리' else last_f_in * 0.83))
+            last_f_out = float(lookup[d_str].get('방류량', last_f_in if fac_name != '삼가리' else default_out_f))
 
-        ws.cell(r_idx, 2, last_f_in)
-        ws.cell(r_idx, 5, last_f_in)
-        ws.cell(r_idx, 6, last_f_out)
+        # Col 2 (B: 유입량), Col 5 (E: 처리량-고도) -> 동일 유입량 기입
+        c_b = ws.cell(r_idx, 2, last_f_in); c_b.font = font_data; c_b.alignment = align_data_right
+        c_e = ws.cell(r_idx, 5, last_f_in); c_e.font = font_data; c_e.alignment = align_data_right
+        # Col 6 (F: 방류량)
+        c_f = ws.cell(r_idx, 6, last_f_out); c_f.font = font_data; c_f.alignment = align_data_right
 
+        # 수질 기입 (주 1회 검사일만 기입, 비워진 항목(pH, 수온, 생태독성 등)은 100% 빈칸 유지)
         r_match = lookup.get(d_str, None)
         if r_match is not None:
-            raw_temp = r_match.get('수온', np.nan)
-            if pd.notna(raw_temp): ws.cell(r_idx, 7, float(raw_temp))
-
-            if pd.notna(r_match.get('유입pH')): ws.cell(r_idx, 8, float(r_match.get('유입pH')))
-            if pd.notna(r_match.get('유입BOD')): ws.cell(r_idx, 9, float(r_match.get('유입BOD')))
-            if pd.notna(r_match.get('유입TOC')): ws.cell(r_idx, 10, float(r_match.get('유입TOC')))
-            if pd.notna(r_match.get('유입SS')): ws.cell(r_idx, 11, float(r_match.get('유입SS')))
-            if pd.notna(r_match.get('유입TN')): ws.cell(r_idx, 12, float(r_match.get('유입TN')))
-            if pd.notna(r_match.get('유입TP')): ws.cell(r_idx, 13, float(r_match.get('유입TP')))
-            if pd.notna(r_match.get('유입대장균')): ws.cell(r_idx, 14, float(r_match.get('유입대장균')))
-
-            if pd.notna(r_match.get('방류pH')): ws.cell(r_idx, 16, float(r_match.get('방류pH')))
-            if pd.notna(r_match.get('방류BOD')): ws.cell(r_idx, 17, float(r_match.get('방류BOD')))
-            if pd.notna(r_match.get('방류TOC')): ws.cell(r_idx, 18, float(r_match.get('방류TOC')))
-            if pd.notna(r_match.get('방류SS')): ws.cell(r_idx, 19, float(r_match.get('방류SS')))
-            if pd.notna(r_match.get('방류TN')): ws.cell(r_idx, 20, float(r_match.get('방류TN')))
-            if pd.notna(r_match.get('방류TP')): ws.cell(r_idx, 21, float(r_match.get('방류TP')))
-            if pd.notna(r_match.get('방류대장균')): ws.cell(r_idx, 22, float(r_match.get('방류대장균')))
+            # 유입수질 6개 항목 (I, J, K, L, M, N열 / Cols 9~14)
+            col_map_in = [
+                (9, '유입BOD'), (10, '유입TOC'), (11, '유입SS'),
+                (12, '유입TN'), (13, '유입TP'), (14, '유입대장균')
+            ]
+            for col_idx, col_name in col_map_in:
+                v = r_match.get(col_name, None)
+                if pd.notna(v) and str(v).strip() != '':
+                    c = ws.cell(r_idx, col_idx, float(v))
+                    c.font = font_data; c.alignment = align_data_right
+                    
+            # 방류수질 6개 항목 (Q, R, S, T, U, V열 / Cols 17~22)
+            col_map_out = [
+                (17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'),
+                (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')
+            ]
+            for col_idx, col_name in col_map_out:
+                v = r_match.get(col_name, None)
+                if pd.notna(v) and str(v).strip() != '':
+                    c = ws.cell(r_idx, col_idx, float(v))
+                    c.font = font_data; c.alignment = align_data_right
 
     buf = io.BytesIO()
     wb.save(buf)
