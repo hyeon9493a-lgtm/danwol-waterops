@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from streamlit_drawable_canvas import st_canvas
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Font, Alignment
 import datetime
 import os
 import re
@@ -523,26 +523,148 @@ def parse_private_plant_multi_files(file_list):
         res[fac] = pd.DataFrame(recs)
     return res
 
-def fill_exact_main_template(df_data):
+# [단월 본장 51개 열(A~AY) 공인 서식 원본 100% 일치 생성 엔진]
+# 유입량(반류수 포함) [B열] = 실제 유입량 [D열] = 처리량(고도) [G열] 완벽 연동
+def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sheet1"
+    
     ws['A1'] = "유량및수질관리 업로드양식"
     ws.merge_cells('A1:AY1')
-    headers_r1 = {
-        'A2': '날짜', 'B2': '유입량(반류수 포함)(㎥/일)', 'C2': '반류수 유량(㎥/일)',
-        'D2': '실제 유입량(㎥/일)', 'E2': '처리량', 'H2': '방류량(㎥)/일',
-        'I2': '처리시설 유입전 우수토실 방류량(㎥)/일', 'J2': '수온(℃)',
-        'K2': '유입수질(연계전)', 'S2': '총인시설 유입수질(연계전)',
-        'AA2': '강우시 유입수질(1차처리전)', 'AI2': '방류수질',
-        'AQ2': '방류수질(강우시 1차처리후 by-pass)', 'AY2': '비고'
+    
+    headers_r2 = {
+        'A2': '날짜',
+        'B2': '유입량\n(반류수 포함)\n(㎥/일)',
+        'C2': '반류수 유량\n(㎥/일)',
+        'D2': '실제 유입량\n(㎥/일)',
+        'E2': '처리량',
+        'H2': '방류량\n(㎥)/일',
+        'I2': '처리시설 유입전\n우수토실 방류량\n(㎥)/일',
+        'J2': '수온\n(℃)',
+        'K2': '유입수질(연계전)',
+        'S2': '총인시설 유입수질(연계전)',
+        'AA2': '강우시 유입수질(1차처리전)',
+        'AI2': '방류수질',
+        'AQ2': '방류수질(강우시 1차처리후 by-pass)',
+        'AY2': '비고'
     }
-    for k, v in headers_r1.items(): ws[k] = v
-    for m in ['A2:A3', 'B2:B3', 'C2:C3', 'D2:D3', 'E2:G2', 'H2:H3', 'I2:I3', 'J2:J3', 'K2:R2', 'S2:Z2', 'AA2:AH2', 'AI2:AP2', 'AQ2:AX2', 'AY2:AY3']: ws.merge_cells(m)
-    for r_idx, (_, r) in enumerate(df_data.iterrows(), start=4):
-        ws.cell(r_idx, 1, r['날짜'])
-        ws.cell(r_idx, 2, r.get('유입량', 1700))
-        ws.cell(r_idx, 8, r.get('방류량', 1650))
+    for k, v in headers_r2.items():
+        ws[k] = v
+        
+    subheaders_r3 = {
+        'E3': '물리적\n(㎥/일)', 'F3': '생물학적\n(㎥/일)', 'G3': '고도\n(㎥/일)',
+        # 유입수질(연계전) K~R (11~18)
+        'K3': 'pH\n(-)', 'L3': 'BOD\n(㎎/L)', 'M3': 'TOC\n(㎎/L)', 'N3': 'SS\n(㎎/L)', 'O3': 'T-N\n(㎎/L)', 'P3': 'T-P\n(㎎/L)', 'Q3': '총대장균군\n(개/㎖)', 'R3': '생태독성\n(TU)',
+        # 총인시설 유입수질 S~Z (19~26)
+        'S3': 'pH\n(-)', 'T3': 'BOD\n(㎎/L)', 'U3': 'TOC\n(㎎/L)', 'V3': 'SS\n(㎎/L)', 'W3': 'T-N\n(㎎/L)', 'X3': 'T-P\n(㎎/L)', 'Y3': '총대장균군\n(개/㎖)', 'Z3': '생태독성\n(TU)',
+        # 강우시 유입수질 AA~AH (27~34)
+        'AA3': 'pH\n(-)', 'AB3': 'BOD\n(㎎/L)', 'AC3': 'TOC\n(㎎/L)', 'AD3': 'SS\n(㎎/L)', 'AE3': 'T-N\n(㎎/L)', 'AF3': 'T-P\n(㎎/L)', 'AG3': '총대장균군\n(개/㎖)', 'AH3': '생태독성\n(TU)',
+        # 방류수질 AI~AP (35~42)
+        'AI3': 'pH\n(-)', 'AJ3': 'BOD\n(㎎/L)', 'AK3': 'TOC\n(㎎/L)', 'AL3': 'SS\n(㎎/L)', 'AM3': 'T-N\n(㎎/L)', 'AN3': 'T-P\n(㎎/L)', 'AO3': '총대장균군\n(개/㎖)', 'AP3': '생태독성\n(TU)',
+        # 방류수질 by-pass AQ~AX (43~50)
+        'AQ3': 'pH\n(-)', 'AR3': 'BOD\n(㎎/L)', 'AS3': 'TOC\n(㎎/L)', 'AT3': 'SS\n(㎎/L)', 'AU3': 'T-N\n(㎎/L)', 'AV3': 'T-P\n(㎎/L)', 'AW3': '총대장균군\n(개/㎖)', 'AX3': '생태독성\n(TU)',
+    }
+    for k, v in subheaders_r3.items():
+        ws[k] = v
+        
+    merges = [
+        'A2:A3', 'B2:B3', 'C2:C3', 'D2:D3', 'E2:G2', 'H2:H3', 'I2:I3', 'J2:J3',
+        'K2:R2', 'S2:Z2', 'AA2:AH2', 'AI2:AP2', 'AQ2:AX2', 'AY2:AY3'
+    ]
+    for m in merges:
+        ws.merge_cells(m)
+        
+    align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    font_header = Font(name='dotum', size=9, bold=True)
+    
+    for r in range(1, 4):
+        for c in range(1, 52):
+            cell = ws.cell(r, c)
+            cell.alignment = align_center
+            cell.font = font_header
+
+    if start_date and end_date:
+        d_range = pd.date_range(start_date, end_date)
+    elif df_data is not None and not df_data.empty and '날짜' in df_data.columns:
+        min_d = df_data['날짜'].min()
+        max_d = df_data['날짜'].max()
+        d_range = pd.date_range(min_d, max_d)
+    else:
+        d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+        
+    lookup = {}
+    if df_data is not None and not df_data.empty and '날짜' in df_data.columns:
+        for _, r in df_data.iterrows():
+            d_key = str(r['날짜']).split()[0]
+            lookup[d_key] = r
+
+    font_data = Font(name='맑은 고딕', size=11, bold=False)
+    align_data_center = Alignment(horizontal='center', vertical='center')
+    align_data_right = Alignment(horizontal='right', vertical='center')
+
+    for r_idx, dt in enumerate(d_range, start=4):
+        d_str = dt.strftime('%Y-%m-%d')
+        
+        # Col 1 (A): 날짜
+        c1 = ws.cell(r_idx, 1, dt.date())
+        c1.number_format = 'yyyy-mm-dd'
+        c1.font = font_data
+        c1.alignment = align_data_center
+        
+        r_match = lookup.get(d_str, None)
+        
+        if r_match is not None:
+            # ⭐️ [핵심 3개소 동시 연동] Col 2(B: 유입량), Col 4(D: 실제 유입량), Col 7(G: 처리량-고도)
+            val_in = r_match.get('유입량', None)
+            if pd.notna(val_in) and str(val_in).strip() != '':
+                in_float = float(val_in)
+                # 1. B열: 유입량(반류수 포함)(㎥/일)
+                c_b = ws.cell(r_idx, 2, in_float)
+                c_b.font = font_data; c_b.alignment = align_data_right
+                
+                # 2. D열: 실제 유입량(㎥/일)
+                c_d = ws.cell(r_idx, 4, in_float)
+                c_d.font = font_data; c_d.alignment = align_data_right
+                
+                # 3. G열: 처리량 - 고도(㎥/일)
+                c_g = ws.cell(r_idx, 7, in_float)
+                c_g.font = font_data; c_g.alignment = align_data_right
+
+            # Col 8 (H): 방류량
+            val_out = r_match.get('방류량', None)
+            if pd.notna(val_out) and str(val_out).strip() != '':
+                c = ws.cell(r_idx, 8, float(val_out))
+                c.font = font_data; c.alignment = align_data_right
+                
+            # Col 10 (J): 수온
+            val_temp = r_match.get('수온', None)
+            if pd.notna(val_temp) and str(val_temp).strip() != '':
+                c = ws.cell(r_idx, 10, float(val_temp))
+                c.font = font_data; c.alignment = align_data_right
+                
+            # 유입수질(연계전) L~Q (Cols 12~17)
+            col_map_in = [
+                (12, '유입BOD'), (13, '유입TOC'), (14, '유입SS'),
+                (15, '유입TN'), (16, '유입TP'), (17, '유입대장균')
+            ]
+            for col_idx, col_name in col_map_in:
+                v = r_match.get(col_name, None)
+                if pd.notna(v) and str(v).strip() != '':
+                    c = ws.cell(r_idx, col_idx, float(v))
+                    c.font = font_data; c.alignment = align_data_right
+                    
+            # 방류수질 AJ~AO (Cols 36~41)
+            col_map_out = [
+                (36, '방류BOD'), (37, '방류TOC'), (38, '방류SS'),
+                (39, '방류TN'), (40, '방류TP'), (41, '방류대장균')
+            ]
+            for col_idx, col_name in col_map_out:
+                v = r_match.get(col_name, None)
+                if pd.notna(v) and str(v).strip() != '':
+                    c = ws.cell(r_idx, col_idx, float(v))
+                    c.font = font_data; c.alignment = align_data_right
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -1078,7 +1200,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
             st.markdown("##### 🏢 단월 본장 누적 엑셀")
             df_main_cum = get_master_data(MAIN_PLANT, s_d, e_d)
             if not df_main_cum.empty:
-                cum_main_bytes = fill_exact_main_template(df_main_cum)
+                cum_main_bytes = fill_exact_main_template(df_main_cum, start_date=s_d, end_date=e_d, year=sel_cum_year)
                 st.download_button(f"📥 단월본장 누적 다운로드 ({len(df_main_cum)}일치)", cum_main_bytes, f"유량및수질관리_단월_{sel_cum_year}_{sel_period.split()[0]}.xlsx", use_container_width=True, type="primary")
             else:
                 st.info("해당 기간의 단월 본장 데이터가 없습니다.")
