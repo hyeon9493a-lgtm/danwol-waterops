@@ -98,10 +98,28 @@ TMS_ACCUM_DB = "danwol_tms_master.csv"
 PROCESS_CONTROL_DB = "danwol_process_control_master.csv"
 CHEMICAL_ENERGY_DB = "danwol_chemical_energy_master.csv"
 AUTH_DB_FILE = "user_auth_db.json"
+SYSTEM_CONFIG_FILE = "system_config.json"
 
 for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, HWPX_RECORD_DIR]:
     if not os.path.exists(p):
         os.makedirs(p)
+
+def load_system_config():
+    if os.path.exists(SYSTEM_CONFIG_FILE):
+        try:
+            with open(SYSTEM_CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # 기본값: 점검 모드 활성화 (True)
+    return {"maintenance_mode": True, "maintenance_msg": "단월 스마트 자율운전 관제 플랫폼 고도화 및 DB 최적화 작업이 진행 중입니다."}
+
+def save_system_config(cfg):
+    try:
+        with open(SYSTEM_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 def load_auth_db():
     if os.path.exists(AUTH_DB_FILE):
@@ -732,7 +750,7 @@ def build_exact_tbm_html(tbm_date, tbm_time, custom_job, tbm_place, job_desc, is
     return "".join(parts)
 
 # -------------------------------------------------------------
-# 사용자 로그인 검증 함수
+# 사용자 로그인 및 점검 모드 게이트웨이
 # -------------------------------------------------------------
 def check_login_system():
     if "logged_in" not in st.session_state:
@@ -740,12 +758,25 @@ def check_login_system():
     if "user_role" not in st.session_state:
         st.session_state.user_role = None
 
+    cfg = load_system_config()
+    is_maintenance = cfg.get("maintenance_mode", True)
+    admin_master_pw = "yp1311!"
+    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "DANWOL-2027!", "yp1311!"]
+
+    # 1. 이미 로그인된 상태 확인
     if st.session_state.logged_in:
+        # 일반 사용자로 로그인되어 있는데 점검 모드인 경우 차단
+        if is_maintenance and st.session_state.user_role != "admin":
+            render_maintenance_screen(cfg, is_logged_in_user=True)
+            return False
         return True
 
-    admin_master_pw = "yp1311!"
-    whitelist_codes = ["DW-PASS-2026", "WATER-ADMIN", "yp1311!"]
+    # 2. 미로그인 상태에서 점검 모드가 켜져 있을 때 (일반 사용자 차단 화면)
+    if is_maintenance:
+        render_maintenance_screen(cfg, is_logged_in_user=False)
+        return False
 
+    # 3. 점검 모드가 꺼져 있을 때의 정상 로그인 화면
     st.markdown("""
     <div style="text-align: center; padding: 25px 20px 10px 20px;">
         <div style="font-size: 44px;">💧</div>
@@ -770,7 +801,7 @@ def check_login_system():
                     else:
                         st.error("관리자 비밀번호가 일치하지 않습니다.")
             else:
-                passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="yp1311!")
+                passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="DANWOL-2027!")
                 if st.button("🚀 접속하기", type="primary", use_container_width=True):
                     if passcode in whitelist_codes:
                         st.session_state.logged_in = True
@@ -797,17 +828,76 @@ def check_login_system():
     return False
 
 # -------------------------------------------------------------
+# 시스템 정기 점검 중 안내 화면 렌더러
+# -------------------------------------------------------------
+def render_maintenance_screen(cfg, is_logged_in_user=False):
+    current_time_str = datetime.datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
+    st.markdown(f"""
+    <div style="max-width: 680px; margin: 40px auto 20px auto; background: white; border-radius: 20px; padding: 35px 30px; box-shadow: 0 20px 40px -15px rgba(0,0,0,0.1); border: 1px solid #E2E8F0; text-align: center;">
+        <div style="font-size: 54px; margin-bottom: 10px;">🚧</div>
+        <h2 style="color: #0F172A; font-weight: 900; margin-bottom: 12px; font-size: 24px;">시스템 정기 점검 및 업데이트 중</h2>
+        <div style="display: inline-block; background: #FEF3C7; color: #D97706; padding: 5px 16px; border-radius: 30px; font-weight: 700; font-size: 13px; margin-bottom: 20px;">
+            SYSTEM MAINTENANCE & DATA OPTIMIZATION
+        </div>
+        <p style="color: #475569; font-size: 15px; line-height: 1.65; margin-bottom: 25px;">
+            {cfg.get("maintenance_msg", "단월 스마트 자율운전 관제 플랫폼 고도화 및 DB 최적화 작업이 진행 중입니다.")}<br>
+            보다 안정적이고 정확한 수질 관제 서비스를 제공하기 위해 시스템 점검을 수행하고 있습니다.
+        </p>
+        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 15px; font-size: 13px; color: #64748B; text-align: left; margin-bottom: 20px;">
+            • <b>대상 시설</b>: 단월 본장(1,700 ㎥/일) 및 소규모 6개소 관제 시스템<br>
+            • <b>현재 시각 (KST)</b>: <span style="color: #0284C7; font-weight: bold;">{current_time_str}</span><br>
+            • <b>문의처</b>: 단월하수처리장 전산운영팀 (환경2팀)
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if is_logged_in_user:
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("로그아웃", use_container_width=True):
+                st.session_state.logged_in = False
+                st.session_state.user_role = None
+                st.rerun()
+    else:
+        # 점검 중에도 관리자는 접근할 수 있는 마스터 로그인 접이식 창
+        col1, col2, col3 = st.columns([1, 1.2, 1])
+        with col2:
+            with st.expander("🔒 관리자 전용 인증 접속"):
+                admin_pw_m = st.text_input("관리자 마스터 비밀번호", type="password", key="m_admin_pw")
+                if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True, key="btn_m_admin_login"):
+                    if admin_pw_m == "yp1311!":
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "admin"
+                        st.session_state.user_name = "최고관리자"
+                        st.rerun()
+                    else:
+                        st.error("관리자 비밀번호가 일치하지 않습니다.")
+
+# -------------------------------------------------------------
 # 메인 실행 게이트
 # -------------------------------------------------------------
 if not check_login_system():
     st.stop()
 
+# 관리자 사이드바 제어 패널 (점검 모드 온/오프 스위치 포함)
 if st.session_state.get("user_role") == "admin":
+    cfg = load_system_config()
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("##### ⚙️ 관리자 시스템 제어")
+    
+    # 점검 모드 토글 스위치
+    cur_m_state = cfg.get("maintenance_mode", True)
+    new_m_state = st.sidebar.toggle("🚧 일반 사용자 점검 모드 활성화", value=cur_m_state)
+    if new_m_state != cur_m_state:
+        cfg["maintenance_mode"] = new_m_state
+        save_system_config(cfg)
+        st.sidebar.success(f"점검 모드가 {'활성화(ON)' if new_m_state else '해제(OFF)'} 되었습니다.")
+        st.rerun()
+
     auth_db = load_auth_db()
     users = auth_db.get("users", {})
     pending_users = {k: v for k, v in users.items() if v.get("status") == "pending"}
-    st.sidebar.markdown("---")
-    with st.sidebar.expander(f"🛡️ 승인 대기 ({len(pending_users)}명)", expanded=True):
+    with st.sidebar.expander(f"🛡️ 승인 대기 ({len(pending_users)}명)", expanded=False):
         for u_id, u_info in list(pending_users.items()):
             st.write(f"**{u_info.get('name')}** ({u_id})")
             c1, c2 = st.columns(2)
@@ -1640,18 +1730,15 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
     st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미 (Gemini 연동)")
     st.caption("💧 단월 본장(1,700 ㎥/일, KNR+IPR) · 소규모 6개소 · 개인하수 6개소 · 송풍기/3대 약품/TMS 예측/비상운전 전 공정 전문 상담")
 
-    # 상단 Gemini API 키 설정창 (선택사항)
     with st.expander("🔑 Google Gemini API Key 설정 (선택)", expanded=False):
         api_key_input = st.text_input("Gemini API Key 입력 (입력 시 실시간 생성형 AI로 동작합니다)", type="password", value=os.environ.get("GEMINI_API_KEY", ""))
         if api_key_input:
             os.environ["GEMINI_API_KEY"] = api_key_input
             st.success("✅ Gemini API Key가 등록되었습니다.")
 
-    # 13개 관내 시설 및 전 공정 제어 심층 지식 베이스
     def query_danwol_full_process_ai(user_query):
         q = user_query.lower().strip()
         
-        # 1. 실제 Gemini API Key가 등록되어 있을 경우 Google Gemini API 직접 호출
         gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
         if gemini_key:
             try:
@@ -1667,11 +1754,9 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 if response and response.text:
                     return response.text
             except Exception as e:
-                pass # API 오류 시 아래 정밀 지식 엔진으로 부드럽게 Fallback
+                pass
 
-        # 2. 내장 고정밀 공정 제어 지식 엔진 (20가지 이상의 세부 테마 분류)
-        
-        # [A] 약품 효율성 증대 및 절감 방안
+        # 내장 고정밀 공정 제어 지식 엔진
         if any(k in q for k in ["약품 효율", "약품 절감", "효율성", "약품비", "약품 최적화", "주입량 최적화", "약품 관리"]):
             return (
                 "💡 **[단월 본장 3대 약품(PAC·염화제이철·폴리머) 효율성 극대화 및 절감 전략]**\n\n"
@@ -1686,7 +1771,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "   - 탈수기 케이크 함수율 78% 이하를 목표로 피드량과 폴리머 주입 펌프를 비례 제어하여 연간 약품비 15% 이상 절감 달성"
             )
 
-        # [B] 질소(T-N) 및 KNR 공법 고도처리 제어
         elif any(k in q for k in ["knr", "질소", "t-n", "탈질", "질산화", "내부반송", "무산소"]):
             return (
                 "💡 **[단월 본장 KNR 질소(T-N) 고도처리 제어 가이드]**\n\n"
@@ -1698,7 +1782,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "4. **질산화율 향상**: 동절기 저수온 시 SRT를 20일 이상으로 길게 가져가 질산화균 농도를 유지하십시오."
             )
 
-        # [C] 총인(T-P) 및 IPR 공정 제어
         elif any(k in q for k in ["ipr", "인", "t-p", "총인", "염화제이철", "염철", "pac", "응집"]):
             return (
                 "💡 **[단월 본장 총인(T-P) 제거 및 약품 주입 제어 지침]**\n\n"
@@ -1707,7 +1790,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "3. **방류수 T-P 목표**: 법적 기준 0.20 mg/L 대비 안전 관리선인 **0.05 mg/L 이하**로 항시 유지"
             )
 
-        # [D] 송풍기 인버터 및 전력비 절감
         elif any(k in q for k in ["송풍기", "풍량", "blower", "산소", "aor", "동력비", "전력"]):
             return (
                 "💡 **[송풍기 인버터 자동 연동 및 동력비 최적 제어]**\n\n"
@@ -1716,7 +1798,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "3. **절감 효과**: 심야 저부하 시간대 인버터 주파수 하향(45~50Hz) 제어로 **연간 약 18.2% 동력비 절감**"
             )
 
-        # [E] 슬러지 팽화 및 침강성 불량 (SVI 이상)
         elif any(k in q for k in ["팽화", "bulking", "svi", "슬러지 부상", "거품", "스컴", "핀플록"]):
             return (
                 "💡 **[슬러지 팽화(Bulking) 및 침강 불량 긴급 조치 매뉴얼]**\n\n"
@@ -1726,7 +1807,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "4. **슬러지 인발**: MLSS 농도가 4,000 mg/L 이상 과다 축적되지 않도록 잉여슬러지 인발 펌프 가동시간 연장"
             )
 
-        # [F] 삼가리 (SBR)
         elif any(k in q for k in ["삼가리", "sbr"]):
             return (
                 "💡 **[삼가리 소규모 시설 (120 ㎥/일, SBR) 공정 제어]**\n\n"
@@ -1735,7 +1815,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "3. **디캔터 배출 관리**: 방류 행정 시 침전 슬러지가 흡입되지 않도록 디캔터 하강 속도 및 수위 센서 점검"
             )
 
-        # [G] 산음 (SWPP)
         elif any(k in q for k in ["산음", "swpp"]):
             return (
                 "💡 **[산음 소규모 시설 (100 ㎥/일, SWPP) 공정 제어]**\n\n"
@@ -1743,7 +1822,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "2. **핵심 관리**: 일체형 수조 하부 슬러지 퇴적 방지를 위한 에어레이터 산기 상태 점검 및 주기적 잉여 슬러지 인발"
             )
 
-        # [H] 진목 (고효율오수 + SOD)
         elif any(k in q for k in ["진목", "보룡", "sod"]):
             return (
                 "💡 **[진목(보룡리) 소규모 시설 (23 ㎥/일, 고효율오수+SOD) 공정 제어]**\n\n"
@@ -1751,7 +1829,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "2. **핵심 관리**: 접촉 여재의 생물막 탈락 및 막힘 방지를 위해 주기적 역세척 수행, SOD조 환원 전위(-150mV) 유지"
             )
 
-        # [I] 몰운 (IC-SBR)
         elif any(k in q for k in ["몰운"]):
             return (
                 "💡 **[몰운 소규모 시설 (60 ㎥/일, IC-SBR) 공정 제어]**\n\n"
@@ -1759,7 +1836,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "2. **약품 제어**: 방류 T-P 상승 시 반응조 포기 사이클 후단에 PAC을 일 10~15 L 정량 투입"
             )
 
-        # [J] 단월마을 & 당의 (IC-SBR)
         elif any(k in q for k in ["단월마을", "당의"]):
             return (
                 "💡 **[단월마을(30 ㎥/일) & 당의(45 ㎥/일) IC-SBR 공정 제어]**\n\n"
@@ -1767,7 +1843,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "2. **운전 사이클**: 포기 60분 / 비포기 교반 60분 간헐 반복 주기를 유지하여 질산화와 탈질을 동일 반응조에서 완결"
             )
 
-        # [K] 우천 및 장마철 고유량 유입 시
         elif any(k in q for k in ["우천", "강우", "비", "장마", "침수", "과유량"]):
             return (
                 "💡 **[우천 및 고유량 유입 시 비상 공정 제어 수칙]**\n\n"
@@ -1777,7 +1852,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "4. **우수토실 바이패스 관리**: 초기 우수 바이패스 수문 및 방류 수질 계측기 정상 작동 확인"
             )
 
-        # [L] 동절기 저수온 시 운전 대책
         elif any(k in q for k in ["동절기", "겨울", "저수온", "수온", "동파"]):
             return (
                 "💡 **[동절기 저수온(12℃ 이하) 대비 고도처리 운전 대책]**\n\n"
@@ -1787,7 +1861,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "4. **동파 방지**: 옥외 약품 배관(PAC/염철) 히팅케이블 작동 점검 및 탈수기동 환기팬 온도 연동 제어"
             )
 
-        # [M] 악취 및 슬러지 탈수기 관리
         elif any(k in q for k in ["악취", "탈수기", "함수율", "슬러지"]):
             return (
                 "💡 **[슬러지 탈수 효율 향상 및 탈수기동 악취 저감 대책]**\n\n"
@@ -1796,7 +1869,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "3. **탈수기동 악취 저감**: 황화수소(H2S) 발생 억제를 위해 저류조 체류시간을 48시간 이내로 단축하고 탈취탑 약액 세정(차아염소산나트륨/가성소다) pH를 9.5~10.5로 유지"
             )
 
-        # [N] 기본 포괄적 진단 안내
         else:
             return (
                 f"💡 **[단월 스마트 관제 AI 전문가 진단: '{user_query}']**\n\n"
@@ -1806,7 +1878,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "3. **추천 질문**: '본장 약품 효율성 증대방법', 'KNR 질소 제어법', '삼가리 SBR 운전법', '동절기 저수온 대책', '우천시 비상운전 수칙' 등을 질문하시면 더욱 상세한 기술 매뉴얼을 확인하실 수 있습니다."
             )
 
-    # 챗봇 세션 상태 초기화
     if "messages" not in st.session_state:
         st.session_state.messages = [{
             "role": "assistant", 
@@ -1817,7 +1888,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
             )
         }]
 
-    # 빠른 추천 질문 칩 (Quick Buttons)
     st.markdown("##### ⚡ 빠른 공정 제어 질의 추천")
     chip_c1, chip_c2, chip_c3, chip_c4 = st.columns(4)
     quick_q = None
@@ -1828,12 +1898,10 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
 
     st.divider()
 
-    # 대화 히스토리 출력
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # 입력창 또는 퀵버튼 질문 처리
     user_prompt = st.chat_input("공정 제어에 대해 질문하세요 (예: 비가 많이 올 때 본장 침전조 및 약품 제어는?)")
     if quick_q: user_prompt = quick_q
 
