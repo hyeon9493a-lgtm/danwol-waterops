@@ -524,7 +524,6 @@ def parse_private_plant_multi_files(file_list):
     return res
 
 # [단월 본장 51개 열(A~AY) 공인 서식 원본 100% 일치 생성 엔진]
-# 유입량(반류수 포함) [B열] = 실제 유입량 [D열] = 처리량(고도) [G열] 완벽 연동
 def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -554,15 +553,10 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
         
     subheaders_r3 = {
         'E3': '물리적\n(㎥/일)', 'F3': '생물학적\n(㎥/일)', 'G3': '고도\n(㎥/일)',
-        # 유입수질(연계전) K~R (11~18)
         'K3': 'pH\n(-)', 'L3': 'BOD\n(㎎/L)', 'M3': 'TOC\n(㎎/L)', 'N3': 'SS\n(㎎/L)', 'O3': 'T-N\n(㎎/L)', 'P3': 'T-P\n(㎎/L)', 'Q3': '총대장균군\n(개/㎖)', 'R3': '생태독성\n(TU)',
-        # 총인시설 유입수질 S~Z (19~26)
         'S3': 'pH\n(-)', 'T3': 'BOD\n(㎎/L)', 'U3': 'TOC\n(㎎/L)', 'V3': 'SS\n(㎎/L)', 'W3': 'T-N\n(㎎/L)', 'X3': 'T-P\n(㎎/L)', 'Y3': '총대장균군\n(개/㎖)', 'Z3': '생태독성\n(TU)',
-        # 강우시 유입수질 AA~AH (27~34)
         'AA3': 'pH\n(-)', 'AB3': 'BOD\n(㎎/L)', 'AC3': 'TOC\n(㎎/L)', 'AD3': 'SS\n(㎎/L)', 'AE3': 'T-N\n(㎎/L)', 'AF3': 'T-P\n(㎎/L)', 'AG3': '총대장균군\n(개/㎖)', 'AH3': '생태독성\n(TU)',
-        # 방류수질 AI~AP (35~42)
         'AI3': 'pH\n(-)', 'AJ3': 'BOD\n(㎎/L)', 'AK3': 'TOC\n(㎎/L)', 'AL3': 'SS\n(㎎/L)', 'AM3': 'T-N\n(㎎/L)', 'AN3': 'T-P\n(㎎/L)', 'AO3': '총대장균군\n(개/㎖)', 'AP3': '생태독성\n(TU)',
-        # 방류수질 by-pass AQ~AX (43~50)
         'AQ3': 'pH\n(-)', 'AR3': 'BOD\n(㎎/L)', 'AS3': 'TOC\n(㎎/L)', 'AT3': 'SS\n(㎎/L)', 'AU3': 'T-N\n(㎎/L)', 'AV3': 'T-P\n(㎎/L)', 'AW3': '총대장균군\n(개/㎖)', 'AX3': '생태독성\n(TU)',
     }
     for k, v in subheaders_r3.items():
@@ -662,7 +656,6 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
     return buf.getvalue()
 
 # [단월 본장 재이용수 20개 열(A~T) 공인 서식 원본 100% 일치 생성 엔진]
-# 재이용수 값 ➔ B열(합계) = C열(장내용수 소계) = D열(세척수) 완벽 자동 기입, 나머지 E~T열 공란 유지
 def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -850,7 +843,7 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             last_f_in = float(lookup[d_str].get('유입량'))
             last_f_out = float(lookup[d_str].get('방류량', last_f_in if fac_name != '삼가리' else default_out_f))
 
-        # Col 2 (B: 유입량), Col 5 (E: 처리량-고도) -> 동일 유입량 기입
+        # ⭐️ [핵심 매핑] Col 2 (B: 유입량), Col 5 (E: 처리량-고도) -> 동일 유입량 기입
         c_b = ws.cell(r_idx, 2, last_f_in); c_b.font = font_data; c_b.alignment = align_data_right
         c_e = ws.cell(r_idx, 5, last_f_in); c_e.font = font_data; c_e.alignment = align_data_right
         # Col 6 (F: 방류량)
@@ -2024,35 +2017,40 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "💡 **[삼가리 소규모 시설 (120 ㎥/일, SBR) 공정 제어]**\n\n"
                 "1. **공정 방식**: 회분식 활성슬러지 공정 (100% 무약품 생물학적 고도처리)\n"
                 "2. **질소 수질 조절**: 유입 T-N 상승 시 비포기 교반 시간을 15~20분 연장하여 무산소 탈질 행정 강화\n"
-                "3. **디캔터 배출 관리**: 방류 행정 시 침전 슬러지가 흡입되지 않도록 디캔터 하강 속도 및 수위 센서 점검"
+                "3. **디캔터 배출 관리**: 방류 행정 시 침전 슬러지가 흡입되지 않도록 디캔터 하강 속도 및 수위 센서 점검\n"
+                "4. **유량 특성**: 유입량은 59.1 ㎥/일, 방류량은 49.1 ㎥/일로 관리됩니다."
             )
 
         elif any(k in q for k in ["산음", "swpp"]):
             return (
                 "💡 **[산음 소규모 시설 (100 ㎥/일, SWPP) 공정 제어]**\n\n"
                 "1. **공정 방식**: 수중포기 침전일체형 고도처리 (무약품)\n"
-                "2. **핵심 관리**: 일체형 수조 하부 슬러지 퇴적 방지를 위한 에어레이터 산기 상태 점검 및 주기적 잉여 슬러지 인발"
+                "2. **핵심 관리**: 일체형 수조 하부 슬러지 퇴적 방지를 위한 에어레이터 산기 상태 점검 및 주기적 잉여 슬러지 인발\n"
+                "3. **유량 특성**: 유입량과 방류량은 33.3 ㎥/일(동절기 29.1 ㎥/일)로 동일하게 관리됩니다."
             )
 
         elif any(k in q for k in ["진목", "보룡", "sod"]):
             return (
                 "💡 **[진목(보룡리) 소규모 시설 (23 ㎥/일, 고효율오수+SOD) 공정 제어]**\n\n"
                 "1. **공정 방식**: 미생물 접촉산화 + SOD 전용 탈질조 결합 공법\n"
-                "2. **핵심 관리**: 접촉 여재의 생물막 탈락 및 막힘 방지를 위해 주기적 역세척 수행, SOD조 환원 전위(-150mV) 유지"
+                "2. **핵심 관리**: 접촉 여재의 생물막 탈락 및 막힘 방지를 위해 주기적 역세척 수행, SOD조 환원 전위(-150mV) 유지\n"
+                "3. **유량 특성**: 유입량과 방류량은 2.9 ㎥/일로 동일하게 관리됩니다."
             )
 
         elif any(k in q for k in ["몰운"]):
             return (
                 "💡 **[몰운 소규모 시설 (60 ㎥/일, IC-SBR) 공정 제어]**\n\n"
                 "1. **공정 특성**: 간헐 포기 회분식 반응조이며, 소규모 중 유일하게 **반응조 PAC 직접 투입 설비** 보유\n"
-                "2. **약품 제어**: 방류 T-P 상승 시 반응조 포기 사이클 후단에 PAC을 일 10~15 L 정량 투입"
+                "2. **약품 제어**: 방류 T-P 상승 시 반응조 포기 사이클 후단에 PAC을 일 10~15 L 정량 투입\n"
+                "3. **유량 특성**: 유입량과 방류량은 20.3 ㎥/일로 동일하게 관리됩니다."
             )
 
         elif any(k in q for k in ["단월마을", "당의"]):
             return (
                 "💡 **[단월마을(30 ㎥/일) & 당의(45 ㎥/일) IC-SBR 공정 제어]**\n\n"
                 "1. **공정 방식**: 간헐 포기 회분식 생물학적 고도처리 (무약품)\n"
-                "2. **운전 사이클**: 포기 60분 / 비포기 교반 60분 간헐 반복 주기를 유지하여 질산화와 탈질을 동일 반응조에서 완결"
+                "2. **운전 사이클**: 포기 60분 / 비포기 교반 60분 간헐 반복 주기를 유지하여 질산화와 탈질을 동일 반응조에서 완결\n"
+                "3. **유량 특성**: 단월마을은 11.0 ㎥/일(평균 8.4 ㎥/일), 당의는 44.3 ㎥/일(평균 42.4 ㎥/일)로 유입량과 방류량이 동일합니다."
             )
 
         elif any(k in q for k in ["우천", "강우", "비", "장마", "침수", "과유량"]):
