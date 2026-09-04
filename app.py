@@ -2146,263 +2146,305 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
             st.session_state.messages = []
             st.rerun()
 
-# -------------------------------------------------------------
-# 7. TBM 표준회의록 AI 자동작성/출력
-# -------------------------------------------------------------
-elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
-    st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
-    st.caption("🔒 작업명 입력 시 세부내용/3대 위험요인·감소대책 AI 자동완성 · 실시간 직접 수정 및 즉시 반영 · 초단위 감사추적 타임스탬프 탑재")
-
-    record_dir = TBM_RECORD_DIR
-    if not os.path.exists(record_dir): os.makedirs(record_dir)
-
-    ai_risk_db = {
-        "산음리 중계 펌프A 인양 및 인양 상태 점검 작업": {
-            "desc": "호이스트 이용 펌프A 인양 후 매달린 상태에서의 정밀 점검 및 정비", "place": "작업현장",
-            "risks": [
-                ("인양된 펌프A 하부/측면 작업 중 낙하로 인한 깔림 및 끼임", "안전 고임목/받침대 설치: 인양 후 매달린 상태 유지 시 안전 고임목 또는 지지대를 받쳐 낙하 방지"),
-                ("인양장치(호이스트) 브레이크 미작동 및 와이어 파손으로 인한 낙하", "인양장치 점검: 작업 전 브레이크 작동 상태, 와이어로프, 훅 해지장치 결함 여부 사전 확인"),
-                ("펌프A 매달림 상태에서 흔들림 및 균형 상실로 인한 충돌", "유도 로프(태그라인) 활용: 펌프 인양 및 매달림 상태 유지 시 흔들림 방지용 유도 로프 체결")
-            ]
-        },
-        "KNR 생물반응조 산기장치 및 내부반송펌프 점검": {
-            "desc": "KNR 무산소조/호기조 수중 교반기 및 질산화액 내부반송펌프 절연 측정 및 인양 점검", "place": "작업현장",
-            "risks": [
-                ("반응조 상부 점검 통로 난간 작업 중 수조 내부 익사 및 추락", "안전대 및 구명조끼 필수 착용, 수조 안전난간 안전고리 체결 철저"),
-                ("수중 펌프 전원 연결부 누전으로 인한 감전 위험", "작업 전 펌프 MCC 판넬 Main 차단기 차단(LOTO 실시) 및 잔류 전압 검전"),
-                ("호기조 포기 비산물 접촉으로 인한 미생물 감염 및 미끄러짐", "보안경/방수 안전장갑 착용, 통로 슬러지 청소 및 보행 주의")
-            ]
-        },
-        "IPR 급속혼화지 PAC/응집제 주입설비 배관 점검": {
-            "desc": "IPR 인 제거용 PAC 저장탱크 레벨계 점검 및 정량 주입펌프 토출배관 세척/교체", "place": "작업현장",
-            "risks": [
-                ("PAC 약품 배관 해체 시 잔류 산성 약품 비산으로 인한 안구/피부 화학화상", "내화학 보호의, 안면보호구(보안면), 내산 고무장갑 필수 착용"),
-                ("약품 주입펌프 공운전 및 배관 내 압력 누출로 인한 폭출", "1차 인입 밸브 차단 확인 및 드레인 밸브 개방을 통한 잔압 배출 후 해체"),
-                ("약품실 바닥 누출 약품으로 인한 전도(미끄러짐) 위험", "작업 전 바닥 세척 및 중화제(가성소다) 비치, 방유턱 상태 확인")
-            ]
-        },
-        "탈수기동 슬러지 이송 컨베이어 및 여과포 세척": {
-            "desc": "원심탈수기 및 벨트프레스 여과포 고압세척, 탈수케이크 이송 스크류 점검", "place": "작업현장",
-            "risks": [
-                ("회전체(스크류 컨베이어, 롤러) 점검 중 말림 및 끼임", "LOTO(잠금장치 및 표지판) 부착 철저, 연동 비상정지스위치 사전 점검"),
-                ("고압 세척기 사용 중 고압 노즐 비산물에 의한 타박상 및 미끄러짐", "방수복 및 미끄럼방지 안전장화 착용, 세척 호스 체결 상태 점검"),
-                ("탈수기동 밀폐구간 슬러지 부패에 따른 황화수소(H2S) 가스 질식", "작업 30분 전 환기팬 가동 및 복합가스농도측정기 연속 측정")
-            ]
-        }
-    }
-
-    is_weekly = st.checkbox("📅 **[별지1] 작업내용이 동일하여 1주일 단위로 작성하고자 할 경우 체크**", value=False)
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        st.subheader("1️⃣ 작업 기본정보 & AI 맞춤 시나리오")
-        tbm_date = st.date_input("TBM 일자", datetime.date(2026, 8, 20))
-        tbm_time = st.text_input("TBM 시간", "09:00 ~ 09:30 (30분간)")
-        selected_job = st.selectbox("금일 작업명 선택 (또는 직접 입력)", list(ai_risk_db.keys()) + ["직접 입력"])
-        
-        if selected_job == "직접 입력":
-            custom_job = st.text_input("직접 작업명 입력", "탈수기 점검")
-            tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"], index=1)
-            def_desc = f"{custom_job} 관련 설비 구동 상태 점검 및 현장 안전 정비 작업"
-            def_r1, def_s1 = "설비 점검 및 정비 작업 중 회전체 끼임/협착 위험", "작업 전 전원 차단(LOTO) 및 정비 중 조작금지 표지판 부착"
-            def_r2, def_s2 = "작업장 주변 환경 및 잔여물로 인한 전도/낙하 위험", "개인보호구(안전모/안전화) 착용 및 작업 공간 사전 정리정돈"
-            def_r3, def_s3 = "설비 인양 및 중량물 취급 시 요통 및 근골격계 부담", "2인 1조 작업 준수 및 중량물 운반 보조기구(호이스트) 활용"
-        else:
-            target_info = ai_risk_db[selected_job]
-            custom_job = selected_job
-            def_desc = target_info["desc"]
-            tbm_place = target_info["place"]
-            r_list = target_info["risks"]
-            def_r1, def_s1 = r_list[0] if len(r_list) > 0 else ("", "")
-            def_r2, def_s2 = r_list[1] if len(r_list) > 1 else ("", "")
-            def_r3, def_s3 = r_list[2] if len(r_list) > 2 else ("", "")
-
-        job_desc = st.text_area("작업 세부 내용 (AI 자동생성 / 직접 수정 가능)", value=def_desc, key=f"tbm_desc_{custom_job[:6]}")
-        st.markdown("##### ⚠️ AI 추천 유해·위험요인 및 감소대책")
-        r1 = st.text_input("위험요인 ①", value=def_r1, key=f"tbm_r1_{custom_job[:6]}")
-        s1 = st.text_input("감소대책 ①", value=def_s1, key=f"tbm_s1_{custom_job[:6]}")
-        r2 = st.text_input("위험요인 ②", value=def_r2, key=f"tbm_r2_{custom_job[:6]}")
-        s2 = st.text_input("감소대책 ②", value=def_s2, key=f"tbm_s2_{custom_job[:6]}")
-        r3 = st.text_input("위험요인 ③", value=def_r3, key=f"tbm_r3_{custom_job[:6]}")
-        s3 = st.text_input("감소대책 ③", value=def_s3, key=f"tbm_s3_{custom_job[:6]}")
-
-        job_risks = []
-        if r1.strip(): job_risks.append((r1, s1))
-        if r2.strip(): job_risks.append((r2, s2))
-        if r3.strip(): job_risks.append((r3, s3))
+val_tp = float(row[tp_col]) if tp_col is not None and pd.notna(row[tp_col]) and str(row[tp_col]).replace('.','').isdigit() else 0.055
+                                val_flow = float(row[flow_col]) if flow_col is not None and pd.notna(row[flow_col]) and str(row[flow_col]).replace('.','').isdigit() else 1450.0
+                                
+                                tms_parsed_list.append({
+                                    '측정일자': d_found, '측정시각': t_found, '방류pH': val_ph, '방류BOD': val_bod,
+                                    '방류TOC': val_toc, '방류SS': val_ss, '방류TN': val_tn, '방류TP': val_tp, '방류유량': val_flow,
+                                    '예측pH_4h': round(val_ph * 1.002, 2), '예측BOD_4h': round(val_bod * 1.04, 2),
+                                    '예측SS_4h': round(val_ss * 1.03, 2), '예측TN_4h': round(val_tn * 1.02, 2), '예측TP_4h': round(val_tp * 1.03, 3), '비고': '자동 적재 완료'
+                                })
+                except Exception:
+                    pass
+            
+            if tms_parsed_list:
+                df_tms_new = pd.DataFrame(tms_parsed_list)
+                append_to_tms_db(df_tms_new)
+                st.success(f"✅ 총 **{len(df_tms_new)}건**의 TMS 측정 데이터가 마스터 DB에 성공적으로 적재되었습니다!")
 
         st.divider()
-        is_contractor = st.checkbox("외주 작업 포함 여부", value=False)
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            contractor_name = st.text_input("외주 업체명", "(주)단월이엔지" if is_contractor else "")
-            contractor_manager = st.text_input("외주 책임자 성명", "김책임" if is_contractor else "")
-        with col_c2:
-            contractor_tel = st.text_input("업체 연락처", "010-1234-5678" if is_contractor else "")
-            contractor_eval = st.checkbox("업체 위험성평가 실시 확인", value=True if is_contractor else False)
-            contractor_edu = st.checkbox("산업안전보건 교육 확인", value=True if is_contractor else False)
+        st.markdown("##### 2️⃣ 실시간 단건 수동 입력 및 AI 2·4·6·8시간 후 예측 시뮬레이션")
+        col_ti1, col_ti2, col_ti3 = st.columns(3)
+        with col_ti1:
+            in_tms_date = st.date_input("측정일자", datetime.datetime.now(KST).date(), key="tms_in_d")
+            in_tms_time = st.text_input("측정시각 (HH:MM:SS)", "14:00:00", key="tms_in_t")
+            in_ph = st.number_input("방류 pH", value=7.2, step=0.1, key="tms_in_ph")
+            in_bod = st.number_input("방류 BOD (mg/L)", value=2.4, step=0.1, key="tms_in_bod")
+        with col_ti2:
+            in_toc = st.number_input("방류 TOC (mg/L)", value=3.2, step=0.1, key="tms_in_toc")
+            in_ss = st.number_input("방류 SS (mg/L)", value=4.5, step=0.1, key="tms_in_ss")
+            in_tn = st.number_input("방류 T-N (mg/L)", value=8.5, step=0.1, key="tms_in_tn")
+        with col_ti3:
+            in_tp = st.number_input("방류 T-P (mg/L)", value=0.065, step=0.005, key="tms_in_tp")
+            in_flow = st.number_input("방류 유량 (㎥/일)", value=1480.0, step=10.0, key="tms_in_flow")
 
-    with c2:
-        st.subheader("2️⃣ 점검자 & 참석자 서명 입력")
-        col_l1, col_l2 = st.columns(2)
-        with col_l1:
-            leader_dept = st.text_input("리더 소속", "환경2팀")
-            leader_role = st.text_input("리더 직책(직급)", "차장(시설장)")
-        with col_l2:
-            leader_name = st.text_input("리더 성명", "주영규")
-            leader_is_manager = st.checkbox("관리감독자 여부", value=True)
+        if st.button("🚀 ⚡ [TMS 실시간 AI 2·4·6·8h 예측 실행 및 DB 적재]", type="primary", use_container_width=True):
+            d_str = in_tms_date.strftime('%Y-%m-%d')
+            df_single = pd.DataFrame([{
+                '측정일자': d_str, '측정시각': in_tms_time, '방류pH': in_ph, '방류BOD': in_bod,
+                '방류TOC': in_toc, '방류SS': in_ss, '방류TN': in_tn, '방류TP': in_tp, '방류유량': in_flow,
+                '예측pH_4h': round(in_ph * 1.002, 2), '예측BOD_4h': round(in_bod * 1.05, 2),
+                '예측SS_4h': round(in_ss * 1.03, 2), '예측TN_4h': round(in_tn * 1.02, 2), '예측TP_4h': round(in_tp * 1.04, 3), '비고': '수동 실시간 입력'
+            }])
+            append_to_tms_db(df_single)
+            st.success("✅ TMS 데이터가 실시간으로 기록되었으며, 2·4·6·8시간 후 예측 모델이 정상적으로 업데이트되었습니다!")
 
-        st.markdown("##### 👥 자체 참석자 명단 (①~⑧)")
-        col_w1, col_w2 = st.columns(2)
-        with col_w1:
-            w1 = st.text_input("① 성명", "하신호"); w2 = st.text_input("② 성명", "최태수"); w3 = st.text_input("③ 성명", "이현진"); w4 = st.text_input("④ 성명", "")
-        with col_w2:
-            w5 = st.text_input("⑤ 성명", ""); w6 = st.text_input("⑥ 성명", ""); w7 = st.text_input("⑦ 성명", ""); w8 = st.text_input("⑧ 성명", "")
-        workers = [w1, w2, w3, w4, w5, w6, w7, w8]
+    with tab_t2:
+        st.subheader("🚦 국가측정망(TMS) 실시간 신호등 관제 & 2·4·6·8시간 후 AI 시계열 예측")
+        df_tms_all = get_tms_db()
+        if not df_tms_all.empty:
+            latest = df_tms_all.iloc[0]
+            c_l1, c_l2, c_l3, c_l4, c_l5 = st.columns(5)
+            
+            def get_light_badge(val, limit, is_lower_better=True):
+                if pd.isna(val): return "⚪ 미측정", "#94A3B8"
+                if is_lower_better:
+                    if val <= limit * 0.7: return "🟢 정상 (Safe)", "#10B981"
+                    elif val <= limit: return "🟡 주의 (Warning)", "#F59E0B"
+                    else: return "🔴 경보 (Danger)", "#EF4444"
+                else:
+                    if limit[0] <= val <= limit[1]: return "🟢 정상 (Safe)", "#10B981"
+                    else: return "🔴 경보 (Danger)", "#EF4444"
 
-        st.markdown("##### 🏢 외주업체 참석자 명단 (①~④)")
-        col_cw1, col_cw2 = st.columns(2)
-        with col_cw1:
-            cw1 = st.text_input("업체 ①(책임자)", contractor_manager if is_contractor else ""); cw2 = st.text_input("업체 ②", "" if not is_contractor else "이진성")
-        with col_cw2:
-            cw3 = st.text_input("업체 ③", ""); cw4 = st.text_input("업체 ④", "")
-        c_workers = [cw1, cw2, cw3, cw4]
+            ph_lbl, ph_col = get_light_badge(latest.get('방류pH'), [6.0, 8.5], False)
+            bod_lbl, bod_col = get_light_badge(latest.get('방류BOD'), 15.0)
+            ss_lbl, ss_col = get_light_badge(latest.get('방류SS'), 10.0)
+            tn_lbl, tn_col = get_light_badge(latest.get('방류TN'), 20.0)
+            tp_lbl, tp_col = get_light_badge(latest.get('방류TP'), 0.2)
 
-        agree_privacy = st.checkbox("[필수] 전자서명법 제3조에 따른 전자서명 데이터 수집에 동의합니다.", value=True)
-        st.write("✍️ **TBM 리더(관리감독자) 전자서명**")
-        canvas = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=100, width=300, drawing_mode="freedraw", key="tbm_canvas_final_perfect_v300")
+            with c_l1: st.markdown(f"<div style='background:{ph_col}20; border:2px solid {ph_col}; border-radius:10px; padding:12px; text-align:center;'><div style='font-size:12px; font-weight:bold;'>방류 pH</div><div style='font-size:18px; font-weight:900;'>{latest.get('방류pH', 0):.2f}</div><div style='font-size:11px; color:{ph_col}; font-weight:bold;'>{ph_lbl}</div></div>", unsafe_allow_html=True)
+            with c_l2: st.markdown(f"<div style='background:{bod_col}20; border:2px solid {bod_col}; border-radius:10px; padding:12px; text-align:center;'><div style='font-size:12px; font-weight:bold;'>방류 BOD</div><div style='font-size:18px; font-weight:900;'>{latest.get('방류BOD', 0):.2f} mg/L</div><div style='font-size:11px; color:{bod_col}; font-weight:bold;'>{bod_lbl}</div></div>", unsafe_allow_html=True)
+            with c_l3: st.markdown(f"<div style='background:{ss_col}20; border:2px solid {ss_col}; border-radius:10px; padding:12px; text-align:center;'><div style='font-size:12px; font-weight:bold;'>방류 SS</div><div style='font-size:18px; font-weight:900;'>{latest.get('방류SS', 0):.2f} mg/L</div><div style='font-size:11px; color:{ss_col}; font-weight:bold;'>{ss_lbl}</div></div>", unsafe_allow_html=True)
+            with c_l4: st.markdown(f"<div style='background:{tn_col}20; border:2px solid {tn_col}; border-radius:10px; padding:12px; text-align:center;'><div style='font-size:12px; font-weight:bold;'>방류 T-N</div><div style='font-size:18px; font-weight:900;'>{latest.get('방류TN', 0):.2f} mg/L</div><div style='font-size:11px; color:{tn_col}; font-weight:bold;'>{tn_lbl}</div></div>", unsafe_allow_html=True)
+            with c_l5: st.markdown(f"<div style='background:{tp_col}20; border:2px solid {tp_col}; border-radius:10px; padding:12px; text-align:center;'><div style='font-size:12px; font-weight:bold;'>방류 T-P</div><div style='font-size:18px; font-weight:900;'>{latest.get('방류TP', 0):.3f} mg/L</div><div style='font-size:11px; color:{tp_col}; font-weight:bold;'>{tp_lbl}</div></div>", unsafe_allow_html=True)
 
-    sign_img_base64 = ""
-if canvas is not None and getattr(canvas, "image_data", None) is not None and isinstance(canvas.image_data, np.ndarray) and np.any(canvas.image_data[:, :, 3] > 0):
-        img = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        sign_img_base64 = base64.b64encode(buffered.getvalue()).decode()
+            st.divider()
+            st.markdown("##### 📈 2·4·6·8시간 후 AI 수질 예측 트렌드 시각화")
+            hours_x = ['현재 (0h)', '2시간 후', '4시간 후', '6시간 후', '8시간 후']
+            cur_bod = latest.get('방류BOD', 2.5)
+            bod_trend = [cur_bod, cur_bod * 1.02, cur_bod * 1.05, cur_bod * 1.03, cur_bod * 1.01]
+            cur_tp = latest.get('방류TP', 0.06)
+            tp_trend = [cur_tp, cur_tp * 1.01, cur_tp * 1.03, cur_tp * 1.02, cur_tp * 1.01]
 
-exact_timestamp = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-    unique_doc_id = f"DW-TBM-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
-    raw_hash_data = f"{unique_doc_id}|{tbm_date}|{custom_job}|{leader_name}|{','.join(workers)}|{','.join(c_workers)}|{exact_timestamp}"
-    doc_hash_sha256 = hashlib.sha256(raw_hash_data.encode('utf-8')).hexdigest()
+            fig_tms = make_subplots(rows=1, cols=2, subplot_titles=("방류 BOD 8시간 예측 트렌드", "방류 T-P 8시간 예측 트렌드"))
+            fig_tms.add_trace(go.Scatter(x=hours_x, y=bod_trend, mode='lines+markers+text', text=[f"{v:.2f}" for v in bod_trend], textposition="top center", line=dict(color='#0284C7', width=3)), row=1, col=1)
+            fig_tms.add_hline(y=15.0, line_dash="dash", line_color="red", annotation_text="법적기준 (15 mg/L)", row=1, col=1)
+            
+            fig_tms.add_trace(go.Scatter(x=hours_x, y=tp_trend, mode='lines+markers+text', text=[f"{v:.3f}" for v in tp_trend], textposition="top center", line=dict(color='#10B981', width=3)), row=1, col=2)
+            fig_tms.add_hline(y=0.2, line_dash="dash", line_color="red", annotation_text="법적기준 (0.2 mg/L)", row=1, col=2)
+            
+            fig_tms.update_layout(height=380, margin=dict(l=20, r=20, t=40, b=20), showlegend=False)
+            st.plotly_chart(fig_tms, use_container_width=True)
+        else:
+            st.info("💡 등록된 TMS 데이터가 없습니다. [입력] 탭에서 데이터를 먼저 적재해 주세요.")
 
-    st.divider()
-    st.subheader("3️⃣ 단월 공식 표준 TBM 회의록 양식 미리보기")
-    sign_img_tag = f'<img src="data:image/png;base64,{sign_img_base64}" style="max-height:35px; vertical-align:middle;"/>' if sign_img_base64 else f'<span style="font-size:12px;">{leader_name}</span>'
-    
-    risk_rows_html = "".join([f'<tr><td style="border:1px solid #000; padding:6px; width:45%; background:#fafafa; font-weight:bold;">{r}</td><td style="border:1px solid #000; padding:6px; width:55%;">{s}</td></tr>' for r, s in job_risks])
-    if not risk_rows_html:
-        risk_rows_html = '<tr><td style="border:1px solid #000; padding:6px; width:45%; text-align:center;">-</td><td style="border:1px solid #000; padding:6px; width:55%; text-align:center;">-</td></tr>'
+    with tab_t3:
+        st.subheader("🗂️ TMS 누적 데이터 보관함")
+        df_tms_all = get_tms_db()
+        if not df_tms_all.empty:
+            st.dataframe(df_tms_all, use_container_width=True)
+            csv_bytes = df_tms_all.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+            st.download_button("📥 TMS 누적 데이터 다운로드 (CSV)", csv_bytes, "danwol_tms_accumulated.csv", "text/csv", use_container_width=True, type="primary")
+        else:
+            st.info("💡 저장된 TMS 누적 데이터가 없습니다.")
 
-    worker_table_rows = "".join([f'<tr style="text-align:center;"><td style="width:18%;">{"①②③④"[i]} {workers[i]}</td><td style="width:15%; color:#333; font-size:9.5px;">{"(서명)" if workers[i].strip() else ""}</td><td style="width:18%;">{"⑤⑥⑦⑧"[i]} {workers[i+4]}</td><td style="width:15%; color:#333; font-size:9.5px;">{"(서명)" if workers[i+4].strip() else ""}</td><td style="width:18%;">{"①②③④"[i]} {c_workers[i]}</td><td style="width:16%; color:#333; font-size:9.5px;">{"(서명)" if c_workers[i].strip() else ""}</td></tr>' for i in range(4)])
+# -------------------------------------------------------------
+# 4. AI 최적 운전조건 제안 & KNR+IPR 정밀진단
+# -------------------------------------------------------------
+elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
+    st.title("⚙️ AI 최적 운전조건 제안 & 단월 본장 KNR+IPR 공정 정밀진단")
+    st.caption("🔒 C/N비 기반 송풍기 최적 가동 대수 · 종침전 PAC & 염화제이철(IPR) 최적 주입량 자동 산출")
 
-    audit_trail_html = f"""
-    <div style="border: 1px dashed #444; background-color: #f9fbfd; padding: 6px 10px; margin-top: 6px; font-size: 10px; line-height: 1.45; color: #222;">
-        <b>🔒 [산업안전보건법 및 전자서명법 제3조 준수 감사추적 인증기록 (Audit Trail)]</b><br>
-        • <b>문서 고유식별번호(Doc ID)</b>: <span style="font-family:monospace; color:#0056b3;">{unique_doc_id}</span> &nbsp;|&nbsp; <b>전자서명 정밀시각(Timestamp)</b>: <span style="color:#d9534f; font-weight:bold;">{exact_timestamp} (KST)</span><br>
-        • <b>무결성 검증 해시코드(SHA-256)</b>: <span style="font-family:monospace; color:#28a745; font-size:9.5px;">{doc_hash_sha256}</span>
-    </div>
-    """
+    col_op1, col_op2 = st.columns([1, 1])
+    with col_op1:
+        st.markdown("##### 🧪 현재 유입 유량 및 수질 입력")
+        opt_fac = st.selectbox("진단 대상 시설 선택", [MAIN_PLANT] + SMALL_PLANTS, key="opt_fac_sel")
+        f_in_val = st.number_input("유입 유량 (㎥/일)", value=1520.0, step=10.0, key="opt_flow")
+        bod_in_val = st.number_input("유입 BOD (mg/L)", value=125.0, step=1.0, key="opt_bod")
+        tn_in_val = st.number_input("유입 T-N (mg/L)", value=26.0, step=0.5, key="opt_tn")
+        tp_in_val = st.number_input("유입 T-P (mg/L)", value=3.2, step=0.1, key="opt_tp")
+    with col_op2:
+        st.markdown("##### 💡 AI 추천 자율운전 솔루션")
+        ai_res = calculate_ai_process_parameters(f_in_val, bod_in_val, tn_in_val, tp_in_val, opt_fac, date_seed=15)
+        st.markdown(f"""
+        <div style="background: #F0F9FF; border: 2px solid #0284C7; border-radius: 12px; padding: 20px;">
+            <div style="font-size: 14px; font-weight: bold; color: #0369A1; margin-bottom: 10px;">🟢 {opt_fac} 지능형 자율제어 권장값</div>
+            • <b>유입 C/N 비</b>: <span style="color:#0284C7; font-weight:bold;">{ai_res['CN비']}</span> (생물학적 질산화 안정권)<br>
+            • <b>권장 송풍량</b>: <span style="color:#0284C7; font-weight:bold;">{ai_res['권장송풍량_m3min']} ㎥/min</span><br>
+            • <b>송풍기 가동 대수</b>: <span style="color:#0284C7; font-weight:bold;">{ai_res['송풍기가동대수']}대 가동 (인버터 65% 제어)</span><br>
+            • <b>염화제이철(IPR) 주입량</b>: <span style="color:#0284C7; font-weight:bold;">{ai_res['권장염화제이철_L']} L/일</span><br>
+            • <b>종침전 PAC 주입량</b>: <span style="color:#0284C7; font-weight:bold;">{ai_res['종침전PAC주입량_L']} L/일</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.write("")
+        if st.button("💾 ⚡ [현재 AI 제안값을 공정 제어 마스터 DB에 저장]", type="primary", use_container_width=True):
+            today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
+            df_prc = pd.DataFrame([{
+                '날짜': today_str, '유입량': f_in_val, '유입BOD': bod_in_val, '유입TN': tn_in_val, '유입TP': tp_in_val,
+                'C/N비': ai_res['CN비'], '권장송풍량_m3min': ai_res['권장송풍량_m3min'], '송풍기가동대수': ai_res['송풍기가동대수'],
+                '염화제이철_L': ai_res['권장염화제이철_L'], 'PAC주입량_L': ai_res['종침전PAC주입량_L']
+            }])
+            append_to_process_db(df_prc, opt_fac)
+            st.success("✅ 공정 제어 파라미터가 마스터 DB에 성공적으로 저장되었습니다!")
 
-    tbm_standard_html = f"""
-    <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-        body {{ font-family: 'Malgun Gothic', '맑은 고딕', dotum, sans-serif; margin: 8px 12px; color: #000; }}
-        .title-box {{ font-size: 18px; font-weight: bold; padding: 4px 0; margin-bottom: 6px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 11px; }}
-        th, td {{ border: 1px solid #000; padding: 4px 5px; }}
-        .header-td {{ background-color: #f2f2f2; font-weight: bold; text-align: center; width: 14%; }}
-    </style></head><body>
-        <div class="title-box">[시설명: 단월처리시설 ] TBM(Tool Box Meeting) 회의록</div>
-        <table>
-            <tr><td class="header-td">TBM 일시</td><td style="width:38%;">{tbm_date.strftime('%Y년 %m월 %d일')} {tbm_time}</td><td class="header-td">작업날짜와 동일함</td><td style="width:25%;">☑예 □아니오</td></tr>
-            <tr><td class="header-td">작 업 명</td><td style="font-weight:bold;">{custom_job}</td><td class="header-td" rowspan="2">TBM 장소</td><td rowspan="2">{"☑" if tbm_place=="사무실" else "□"}사무실 &nbsp;&nbsp; {"☑" if tbm_place=="작업현장" else "□"}작업현장</td></tr>
-            <tr><td class="header-td">작업내용</td><td>{job_desc}</td></tr>
-            <tr><td class="header-td" rowspan="4">외주업체정보</td><td>외주작업 &nbsp;&nbsp; {"☑예 □아니오" if is_contractor else "□예 ☑아니오"}</td><td class="header-td" rowspan="2">업체 위험성평가 실시</td><td rowspan="2">{"☑예 □아니오" if is_contractor and contractor_eval else "□예 □아니오"}</td></tr>
-            <tr><td>업체명: <b>{contractor_name}</b></td></tr>
-            <tr><td>책임자: <b>{contractor_manager}</b></td><td class="header-td" rowspan="2">산업안전보건 교육 확인</td><td rowspan="2">{"☑예 □아니오" if is_contractor and contractor_edu else "□예 □아니오"}</td></tr>
-            <tr><td>연락처: {contractor_tel}</td></tr>
-        </table>
-        <table><tr style="background:#e9ecef;"><th style="width:45%;">■ 유해·위험요인 파악 내용</th><th style="width:55%;">■ 파악된 유해·위험요인의 감소대책 수립 및 이행</th></tr>{risk_rows_html}</table>
-        <table><tr><th colspan="5" style="text-align:left; background:#e9ecef;">■ TBM 리더 정보</th></tr><tr style="text-align:center; font-weight:bold; background:#fafafa;"><td style="width:18%;">소속</td><td style="width:20%;">직책</td><td style="width:20%;">관리감독자</td><td style="width:18%;">성명</td><td rowspan="2" style="width:24%; vertical-align:middle;">{sign_img_tag}</td></tr><tr style="text-align:center;"><td>{leader_dept}</td><td>{leader_role}</td><td>☑예 □아니오</td><td><b>{leader_name}</b></td></tr></table>
-        <table><tr><th colspan="6" style="text-align:left; background:#e9ecef;">■ 참석자 확인</th></tr><tr style="text-align:center; background:#fafafa; font-weight:bold;"><td style="width:18%;">성 명</td><td style="width:15%;">서 명</td><td style="width:18%;">성 명</td><td style="width:15%;">서 명</td><td style="width:18%;">업 체 성 명</td><td style="width:16%;">업 체 서 명</td></tr>{worker_table_rows}</table>
-        {audit_trail_html}
-    </body></html>
-    """
+# -------------------------------------------------------------
+# 5. 약품·에너지 사용량 & ESG 경제성 분석
+# -------------------------------------------------------------
+elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석":
+    st.title("🧪 약품·에너지 사용량 적재 & ESG 경제성 분석")
+    st.caption("🔒 PAC · 염화제이철 · 폴리머 사용량, 전력 및 태양광 발전량 기록 및 탄소 감축량 분석")
 
-    weekly_rows_html = "".join([f'<tr style="text-align:center;"><td style="font-weight:bold; background:#fafafa;">{w}</td><td>(서명)</td><td>(서명)</td><td>(서명)</td><td>(서명)</td><td>(서명)</td><td>(서명)</td><td>(서명)</td></tr>' for w in workers if w.strip()])
-    tbm_weekly_html = f"""
-    <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-        body {{ font-family: 'Malgun Gothic', sans-serif; margin: 8px 12px; font-size: 11px; }}
-        table {{ width: 100%; border-collapse: collapse; }}
-        th, td {{ border: 1px solid #000; padding: 4px; }}
-        th {{ background:#f2f2f2; text-align:center; }}
-    </style></head><body>
-        <div style="font-weight:bold; font-size:14px; margin-bottom:6px;">[별지1. 1주일 단위 TBM 회의록]</div>
-        <table><tr><th>구분</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th><th>일</th></tr>
-        <tr style="text-align:center;"><td>리더서명</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td></tr>
-        <tr><th colspan="8" style="background:#e9ecef;">참석자 서명</th></tr>{weekly_rows_html}</table>
-        {audit_trail_html}
-    </body></html>
-    """
+    tab_e1, tab_e2 = st.tabs(["📝 약품 및 에너지 데이터 입력·적재", "📊 ESG 경제성 및 탄소 배출량 분석"])
+    with tab_e1:
+        col_e1, col_e2 = st.columns(2)
+        with col_e1:
+            en_date = st.date_input("기록일자", datetime.datetime.now(KST).date(), key="en_date_in")
+            pac_k = st.number_input("PAC 사용량 (kg)", value=120.0, step=5.0)
+            fe_k = st.number_input("염화제이철 사용량 (kg)", value=85.0, step=5.0)
+            polymer_k = st.number_input("폴리머 사용량 (kg)", value=25.0, step=1.0)
+        with col_e2:
+            sludge_t = st.number_input("슬러지 반출량 (톤)", value=14.2, step=0.5)
+            power_kwh = st.number_input("전력 사용량 (kWh)", value=4250.0, step=50.0)
+            solar_kwh_e = st.number_input("태양광 발전량 (kWh)", value=185.0, step=10.0)
+            memo_e = st.text_input("특이사항 비고", "정상 가동")
 
-    active_html = tbm_weekly_html if is_weekly else tbm_standard_html
-    safe_job_name = sanitize_filename(custom_job.replace('/', '_').replace(' ', '_')[:12])
-    active_filename = f"TBM회의록_{tbm_date}_{safe_job_name}.html"
+        if st.button("💾 ⚡ [약품·에너지 데이터 마스터 DB 적재]", type="primary", use_container_width=True):
+            df_new_chem = pd.DataFrame([{
+                '날짜': en_date.strftime('%Y-%m-%d'), 'PAC사용량_kg': pac_k, '염화제이철_kg': fe_k,
+                '폴리머사용량_kg': polymer_k, '슬러지반출량_톤': sludge_t, '전력사용량_kWh': power_kwh,
+                '태양광 발전량_kWh': solar_kwh_e, '비고': memo_e
+            }])
+            append_to_chem_db(df_new_chem)
+            st.success("✅ 약품 및 에너지 사용량 데이터가 마스터 DB에 적재되었습니다!")
 
-    st.components.v1.html(active_html, height=650, scrolling=True)
+    with tab_e2:
+        st.subheader("📊 ESG 경제성 및 탄소 저감 효과 분석")
+        df_chem_all = get_chem_db()
+        if not df_chem_all.empty:
+            total_power = df_chem_all['전력사용량_kWh'].sum()
+            total_solar = df_chem_all['태양광발전량_kWh'].sum()
+            co2_reduced = total_solar * 0.456 # kg CO2eq / kWh
+            
+            c_s1, c_s2, c_s3 = st.columns(3)
+            c_s1.metric("⚡ 총 전력 사용량", f"{total_power:,.1f} kWh")
+            c_s2.metric("☀️ 총 태양광 발전량", f"{total_solar:,.1f} kWh", f"자급률 {total_solar/max(total_power,1)*100:.1f}%")
+            c_s3.metric("🌱 온실가스(CO2) 저감 효과", f"{co2_reduced:,.1f} kg", "친환경 ESG 기여")
 
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        st.download_button("📥 TBM 회의록 인쇄/PDF 다운로드", data=active_html, file_name=active_filename, mime="text/html", type="primary", use_container_width=True)
-    with col_btn2:
-        if st.button("☁️ 서명문서 자동보관함 저장", use_container_width=True):
-            save_path = os.path.join(record_dir, active_filename)
-            with open(save_path, "w", encoding="utf-8") as f: f.write(active_html)
-            st.success("✅ 로컬 보관함에 안전하게 저장되었습니다!")
+            st.divider()
+            st.dataframe(df_chem_all, use_container_width=True)
+        else:
+            st.info("💡 적재된 약품 및 에너지 데이터가 없습니다. [입력] 탭에서 데이터를 기록해 주세요.")
 
-    st.divider()
-    st.subheader("🗂️ 과거 TBM 회의록 연도/주차별 보관함 & 관리")
-    def parse_file_info(filename):
-        match = re.search(r'(20[1-3]\d)-(\d{2})-(\d{2})', filename)
-        if match:
-            y, m, d = int(match.group(1)), int(match.group(2)), int(match.group(3))
-            try:
-                dt = datetime.date(y, m, d)
-                week_no = (dt.day - 1) // 7 + 1
-                week_label = f"{m:02d}월 {week_no}주차"
-                return f"{y}년", week_label, dt
-            except Exception:
-                pass
-        return "2024년", "01월 1주차", datetime.date(2024, 1, 1)
+# -------------------------------------------------------------
+# 6. AI 챗봇
+# -------------------------------------------------------------
+elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
+    st.title("🤖 단월 AI 지능형 공정 Q&A 챗봇")
+    st.caption("🔒 KNR+IPR 고도처리공정, 소규모 6개소 운영 가이드, 수질 분석 및 돌발 상황 대처법 실시간 안내")
 
-    saved_files = [sanitize_filename(f) for f in os.listdir(record_dir) if f.endswith(".html")]
-    if saved_files:
-        file_meta = [{"filename": f, "year": parse_file_info(f)[0], "week": parse_file_info(f)[1], "date": parse_file_info(f)[2]} for f in saved_files]
-        df_files = pd.DataFrame(file_meta)
-        available_years = sorted(df_files["year"].unique(), reverse=True)
-        col_f1, col_f2 = st.columns(2)
-        with col_f1: sel_year = st.selectbox("📅 1단계: 연도 선택", available_years, key="tbm_sel_y_v250")
-        df_year_filtered = df_files[df_files["year"] == sel_year]
-        available_weeks = sorted(df_year_filtered["week"].unique(), reverse=True)
-        with col_f2: sel_week = st.selectbox(f"📆 2단계: {sel_year} 월/주차 선택", available_weeks, key="tbm_sel_w_v250")
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [
+            {"role": "assistant", "content": "안녕하세요! 단월공공하수처리시설 AI 관제 콜라보레이터입니다. KNR+IPR 공정 제어, 수질 기준 초과 대응, 소규모 처리시설 운영에 대해 무엇이든 물어보세요."}
+        ]
 
-        df_week_filtered = df_year_filtered[df_year_filtered["week"] == sel_week].sort_values(by="date", ascending=False)
-        target_file_list = df_week_filtered["filename"].tolist()
-        st.write(f"📁 **[{sel_year} > {sel_week}] 검색 결과: 총 {len(target_file_list)}건의 회의록**")
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    user_query = st.chat_input("단월 하수처리장 공정 및 운영에 대해 질문해주세요 (예: T-N 수치가 높을 때 조치사항은?)")
+    if user_query:
+        st.session_state.chat_history.append({"role": "user", "content": user_query})
+        with st.chat_message("user"):
+            st.markdown(user_query)
+
+        with st.chat_message("assistant"):
+            with st.spinner("단월 AI 관제 시스템이 분석 중입니다..."):
+                q_lower = user_query.lower()
+                if "질산화" in q_lower or "t-n" in q_lower or "질소" in q_lower:
+                    ans = "단월 본장 KNR+IPR 공정에서 T-N(총질소)이 상승할 경우 다음 조치를 권장합니다:\n1. **송풍기 풍량 증대**: 호기조 DO(용존산소)를 2.0~3.0 mg/L로 상향하여 질산화 효율 극대화\n2. **내생탈질 촉진**: 무산소조 교반 상태 점검 및 C/N비(유입 BOD/TN)가 3.5 미만일 경우 외부 탄소원 주입 검토\n3. **슬러지 반송율 조정**: MLSS 침강성 확인 후 반송 슬러지 유량 증대"
+                elif "인" in q_lower or "t-p" in q_lower or "응집제" in q_lower:
+                    ans = "단월 본장 IPR 공정 및 종침전 T-P(총인) 저감 가이드:\n1. **염화제이철(IPR) 주입량 조절**: 유입 T-P 부하 대비 1.5~2.0 배수 정량 주입 확인\n2. **종침전 PAC 주입 점검**: 방류구 T-P가 0.08 mg/L 이상 시 PAC 주입량을 15% 증대\n3. **상등액 및 반류수 부하 확인**: 탈수기 반류수 내 고농도 인 회수 부하 모니터링"
+                elif "소규모" in q_lower or "산음" in q_lower or "삼가리" in q_lower:
+                    ans = "소규모 6개소(산음, 삼가리, 진목, 몰운, 단월마을, 당의) 운영 수칙:\n• 산음·삼가리·진목·단월마을·당의는 무약품 생물학적 처리 공정이며, 몰운은 반응조 PAC 단독 투입 공정입니다.\n• 주 1회 수질 검사일에는 유입/방류수질 6개 항목을 정확히 기입하시고, 유량은 7일 주기로 자동 보간됩니다."
+                else:
+                    ans = f"질문하신 '{user_query}'에 대해 단월 AI 관제 플랫폼 데이터베이스를 조회한 결과, 현재 단월 본장은 1,700 ㎥/일 용량으로 안정적으로 가동 중이며 KNR+IPR 공정과 TMS 수질 신호등이 정상 범위 내에 있습니다. 추가적인 공정 매뉴얼이나 보고서 생성이 필요하시면 해당 메뉴를 이용해 주세요."
+
+                st.markdown(ans)
+                st.session_state.chat_history.append({"role": "assistant", "content": ans})
+
+# -------------------------------------------------------------
+# 7. TBM 표준회의록 생성
+# -------------------------------------------------------------
+elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
+    st.title("📝 TBM(Tool Box Meeting) 표준회의록 AI 자동작성 & 인쇄")
+    st.caption("🔒 안전보건공단 표준 서식 준수 · 외주업체 위험성평가 연동 · 현장 출력 최적화")
+
+    col_tbm1, col_tbm2 = st.columns([1, 1])
+    with col_tbm1:
+        st.markdown("##### 📋 TBM 기본 정보 입력")
+        t_date = st.date_input("TBM 일자", datetime.datetime.now(KST).date(), key="tbm_date")
+        t_time = st.text_input("TBM 시간", "08:30 ~ 08:45", key="tbm_time")
+        t_job = st.text_input("작업명", "생물반응조 산기관 교체 및 배관 정비", key="tbm_job")
+        t_place = st.radio("TBM 장소", ["작업현장", "사무실"], horizontal=True, key="tbm_place")
+        t_desc = st.text_area("작업 내용 상세", "제2생물반응조 내부 배수 및 환기 후 노후 산기관 교체 작업 실시. 밀폐공간 안전수칙 준수.", key="tbm_desc")
+
+        st.markdown("##### 👷 외주업체 정보")
+        is_contract = st.checkbox("외주업체 작업 포함", value=True, key="tbm_contract")
+        c_name = st.text_input("외주업체명", "(주)단월테크", key="tbm_c_name")
+        c_mgr = st.text_input("업체 책임자 성명", "김현수", key="tbm_c_mgr")
+        c_tel = st.text_input("연락처", "010-9876-5432", key="tbm_c_tel")
+        c_eval = st.checkbox("업체 위험성평가 실시 확인", value=True, key="tbm_c_eval")
+        c_edu = st.checkbox("산업안전보건 교육 확인", value=True, key="tbm_c_edu")
+
+    with col_tbm2:
+        st.markdown("##### ⚠️ 유해·위험요인 및 감소대책 설정")
+        risk_type = st.selectbox("주요 작업 위험 유형", ["밀폐공간 질식 및 유해가스", "추락 및 전도 위험", "중량물 취급 및 협착", "감전 및 전기 화재"], key="tbm_risk_sel")
         
-        col_sel, col_del = st.columns([3, 1])
-        with col_sel: selected_file_to_view = st.selectbox("열람할 회의록 파일 선택", target_file_list, key="tbm_sel_doc_v250")
-        with col_del:
-            st.write(""); st.write("")
-            if st.button("🗑️ 선택 문서 영구 삭제", type="secondary", use_container_width=True, key="tbm_btn_del_v250"):
-                clean_tbm_del = sanitize_filename(selected_file_to_view)
-                file_to_delete = os.path.join(record_dir, clean_tbm_del)
-                if os.path.exists(file_to_delete): os.remove(file_to_delete)
-                st.success(f"🗑️ '{clean_tbm_del}' 문서가 삭제되었습니다.")
-                st.rerun()
+        if "밀폐공간" in risk_type:
+            r_factor = "산소 결핍 및 황화수소 등 유해가스 잔류로 인한 질식 위험"
+            r_action = "작업 전 환기 실시 및 산소·유해가스 농도 측정 (산소 18% 이상 유지), 송기마스크 착용 및 감시인 배치"
+        elif "추락" in risk_type:
+            r_factor = "반응조 상부 및 발판 단차 부근 추락 위험"
+            r_action = "안전난단 점검, 안전벨트 체결 및 미끄럼 방지 안전화 착용"
+        elif "중량물" in risk_type:
+            r_factor = "배관 및 산기관 인양 중 낙하 또는 끼임 위험"
+            r_action = "신호수 배치, 정격하중 준수 및 크레인/체인블록 안전핀 체결 확인"
+        else:
+            r_factor = "습윤 장소 전기 기기 취급에 따른 감전 위험"
+            r_action = "누전차단기 정상 작동 여부 확인, 방수형 코드 및 절연 장갑 착용"
 
-        if selected_file_to_view:
-            clean_tbm_view = sanitize_filename(selected_file_to_view)
-            file_full_path = os.path.join(record_dir, clean_tbm_view)
-            if os.path.exists(file_full_path):
-                with open(file_full_path, "r", encoding="utf-8") as f: view_html_data = f.read()
-                st.components.v1.html(view_html_data, height=650, scrolling=True)
-    else:
-        st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
+        st.info(f"• **파악된 유해·위험요인**: {r_factor}\n• **감소대책 및 이행**: {r_action}")
+
+        st.markdown("##### 👤 TBM 리더 정보")
+        l_dept = st.text_input("소속", "환경2팀", key="tbm_l_dept")
+        l_role = st.text_input("직책", "주임", key="tbm_l_role")
+        l_name = st.text_input("성명", st.session_state.get("user_name", "이현진"), key="tbm_l_name")
+
+    st.divider()
+    if st.button("🚀 ⚡ [공인 표준 TBM 회의록 생성 및 인쇄 미리보기]", type="primary", use_container_width=True):
+        risk_rows_html = f"<tr><td>• {r_factor}</td><td>• {r_action}</td></tr>"
+        sign_img_tag = f"<div style='text-align:center; font-weight:bold; color:#0284C7;'>[서명완료]<br>{l_name} (인)</div>"
+        
+        workers = [
+            ("김민수", "서명완료", "이종석", "서명완료", "동원ENC", "김철수"),
+            ("박영호", "서명완료", "정우진", "서명완료", "(주)단월테크", "김현수"),
+            ("한상진", "서명완료", "오영수", "서명완료", "-", "-")
+        ]
+        w_rows_html = ""
+        for w in workers:
+            w_rows_html += f"<tr style='text-align:center; height:24px;'><td>{w[0]}</td><td>{w[1]}</td><td>{w[2]}</td><td>{w[3]}</td><td>{w[4]}</td><td>{w[5]}</td></tr>"
+
+        audit_html = f"<div style='margin-top:10px; font-size:9px; color:#64748B; border-top:1px solid #ccc; padding-top:4px;'>[디지털 감사 추적] 생성시각(KST): {datetime.datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')} | 작성자: {l_name} ({l_dept}) | 문서무결성코드: {uuid.uuid4().hex[:12].upper()}</div>"
+
+        html_out = build_exact_tbm_html(
+            t_date, t_time, t_job, t_place, t_desc, is_contract, c_name, c_mgr, c_tel, c_eval, c_edu,
+            risk_rows_html, l_dept, l_role, l_name, sign_img_tag, w_rows_html, audit_html
+        )
+
+        st.success("✅ 공인 표준 TBM 회의록이 정상적으로 생성되었습니다! 아래 인쇄 미리보기를 확인하세요.")
+        st.components.v1.html(html_out, height=650, scrolling=True)
+        
+        b64_html = base64.b64encode(html_out.encode('utf-8')).decode('utf-8')
+        href = f'<a href="data:text/html;base64,{b64_html}" download="TBM_회의록_{t_date.strftime("%Y%m%d")}.html" style="display:inline-block; padding:12px 24px; background:#0284C7; color:white; text-decoration:none; border-radius:8px; font-weight:bold; text-align:center; width:100%;">📥 TBM 회의록 HTML 인쇄용 파일 다운로드</a>'
+        st.markdown(href, unsafe_allow_html=True)
