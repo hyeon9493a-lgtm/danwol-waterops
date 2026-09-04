@@ -2278,7 +2278,7 @@ if canvas is not None and getattr(canvas, "image_data", None) is not None and is
         img.save(buffered, format="PNG")
         sign_img_base64 = base64.b64encode(buffered.getvalue()).decode()
 
-    exact_timestamp = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+exact_timestamp = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
     unique_doc_id = f"DW-TBM-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
     raw_hash_data = f"{unique_doc_id}|{tbm_date}|{custom_job}|{leader_name}|{','.join(workers)}|{','.join(c_workers)}|{exact_timestamp}"
     doc_hash_sha256 = hashlib.sha256(raw_hash_data.encode('utf-8')).hexdigest()
