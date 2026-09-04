@@ -2272,7 +2272,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         canvas = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=100, width=300, drawing_mode="freedraw", key="tbm_canvas_final_perfect_v300")
 
     sign_img_base64 = ""
-   if canvas.image_data is not None and isinstance(canvas.image_data, np.ndarray) and np.any(canvas.image_data[:, :, 3] > 0):
+if canvas is not None and getattr(canvas, "image_data", None) is not None and isinstance(canvas.image_data, np.ndarray) and np.any(canvas.image_data[:, :, 3] > 0):
         img = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
         buffered = io.BytesIO()
         img.save(buffered, format="PNG")
