@@ -1488,7 +1488,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서":
         </table>
 
         <div style="margin-top:20px; text-align:right; line-height: 1.4;">
-            보고자: <b>주영규</b> (서명 또는 인)<br>
+            보고자: <b>이현진</b> (서명 또는 인)<br>
             작성 일시: {report_timestamp} (KST)
         </div>
     </body></html>
