@@ -1,7 +1,5 @@
 streamlit
 pandas
-numpy
-plotly
 openpyxl
-streamlit-drawable-canvas
-pillow
+plotly
+pytz
