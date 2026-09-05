@@ -18,12 +18,11 @@ import io
 import zipfile
 import openpyxl
 import warnings
-from zoneinfo import ZoneInfo  # 👈 여기에 추가
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# 한국 표준시(KST) 타임존 정의 (ZoneInfo 적용)
-KST = ZoneInfo("Asia/Seoul")  # 👈 이 부분으로 수정
+# 한국 표준시(KST, UTC+9) 타임존 정의
+KST = datetime.timezone(datetime.timedelta(hours=9))
 
 # 1. 페이지 설정 & 프리미엄 블루 테마 CSS
 st.set_page_config(
@@ -106,14 +105,15 @@ for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, HWPX_RECORD_DIR]:
         os.makedirs(p)
 
 def sanitize_filename(filename):
-    """경로 조작(Path Traversal) 방지 함수"""
+    """[보안 패치] 경로 조작(Path Traversal) 방지 함수"""
     clean_name = os.path.basename(str(filename))
     return re.sub(r'[^a-zA-Z0-9가-힣._\-\(\)\s]', '', clean_name)
 
 def hash_pw(pw_str):
-    """비밀번호 SHA-256 단방향 해시 암호화"""
+    """[보안 패치] 비밀번호 SHA-256 단방향 해시 암호화"""
     return hashlib.sha256(pw_str.encode('utf-8')).hexdigest()
 
+# 관리자 마스터 비밀번호 해시 (yp1311!!)
 ADMIN_PW_HASH = hash_pw("yp1311!!")
 WHITELIST_HASHES = [
     hash_pw("DW-PASS-2026"),
@@ -840,6 +840,7 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
         
+        # Col 1 (A): 날짜
         c1 = ws.cell(r_idx, 1, dt.date())
         c1.number_format = 'yyyy-mm-dd'
         c1.font = font_data
@@ -852,12 +853,16 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             last_f_in = float(lookup[d_str].get('유입량'))
             last_f_out = float(lookup[d_str].get('방류량', last_f_in if fac_name != '삼가리' else default_out_f))
 
+        # ⭐️ [핵심 매핑] Col 2 (B: 유입량), Col 5 (E: 처리량-고도) -> 동일 유입량 기입
         c_b = ws.cell(r_idx, 2, last_f_in); c_b.font = font_data; c_b.alignment = align_data_right
         c_e = ws.cell(r_idx, 5, last_f_in); c_e.font = font_data; c_e.alignment = align_data_right
+        # Col 6 (F: 방류량)
         c_f = ws.cell(r_idx, 6, last_f_out); c_f.font = font_data; c_f.alignment = align_data_right
 
+        # 수질 기입 (주 1회 검사일만 기입, 비워진 항목(pH, 수온, 생태독성 등)은 100% 빈칸 유지)
         r_match = lookup.get(d_str, None)
         if r_match is not None:
+            # 유입수질 6개 항목 (I, J, K, L, M, N열 / Cols 9~14)
             col_map_in = [
                 (9, '유입BOD'), (10, '유입TOC'), (11, '유입SS'),
                 (12, '유입TN'), (13, '유입TP'), (14, '유입대장균')
@@ -868,6 +873,7 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
                     c = ws.cell(r_idx, col_idx, float(v))
                     c.font = font_data; c.alignment = align_data_right
                     
+            # 방류수질 6개 항목 (Q, R, S, T, U, V열 / Cols 17~22)
             col_map_out = [
                 (17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'),
                 (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')
@@ -1145,7 +1151,7 @@ menu = st.sidebar.radio(
         "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제",
         "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단",
         "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석",
-        "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% 로컬 폐쇄망)",
+        "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)",
         "📝 7. TBM 표준회의록 AI 자동작성/출력"
     ]
 )
@@ -1329,186 +1335,81 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                 st.download_button("📦 개인하수 6개소 누적 ZIP 다운로드", zip_p_buf.getvalue(), f"개인하수6개소_누적통합_{sel_cum_year}_{sel_period.split()[0]}.zip", use_container_width=True, type="primary")
             else:
                 st.info("해당 기간의 개인하수 시설 데이터가 없습니다.")
+
 # -------------------------------------------------------------
-# 2. 공공하수도시설 월간보고서 자동작성/출력 (고도화 버전)
+# 2. HWPX 월간보고서
 # -------------------------------------------------------------
-elif menu == "📊 2. 공공하수도시설 월간보고서":
-    st.title("📊 단월공공하수처리시설 월간운영 보고서")
-    st.caption("🔒 엑셀 운영일지 연동 · 최근 6개월 추이 자동완성 · 태양광 및 슬러지 자동계산 · 추진실적 자동분류 및 수기수정 지원")
+elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편철 & 보관함":
+    st.title("📊 단월공공하수처리시설 대행사업 월간보고서 (HWPX)")
+    st.caption("🔒 최근 6개월 슬라이딩 윈도우 동적 반영 · 슬러지/태양광 실데이터 치환 · 한글(HWPX) 표준 편철 및 보관")
 
-    report_dir = "report_records"
-    if not os.path.exists(report_dir):
-        os.makedirs(report_dir)
+    tab_hw_w, tab_hw_a = st.tabs(["✍️ [생성] 월간보고서 AI 자동편철", "🗂️ [보관함] 연도/월별 HWPX 보관소 & 삭제"])
+    with tab_hw_w:
+        col_m1, col_m2 = st.columns([1, 2])
+        with col_m1:
+            sel_report_year = st.selectbox("📅 대상 연도", [2026, 2025, 2024], index=0)
+            sel_report_month = st.selectbox("📅 대상 월", list(range(1, 13)), index=7)
+            hwpx_file_up = st.file_uploader("📂 원본 HWPX 양식 업로드 (선택)", type=["hwpx"])
+        with col_m2:
+            m_win = [(sel_report_month - 5 + i - 1) % 12 + 1 for i in range(6)]
+            m_win_str = ', '.join([f'{m}월' for m in m_win])
+            st.success(f"📌 **최근 6개월 슬라이딩 윈도우 자동 연동**: **{m_win_str}**")
 
-    # 1. 엑셀 파일 업로드 (운영일지 및 실험실 데이터)
-    st.subheader("📂 1. 운영일지 및 실험실 데이터 엑셀 업로드")
-    uploaded_excel = st.file_uploader("1번 항목의 운영일지 및 실험실 데이터 엑셀 파일을 업로드하세요.", type=["xlsx", "xls"], key="monthly_excel_v2")
-    
-    # 엑셀 데이터 파싱 시뮬레이션 (업로드 없을 경우 기본값 세팅)
-    excel_data_loaded = False
-    parsed_inflow, parsed_outflow, parsed_bod, parsed_cod, parsed_ss, parsed_tn = 45250.0, 44800.0, 3.2, 12.5, 4.1, 8.2
-    auto_electrical, auto_mechanical, auto_etc = [], [], []
+        st.markdown("##### ⚙️ 월간 운전 통계 및 주요 실적 입력")
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            sludge_avg = st.number_input("당월 슬러지 평균 함수율 (%)", value=78.5, step=0.1)
+            sludge_max = st.number_input("최대 함수율 (%)", value=80.2, step=0.1)
+            sludge_min = st.number_input("최소 함수율 (%)", value=76.8, step=0.1)
+        with col_s2:
+            solar_kwh = st.number_input(f"{sel_report_month}월 태양광 발전량 (kWh)", value=4320.0, step=10.0)
 
-    if uploaded_excel is not None:
-        try:
-            df_excel = pd.read_excel(uploaded_excel)
-            excel_data_loaded = True
-            st.success("✅ 운영일지 및 실험실 엑셀 파일이 성공적으로 연동되었습니다!")
-            # 실제 파일 구조에 맞춰 파싱 로직 확장 가능 (현재는 연동 상태 시각화)
-            auto_electrical = ["배수펌프 MCC 판넬 차단기 점검 및 접지 확인", "전기실 수배전반 온습도 모니터링"]
-            auto_mechanical = ["KNR 생물반응조 산기장치 및 내부반송펌프 점검", "탈수기동 슬러지 이송 스크류 및 여과포 세척"]
-            auto_etc = ["방류수 수질 자가 측정 및 채수 검사", "약품동 PAC 응집제 잔량 확인 및 보충"]
-        except Exception as e:
-            st.warning(f"⚠️ 엑셀 파일 읽기 중 오류 발생 (기본값으로 대체됩니다): {e}")
+        task_memo = st.text_area(
+            "📋 주요 설비 점검 및 보수 실적",
+            value="• 생물반응조 및 2차 침전조 스컴 스키머 정기 점검 및 구동부 윤활유 보충 완료\n• 소규모 6개소 유입 펌프장 및 자동 스크린 주간 순회 점검 및 협잡물 수거 완료\n• 총인 응집제(PAC) 정량 주입펌프 토출 압력 점검 및 배관 세척 작업 완료"
+        )
 
-    st.divider()
+        if st.button("🚀 ⚡ [월간보고서 (HWPX) 자동 생성 및 다운로드]", type="primary", use_container_width=True):
+            sl_data = {"avg": sludge_avg, "max": sludge_max, "min": sludge_min}
+            so_data = {"current_month": solar_kwh}
+            bytes_hwpx = generate_hwpx_monthly_report(sel_report_month, hwpx_file_up, sl_data, so_data, task_memo, sel_report_year)
+            
+            clean_save_name = sanitize_filename(f"공공하수도시설_대행사업_월간보고서({sel_report_month}월)_{sel_report_year}.hwpx")
+            with open(os.path.join(HWPX_RECORD_DIR, clean_save_name), "wb") as f:
+                f.write(bytes_hwpx)
+                
+            st.success(f"✅ [{sel_report_year}년 {sel_report_month}월] 월간보고서가 자동 편철되어 보관함에 저장되었습니다!")
+            st.download_button(
+                label=f"📥 {clean_save_name} 다운로드",
+                data=bytes_hwpx,
+                file_name=clean_save_name,
+                mime="application/hwp+zip",
+                type="primary",
+                use_container_width=True
+            )
 
-    # 2. 시설 기본 개요 (고정)
-    st.subheader("📋 2. 시설 기본 개요 (고정 정보)")
-    col_o1, col_o2 = st.columns(2)
-    with col_o1:
-        st.text_input("시 설 명", "단월공공하수처리시설", disabled=True, key="fix_fac")
-        st.text_input("대행업체명", "양평공사", disabled=True, key="fix_agency")
-        st.text_input("시 설 용 량", "1,700㎥/일", disabled=True, key="fix_cap")
-    with col_o2:
-        st.text_input("공      법", "KNR + IPR(총인처리시설)", disabled=True, key="fix_meth")
-        st.text_input("근  무  자", "총5명(주간 4명, 야간 1명)", disabled=True, key="fix_work")
-        report_month_sel = st.selectbox("보고 대상 월 선택", [f"{i:02d}월" for i in range(1, 13)], index=7, key="rep_target_m")
-
-    st.divider()
-
-    # 3. 과거 저장 데이터를 활용한 최근 6개월 데이터 불러오기 (자동 연동)
-    st.subheader("📈 3. 최근 6개월 유입·방류량 및 태양광/슬러지 현황 (자동 연동 + 수기 보완)")
-    
-    # 로컬 저장된 이전 보고서 파일 검색하여 최근 6개월 데이터 구성 시뮬레이션
-    existing_reports = [f for f in os.listdir(report_dir) if f.endswith(".html")]
-    
-    col_m1, col_m2 = st.columns(2)
-    with col_m1:
-        st.markdown("##### 💧 유입량 및 방류량 현황 (최근 6개월)")
-        inflow_6m = st.text_input("6개월 유입량 데이터 (㎥, 콤마로 구분)", "42,100, 43,500, 44,000, 46,200, 43,800, 45,250", key="in_6m")
-        outflow_6m = st.text_input("6개월 방류량 데이터 (㎥, 콤마로 구분)", "41,800, 43,100, 43,600, 45,900, 43,500, 44,800", key="out_6m")
-    with col_m2:
-        st.markdown("##### 🔬 수질 현황 (해당 월)")
-        q_bod = st.number_input("BOD 방류수 (mg/L)", value=parsed_bod, key="q_bod")
-        q_cod = st.number_input("COD 방류수 (mg/L)", value=parsed_cod, key="q_cod")
-        q_ss = st.number_input("SS 방류수 (mg/L)", value=parsed_ss, key="q_ss")
-        q_tn = st.number_input("T-N 방류수 (mg/L)", value=parsed_tn, key="q_tn")
-
-    st.markdown("##### 🧪 탈수 슬러지 함수율 입력 (해당 월 평균/최대/최소)")
-    s_col1, s_col2, s_col3 = st.columns(3)
-    with s_col1:
-        sludge_avg = st.number_input("함수율 평균 (%)", value=78.5, step=0.1, key="s_avg")
-    with s_col2:
-        sludge_max = st.number_input("함수율 최대 (%)", value=80.2, step=0.1, key="s_max")
-    with s_col3:
-        sludge_min = st.number_input("함수율 최소 (%)", value=76.8, step=0.1, key="s_min")
-
-    st.markdown("##### ☀️ 태양광 월별 발전량 (최근 6개월) 및 자동 계산 (효율 / CO2 감축량)")
-    st.caption("💡 발전량(MWh)만 수기로 입력하시면, 월 발전효율(%)과 CO2 감축량(t)은 표준 산식에 의해 자동으로 산출됩니다.")
-    
-    solar_m1 = st.number_input("1개월 전 발전량 (MWh)", value=12.5, step=0.1, key="sol_1")
-    solar_m2 = st.number_input("2개월 전 발전량 (MWh)", value=14.1, step=0.1, key="sol_2")
-    solar_m3 = st.number_input("3개월 전 발전량 (MWh)", value=15.8, step=0.1, key="sol_3")
-    solar_m4 = st.number_input("4개월 전 발전량 (MWh)", value=13.2, step=0.1, key="sol_4")
-    solar_m5 = st.number_input("5개월 전 발전량 (MWh)", value=11.0, step=0.1, key="sol_5")
-    solar_current = st.number_input("해당 월 발전량 (MWh) [수기 입력]", value=16.4, step=0.1, key="sol_cur")
-
-    # 태양광 자동 계산 로직 (임의 보정 함수식 적용: 효율 = 발전량 연동 환산, CO2 = MWh * 0.456t)
-    calc_efficiency = min(95.0, 75.0 + (solar_current * 0.8))
-    calc_co2 = solar_current * 0.456
-
-    st.info(f"📊 **[자동 계산 결과]** 해당 월 태양광 발전효율: **{calc_efficiency:.1f}%** | CO2 감축량: **{calc_co2:.2f} t**")
-
-    st.divider()
-
-    # 4. 추진실적 (전기/기계/기타 자동 분류 및 수기 수정)
-    st.subheader("🛠️ 4. 주요 추진실적 (전기설비 / 기계설비 / 기타)")
-    st.caption("💡 업로드된 엑셀 운영일지 내용을 바탕으로 자동 분류되었으며, 아래 입력창에서 자유롭게 추가 및 수정이 가능합니다.")
-
-    p_col1, p_col2, p_col3 = st.columns(3)
-    with p_col1:
-        perf_elec = st.text_area("⚡ 전기설비 추진실적", value="\n".join(auto_electrical) if auto_electrical else "• 배수펌프 MCC 판넬 점검 완료\n• 전기실 수배전반 일상 점검", key="p_elec")
-    with p_col2:
-        perf_mech = st.text_area("⚙️ 기계설비 추진실적", value="\n".join(auto_mechanical) if auto_mechanical else "• KNR 생물반응조 산기장치 점검\n• 탈수기동 여과포 고압세척", key="p_mech")
-    with p_col3:
-        perf_etc = st.text_area("📋 기타 추진실적", value="\n".join(auto_etc) if auto_etc else "• 방류수 수질 자가 채수 검사\n• 약품동 PAC 응집제 보충", key="p_etc")
-
-    report_timestamp = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-
-    # 5. 최종 HTML 월간보고서 양식 조립
-    monthly_report_html = f"""
-    <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-        body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 15px; color: #000; font-size: 11px; }}
-        h2 {{ text-align: center; margin-bottom: 15px; font-size: 16px; font-weight: bold; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 12px; }}
-        th, td {{ border: 1px solid #000; padding: 5px 6px; text-align: center; }}
-        th {{ background-color: #f2f2f2; font-weight: bold; }}
-        .left {{ text-align: left; padding-left: 8px; }}
-    </style></head><body>
-        <h2>[단월공공하수처리시설] {report_month_sel} 공공하수도시설 운영 월간보고서</h2>
-        
-        <table>
-            <tr><th colspan="4" class="left">1. 시설 개요</th></tr>
-            <tr><th>시설명</th><td>단월공공하수처리시설</td><th>대행업체명</th><td>양평공사</td></tr>
-            <tr><th>시설용량</th><td>1,700 ㎥/일</td><th>공법</th><td>KNR + IPR(총인처리시설)</td></tr>
-            <tr><th>근무자</th><td colspan="3">총 5명 (주간 4명, 야간 1명)</td></tr>
-        </table>
-
-        <table>
-            <tr><th colspan="3" class="left">2. 유입 및 방류량 현황 (최근 6개월)</th></tr>
-            <tr><th>구분</th><th>총 유입하수량 (㎥)</th><th>총 방류량 (㎥)</th></tr>
-            <tr><td>최근 6개월 추이</td><td>{inflow_6m}</td><td>{outflow_6m}</td></tr>
-        </table>
-
-        <table>
-            <tr><th colspan="5" class="left">3. 수질오염물질 방류 현황 (해당 월)</th></tr>
-            <tr><th>항목</th><th>BOD</th><th>COD</th><th>SS</th><th>T-N</th></tr>
-            <tr><th>방류수 (mg/L)</th><td>{q_bod}</td><td>{q_cod}</td><td>{q_ss}</td><td>{q_tn}</td></tr>
-        </table>
-
-        <table>
-            <tr><th colspan="4" class="left">4. 탈수 슬러지 함수율 현황 (해당 월)</th></tr>
-            <tr><th>평균 함수율</th><td>{sludge_avg}%</td><th>최대 함수율</th><td>{sludge_max}%</td></tr>
-            <tr><th>최소 함수율</th><td colspan="3">{sludge_min}%</td></tr>
-        </table>
-
-        <table>
-            <tr><th colspan="4" class="left">5. 태양광 발전 현황 및 환경 기여도</th></tr>
-            <tr><th>해당 월 발전량</th><td>{solar_current} MWh</td><th>월 발전효율</th><td>{calc_efficiency:.1f}%</td></tr>
-            <tr><th>CO2 감축량</th><td colspan="3">{calc_co2:.2f} t</td></tr>
-        </table>
-
-        <table>
-            <tr><th class="left">6. 주요 추진실적 (전기 / 기계 / 기타)</th></tr>
-            <tr><td class="left" style="line-height: 1.5; padding: 8px;">
-                <b>[전기설비]</b><br>{perf_elec.replace(chr(10), '<br>')}<br><br>
-                <b>[기계설비]</b><br>{perf_mech.replace(chr(10), '<br>')}<br><br>
-                <b>[기타사항]</b><br>{perf_etc.replace(chr(10), '<br>')}
-            </td></tr>
-        </table>
-
-        <div style="margin-top:20px; text-align:right; line-height: 1.4;">
-            보고자: <b>이현진</b> (서명 또는 인)<br>
-            작성 일시: {report_timestamp} (KST)
-        </div>
-    </body></html>
-    """
-
-    st.markdown("### 📄 월간보고서 최종 미리보기")
-    st.components.v1.html(monthly_report_html, height=600, scrolling=True)
-
-    # 파일 다운로드 및 로컬 보관함 저장 버튼
-    report_filename = f"월간보고서_{report_month_sel}_단월공공하수처리시설.html"
-    col_b1, col_b2 = st.columns(2)
-    with col_b1:
-        st.download_button("📥 월간보고서 HTML 인쇄/다운로드", data=monthly_report_html, file_name=report_filename, mime="text/html", type="primary", use_container_width=True)
-    with col_b2:
-        if st.button("☁️ 월간보고서 보관함에 안전 저장", use_container_width=True):
-            save_path = os.path.join(report_dir, report_filename)
-            with open(save_path, "w", encoding="utf-8") as f:
-                f.write(monthly_report_html)
-            st.success("✅ 월간보고서가 보관함에 안전하게 저장되었습니다!")
+    with tab_hw_a:
+        st.subheader("🗂️ 보관된 HWPX 월간보고서 관리")
+        saved_hwpxs = [sanitize_filename(f) for f in os.listdir(HWPX_RECORD_DIR) if f.endswith(".hwpx")]
+        if saved_hwpxs:
+            st.write(f"📁 **보관된 월간보고서: 총 {len(saved_hwpxs)}건**")
+            col_hw1, col_hw2 = st.columns([3, 1])
+            with col_hw1:
+                target_hw = st.selectbox("관리 및 다운로드할 보고서 선택", sorted(saved_hwpxs), key="sel_hwpx_target")
+            with col_hw2:
+                st.write(""); st.write("")
+                if st.button("🗑️ 선택 보고서 삭제", type="secondary", use_container_width=True):
+                    clean_del_hw = sanitize_filename(target_hw)
+                    os.remove(os.path.join(HWPX_RECORD_DIR, clean_del_hw))
+                    st.success(f"🗑️ '{clean_del_hw}' 보고서가 보관함에서 삭제되었습니다.")
+                    st.rerun()
+            if target_hw:
+                clean_hw = sanitize_filename(target_hw)
+                with open(os.path.join(HWPX_RECORD_DIR, clean_hw), "rb") as f:
+                    hw_data = f.read()
+                st.download_button(f"📥 선택 보고서 다시 다운로드 ({clean_hw})", hw_data, file_name=clean_hw, mime="application/hwp+zip", use_container_width=True)
+        else:
+            st.info("💡 아직 보관된 월간보고서가 없습니다.")
 
 # -------------------------------------------------------------
 # 3. TMS 관제
@@ -2042,73 +1943,171 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             st.info("💡 아직 누적된 약품·에너지 데이터가 없습니다.")
 
 # -------------------------------------------------------------
-# 6. 온프레미스 100% 로컬 지능형 Q&A 엔진 (외부 통신 완전 배제)
+# 6. Q&A 챗봇
 # -------------------------------------------------------------
-elif menu == "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% 로컬 폐쇄망)":
-    st.title("🤖 단월 하수처리시설 온프레미스 공정 지식 엔진")
-    st.caption("🔒 **[보안 인증 완료]** 외부 인터넷/해외 LLM 통신 100% 차단 · 공사 내부 격리망 전용 로컬 전문가 추론 시스템")
+elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
+    st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미 (Gemini 연동)")
+    st.caption("💧 단월 본장(1,700 ㎥/일, KNR+IPR) · 소규모 6개소 · 개인하수 6개소 · 송풍기/3대 약품/TMS 예측/비상운전 전 공정 전문 상담")
 
-    def query_danwol_local_secure_ai(user_query):
-        """[보안 패치] 외부 API 호출 없이 로컬 격리망에서만 100% 추론하는 안전 엔진"""
+    with st.expander("🔑 Google Gemini API Key 설정 (선택)", expanded=False):
+        api_key_input = st.text_input("Gemini API Key 입력 (입력 시 실시간 생성형 AI로 동작합니다)", type="password", value=os.environ.get("GEMINI_API_KEY", ""))
+        if api_key_input:
+            os.environ["GEMINI_API_KEY"] = api_key_input
+            st.success("✅ Gemini API Key가 등록되었습니다.")
+
+    def query_danwol_full_process_ai(user_query):
         q = user_query.lower().strip()
+        
+        gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if gemini_key:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=gemini_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                system_instruction = (
+                    "당신은 양평군 '단월공공하수처리시설(본장 1700㎥/일, KNR+IPR)' 및 소규모 6개소(산음, 삼가리, 진목, 몰운, 단월마을, 당의), "
+                    "개인하수 6개소의 하수처리 공정 최고 전문가 AI입니다. "
+                    "사용자의 질문에 맞춰 실무적이고 구체적인 운전 파라미터(DO, MLSS, SRT, C/N비, 약품 투입량 등)를 제시하며 명쾌하게 답변하십시오."
+                )
+                response = model.generate_content(f"{system_instruction}\n\n질문: {user_query}")
+                if response and response.text:
+                    return response.text
+            except Exception as e:
+                pass
 
-        if any(k in q for k in ["약품", "효율", "절감", "pac", "염철", "폴리머", "비용"]):
+        if any(k in q for k in ["약품 효율", "약품 절감", "효율성", "약품비", "약품 최적화", "주입량 최적화", "약품 관리"]):
             return (
-                "💡 **[단월 본장 3대 약품(PAC·염화제이철·폴리머) 효율성 극대화 전략]**\n\n"
-                "1. **IPR 공정 염화제이철(FeCl3 38%) 1차 불용화**:\n"
-                "   - 유입 T-P 부하량에 맞춘 Fe/P 몰비 1.3~1.5 정밀 주입 (과잉 투입 시 슬러지 증가 방지)\n"
-                "2. **2차 침전조 전단 PAC(17%) 보조 주입**:\n"
-                "   - IPR 선제거 후 잔류 인 농도(0.05 mg/L 이하) 확인 후 플록 보조용으로 최소 주입 (일 25~35 L)\n"
-                "3. **탈수기동 폴리머(Polymer) 농도 제어**:\n"
-                "   - TS% 맞춤 0.15% 균일 용해 및 숙성 40분 준수로 연간 약품비 15% 이상 절감 달성"
+                "💡 **[단월 본장 3대 약품(PAC·염화제이철·폴리머) 효율성 극대화 및 절감 전략]**\n\n"
+                "1. **IPR 공정 염화제이철(FeCl3 38%) 1차 불용화 효율화**:\n"
+                "   - **혼화 강도 유지**: 급속혼화조의 교반기 속도(G값 300~500 $s^{-1}$)를 유지하여 약품과 인산염의 접촉 효율 극대화\n"
+                "   - **몰비 최적화**: 유입 T-P 부하량에 맞춘 Fe/P 몰비를 1.3~1.5 수준으로 정밀 연동 주입 (과잉 투입 시 슬러지 발생량 증가 및 알칼리도 저하 방지)\n\n"
+                "2. **2차 침전조 전단 PAC(17%) 보조 주입 절감**:\n"
+                "   - IPR에서 85% 이상 인을 선제거한 후 잔류 인 농도(0.05 mg/L 이하)를 측정하여 PAC은 플록 형성 보조 목적으로만 최소 주입 (일 25~35 L 내외)\n"
+                "   - Jar-Test를 주 1회 실시하여 최적 응집제 주입률(ppm) 재산정\n\n"
+                "3. **탈수기동 폴리머(Polymer) 효율화**:\n"
+                "   - 슬러지 농도(TS%)에 맞춰 용해 농도를 0.1~0.2%로 균일하게 숙성(Aging 시간 40분 이상)시켜 미반응 낭비 방지\n"
+                "   - 탈수기 케이크 함수율 78% 이하를 목표로 피드량과 폴리머 주입 펌프를 비례 제어하여 연간 약품비 15% 이상 절감 달성"
             )
-        elif any(k in q for k in ["knr", "질소", "t-n", "탈질", "질산화", "내부반송"]):
+
+        elif any(k in q for k in ["knr", "질소", "t-n", "탈질", "질산화", "내부반송", "무산소"]):
             return (
                 "💡 **[단월 본장 KNR 질소(T-N) 고도처리 제어 가이드]**\n\n"
-                "1. **C/N 비(BOD/T-N) 관리**: 원활한 생물학적 탈질을 위해 C/N 비 **4.0 이상** 확보\n"
-                "2. **호기조 & 무산소조 DO 관리**: 호기조 말단 **1.5 ~ 2.0 mg/L**, 무산소조 **0.2 mg/L 이하**\n"
-                "3. **질산액 내부 반송율**: 유입 유량 대비 **150% ~ 200%** 유지\n"
-                "4. **동절기 대책**: 저수온 시 SRT를 25일 이상으로 연장하여 질산화균 농도 유지"
+                "1. **C/N 비(BOD/T-N) 관리**: 원활한 생물학적 탈질을 위해 C/N 비 **4.0 이상** 확보 (부족 시 외부탄소원 투입 검토)\n"
+                "2. **호기조 & 무산소조 DO 관리**:\n"
+                "   - 호기조 말단 DO: **1.5 ~ 2.0 mg/L** (과포기 시 질산액 반송을 통해 무산소조로 산소가 넘어가 탈질 저해)\n"
+                "   - 무산소조 DO: **0.2 mg/L 이하** (완전 혐기/무산소 교반 유지)\n"
+                "3. **질산액 내부 반송율(IPR 반송)**: 유입 유량 대비 **150% ~ 200%** 유지\n"
+                "4. **질산화율 향상**: 동절기 저수온 시 SRT를 20일 이상으로 길게 가져가 질산화균 농도를 유지하십시오."
             )
-        elif any(k in q for k in ["송풍기", "풍량", "blower", "동력비", "전력"]):
+
+        elif any(k in q for k in ["ipr", "인", "t-p", "총인", "염화제이철", "염철", "pac", "응집"]):
+            return (
+                "💡 **[단월 본장 총인(T-P) 제거 및 약품 주입 제어 지침]**\n\n"
+                "1. **IPR 급속혼화지 선투입 (염화제이철)**: 유입 T-P 2.5~3.0 mg/L 기준 일평균 **60 ~ 70 L/일**을 1차 투입\n"
+                "2. **종침 전단 보조투입 (PAC)**: 잔류 미세 인 제거를 위해 일평균 **20 ~ 30 L/일** 투입\n"
+                "3. **방류수 T-P 목표**: 법적 기준 0.20 mg/L 대비 안전 관리선인 **0.05 mg/L 이하**로 항시 유지"
+            )
+
+        elif any(k in q for k in ["송풍기", "풍량", "blower", "산소", "aor", "동력비", "전력"]):
             return (
                 "💡 **[송풍기 인버터 자동 연동 및 동력비 최적 제어]**\n\n"
-                "1. **AI 권장 풍량 계산식**: $AOR = (Q \\times BOD \\times 1.2 + Q \\times T\\text{-}N \\times 4.57) \\times 10^{-3}$\n"
-                "2. **단월 본장 적정 가동**: 유입 부하 연동 13.5 ~ 14.5 ㎥/min 범위 인버터 가변 제어\n"
-                "3. **절감 효과**: 심야 저부하 시간대 주파수 하향 제어로 **연간 약 18.2% 동력비 절감**"
+                "1. **AI 권장 풍량 계산식**: $AOR = (Q \\times BOD \\times 1.2 + Q \\times T\\text{-}N \\times 4.57) \\times 10^{-3} \\text{ (kg } O_2/\\text{일)}$\n"
+                "2. **단월 본장 적정 가동**: 유입 부하에 맞춰 13.5 ~ 14.5 ㎥/min 범위로 송풍기 1대 인버터 가변 운전\n"
+                "3. **절감 효과**: 심야 저부하 시간대 인버터 주파수 하향(45~50Hz) 제어로 **연간 약 18.2% 동력비 절감**"
             )
-        elif any(k in q for k in ["삼가리", "sbr", "산음", "진목", "몰운", "단월마을", "당의"]):
+
+        elif any(k in q for k in ["팽화", "bulking", "svi", "슬러지 부상", "거품", "스컴", "핀플록"]):
             return (
-                "💡 **[소규모 6개소 맞춤형 공정 제어 수칙]**\n\n"
-                "1. **산음(100㎥/일, SWPP)**: 일체형 수조 하부 슬러지 퇴적 방지 및 정기 인발 (유입/방류 33.3㎥/일)\n"
-                "2. **삼가리(120㎥/일, SBR)**: 비포기 탈질 행정 강화 및 디캔터 배출 관리 (유입 59.1㎥/일, 방류 49.1㎥/일)\n"
-                "3. **진목(23㎥/일, SOD)**: SOD 환원 전위(-150mV) 유지 및 여재 역세척 (유입/방류 2.9㎥/일)\n"
-                "4. **몰운(60㎥/일, IC-SBR)**: 반응조 PAC 직접 투입 연동 (유입/방류 20.3㎥/일)\n"
-                "5. **단월마을(30㎥/일) & 당의(45㎥/일)**: 간헐 포기 60분/비포기 60분 주기 운전"
+                "💡 **[슬러지 팽화(Bulking) 및 침강 불량 긴급 조치 매뉴얼]**\n\n"
+                "1. **사상균성 팽화 대책**: 호기조 DO가 1.0 mg/L 이하로 떨어졌는지 확인 후 송풍량 20% 증량, 반송슬러지에 미량 염소 투입 고려\n"
+                "2. **점성 팽화(영양원 부족) 대책**: 유입 C:N:P 비가 100:5:1에 맞는지 확인\n"
+                "3. **침전조 핀플록 발생 시**: 침전조 전단 PAC 주입량을 일시적으로 15% 증량하여 플록 결합력 보강\n"
+                "4. **슬러지 인발**: MLSS 농도가 4,000 mg/L 이상 과다 축적되지 않도록 잉여슬러지 인발 펌프 가동시간 연장"
             )
-        elif any(k in q for k in ["우천", "강우", "비", "장마", "과유량"]):
+
+        elif any(k in q for k in ["삼가리", "sbr"]):
+            return (
+                "💡 **[삼가리 소규모 시설 (120 ㎥/일, SBR) 공정 제어]**\n\n"
+                "1. **공정 방식**: 회분식 활성슬러지 공정 (100% 무약품 생물학적 고도처리)\n"
+                "2. **질소 수질 조절**: 유입 T-N 상승 시 비포기 교반 시간을 15~20분 연장하여 무산소 탈질 행정 강화\n"
+                "3. **디캔터 배출 관리**: 방류 행정 시 침전 슬러지가 흡입되지 않도록 디캔터 하강 속도 및 수위 센서 점검\n"
+                "4. **유량 특성**: 유입량은 59.1 ㎥/일, 방류량은 49.1 ㎥/일로 관리됩니다."
+            )
+
+        elif any(k in q for k in ["산음", "swpp"]):
+            return (
+                "💡 **[산음 소규모 시설 (100 ㎥/일, SWPP) 공정 제어]**\n\n"
+                "1. **공정 방식**: 수중포기 침전일체형 고도처리 (무약품)\n"
+                "2. **핵심 관리**: 일체형 수조 하부 슬러지 퇴적 방지를 위한 에어레이터 산기 상태 점검 및 주기적 잉여 슬러지 인발\n"
+                "3. **유량 특성**: 유입량과 방류량은 33.3 ㎥/일(동절기 29.1 ㎥/일)로 동일하게 관리됩니다."
+            )
+
+        elif any(k in q for k in ["진목", "보룡", "sod"]):
+            return (
+                "💡 **[진목(보룡리) 소규모 시설 (23 ㎥/일, 고효율오수+SOD) 공정 제어]**\n\n"
+                "1. **공정 방식**: 미생물 접촉산화 + SOD 전용 탈질조 결합 공법\n"
+                "2. **핵심 관리**: 접촉 여재의 생물막 탈락 및 막힘 방지를 위해 주기적 역세척 수행, SOD조 환원 전위(-150mV) 유지\n"
+                "3. **유량 특성**: 유입량과 방류량은 2.9 ㎥/일로 동일하게 관리됩니다."
+            )
+
+        elif any(k in q for k in ["몰운"]):
+            return (
+                "💡 **[몰운 소규모 시설 (60 ㎥/일, IC-SBR) 공정 제어]**\n\n"
+                "1. **공정 특성**: 간헐 포기 회분식 반응조이며, 소규모 중 유일하게 **반응조 PAC 직접 투입 설비** 보유\n"
+                "2. **약품 제어**: 방류 T-P 상승 시 반응조 포기 사이클 후단에 PAC을 일 10~15 L 정량 투입\n"
+                "3. **유량 특성**: 유입량과 방류량은 20.3 ㎥/일로 동일하게 관리됩니다."
+            )
+
+        elif any(k in q for k in ["단월마을", "당의"]):
+            return (
+                "💡 **[단월마을(30 ㎥/일) & 당의(45 ㎥/일) IC-SBR 공정 제어]**\n\n"
+                "1. **공정 방식**: 간헐 포기 회분식 생물학적 고도처리 (무약품)\n"
+                "2. **운전 사이클**: 포기 60분 / 비포기 교반 60분 간헐 반복 주기를 유지하여 질산화와 탈질을 동일 반응조에서 완결\n"
+                "3. **유량 특성**: 단월마을은 11.0 ㎥/일(평균 8.4 ㎥/일), 당의는 44.3 ㎥/일(평균 42.4 ㎥/일)로 유입량과 방류량이 동일합니다."
+            )
+
+        elif any(k in q for k in ["우천", "강우", "비", "장마", "침수", "과유량"]):
             return (
                 "💡 **[우천 및 고유량 유입 시 비상 공정 제어 수칙]**\n\n"
-                "1. **유입 펌프장/스크린**: 자동 스크린 연속 가동 전환 및 침사지 준설 상태 점검\n"
-                "2. **생물반응조**: 미생물 유실 방지를 위해 반송슬러지율을 50%에서 80~100%로 상향\n"
-                "3. **침전조**: 슬러지 월류 방지를 위해 종침 PAC 주입량 20% 긴급 증량"
+                "1. **유입 펌프장 및 스크린**: 협잡물 급증에 대비해 자동 스크린 연속 가동 모드 전환 및 침사지 준설 상태 확인\n"
+                "2. **생물반응조 수리학적 부하 대응**: 반응조 체류시간 단축에 따른 미생물 유실 방지를 위해 반송슬러지율을 평시 50%에서 80~100%로 상향\n"
+                "3. **침전조 및 약품**: 침전조 월류 방지를 위해 종침 PAC 주입량을 20% 증량하여 플록 침강 속도 증대\n"
+                "4. **우수토실 바이패스 관리**: 초기 우수 바이패스 수문 및 방류 수질 계측기 정상 작동 확인"
             )
+
+        elif any(k in q for k in ["동절기", "겨울", "저수온", "수온", "동파"]):
+            return (
+                "💡 **[동절기 저수온(12℃ 이하) 대비 고도처리 운전 대책]**\n\n"
+                "1. **MLSS 농도 상향**: 미생물 활성 저하를 보상하기 위해 MLSS를 평시(3,000 mg/L) 대비 **3,800 ~ 4,200 mg/L**로 상향 운전\n"
+                "2. **SRT(슬러지 일령) 연장**: 질산화균의 증식 속도 둔화에 대응하여 잉여슬러지 인발량을 줄이고 SRT를 25일 이상으로 유지\n"
+                "3. **무산소조 보온 및 교반**: 표면 방열을 최소화하고 혐기 상태를 유지하며 질산액 반송율을 180% 이상으로 유지\n"
+                "4. **동파 방지**: 옥외 약품 배관(PAC/염철) 히팅케이블 작동 점검 및 탈수기동 환기팬 온도 연동 제어"
+            )
+
+        elif any(k in q for k in ["악취", "탈수기", "함수율", "슬러지"]):
+            return (
+                "💡 **[슬러지 탈수 효율 향상 및 탈수기동 악취 저감 대책]**\n\n"
+                "1. **탈수 케이크 함수율 저감**: 원심탈수기 차속(Differential Speed)을 슬러지性에 맞춰 미세 조정하고 양이온 폴리머 주입 농도를 0.15%로 균일 유지\n"
+                "2. **약품 투입점 점검**: 슬러지 공급 배관과 폴리머 라인의 혼화 거리를 확보하여 균일한 플록 형성 유도\n"
+                "3. **탈수기동 악취 저감**: 황화수소(H2S) 발생 억제를 위해 저류조 체류시간을 48시간 이내로 단축하고 탈취탑 약액 세정(차아염소산나트륨/가성소다) pH를 9.5~10.5로 유지"
+            )
+
         else:
             return (
-                f"💡 **[단월 스마트 관제 온프레미스 지식 엔진 진단: '{user_query}']**\n\n"
-                "단월 공공하수처리시설(본장 1,700 ㎥/일, KNR+IPR) 및 소규모 6개소 엔지니어링 데이터를 기반으로 답변합니다.\n\n"
-                "• **공정 제어점**: 유입 C/N비 4.0 이상, 호기조 DO 1.8~2.2 mg/L, IPR 질산액 반송 150~200% 유지\n"
-                "• **약품 제어점**: IPR 염화제이철 1차 선투입 + 종침 PAC 보조 투입으로 T-P 0.05 mg/L 이하 유지\n"
-                "• **보안 상태**: 본 질의응답은 외부 클라우드 통신 없이 내부 Sandbox VM 로컬에서 안전하게 처리되었습니다."
+                f"💡 **[단월 스마트 관제 AI 전문가 진단: '{user_query}']**\n\n"
+                "단월 공공하수처리시설(본장 1,700 ㎥/일, KNR+IPR) 및 관내 소규모 6개소의 엔지니어링 운전 데이터를 바탕으로 답변드립니다.\n\n"
+                "1. **공정 핵심 제어점**: 단월 본장은 유입 C/N비 4.0 이상, 호기조 DO 1.8~2.2 mg/L, IPR 질산액 반송 150~200%를 표준 운전점으로 권장합니다.\n"
+                "2. **약품 투입 가이드**: 인 제거 효율 증대를 위해 IPR 급속혼화지에 염화제이철(FeCl3)을 1차 선투입하고, 2차 침전조 전단에 PAC을 보조 투입하여 방류수 T-P를 0.05 mg/L 이하로 안정화하십시오.\n"
+                "3. **추천 질문**: '본장 약품 효율성 증대방법', 'KNR 질소 제어법', '삼가리 SBR 운전법', '동절기 저수온 대책', '우천시 비상운전 수칙' 등을 질문하시면 더욱 상세한 기술 매뉴얼을 확인하실 수 있습니다."
             )
 
     if "messages" not in st.session_state:
         st.session_state.messages = [{
             "role": "assistant", 
             "content": (
-                "안녕하세요! **단월공공하수처리시설 온프레미스 지능형 공정 엔진**입니다. 💧\n\n"
-                "본 시스템은 외부 인터넷 및 해외 LLM 통신이 **100% 차단된 공사 내부 전산망 전용 엔진**입니다. "
-                "단월 본장(KNR+IPR), 소규모 6개소, 약품/송풍기 제어, 비상운전 지침 등 무엇이든 질문해 주세요."
+                "안녕하세요! **단월공공하수처리시설 스마트 공정관리 AI 어시스턴트**입니다. 💧\n\n"
+                "단월 본장(1,700 ㎥/일, KNR+IPR) 및 관내 소규모 6개소(산음·삼가리·진목·몰운·단월마을·당의), "
+                "송풍기 제어, 3대 약품(염화제이철/PAC/폴리머) 주입, TMS 수질 이상 진단 등 **모든 공정 제어에 대해 무엇이든 질문해 주세요.**"
             )
         }]
 
@@ -2118,7 +2117,7 @@ elif menu == "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% �
     if chip_c1.button("📌 본장 약품 효율성 증대방법", use_container_width=True): quick_q = "본처리장에 대한 약품 효율성 증대방법"
     if chip_c2.button("🧪 본장 KNR 질소(T-N) 제어법", use_container_width=True): quick_q = "단월 본장 KNR 질소(T-N) 고도처리 제어 가이드는?"
     if chip_c3.button("🏡 삼가리 SBR 공정 제어", use_container_width=True): quick_q = "삼가리 SBR 공정 운전 주기 및 질소 수질 조절법은?"
-    if chip_c4.button("🚨 우천/과유량 비상운전 수칙", use_container_width=True): quick_q = "우천 및 고유량 유입 시 비상 공정 제어 수칙은?"
+    if chip_c4.button("🚨 슬러지 팽화/부상 긴급조치", use_container_width=True): quick_q = "슬러지 팽화(Bulking) 및 침강성 불량 시 긴급 조치 매뉴얼은?"
 
     st.divider()
 
@@ -2134,7 +2133,8 @@ elif menu == "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% �
         with st.chat_message("user"):
             st.markdown(user_prompt)
 
-        ans = query_danwol_local_secure_ai(user_prompt)
+        with st.spinner("단월 공정 제어 지식 엔진 분석 중..."):
+            ans = query_danwol_full_process_ai(user_prompt)
 
         with st.chat_message("assistant"):
             st.markdown(ans)
@@ -2427,3 +2427,4 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
                 st.components.v1.html(view_html_data, height=650, scrolling=True)
     else:
         st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
+
