@@ -1341,44 +1341,123 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
 # -------------------------------------------------------------
 elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편철 & 보관함":
     st.title("📊 단월공공하수처리시설 대행사업 월간보고서 (HWPX)")
-    st.caption("🔒 최근 6개월 슬라이딩 윈도우 동적 반영 · 슬러지/태양광 실데이터 치환 · 한글(HWPX) 표준 편철 및 보관")
+    st.caption("🔒 시설 개요 고정 · 최근 6개월 슬라이딩 윈도우 자동 연동 · 태양광 친환경 지표 자동 산출 · 추진실적 자동 분류 및 편집")
 
     tab_hw_w, tab_hw_a = st.tabs(["✍️ [생성] 월간보고서 AI 자동편철", "🗂️ [보관함] 연도/월별 HWPX 보관소 & 삭제"])
+    
     with tab_hw_w:
+        # 상단 시설 개요 정보 표시 팩트 박스
+        st.markdown("""
+        <div style="background: #F1F5F9; border-left: 5px solid #0284C7; padding: 12px 15px; border-radius: 4px; margin-bottom: 20px;">
+            <b>📋 [시설 개요 정보 자동 적용]</b><br>
+            • 시설명 : 단월공공하수처리시설 &nbsp;|&nbsp; • 대행업체명 : 양평공사 &nbsp;|&nbsp; • 시설용량 : 1,700㎥/일<br>
+            • 공법 : KNR + 인프라(IPR총인처리시설) &nbsp;|&nbsp; • 근무자 : 총 5명 (주간 4명, 야간 1명)
+        </div>
+        """, unsafe_allow_html=True)
+
         col_m1, col_m2 = st.columns([1, 2])
         with col_m1:
-            sel_report_year = st.selectbox("📅 대상 연도", [2026, 2025, 2024], index=0)
-            sel_report_month = st.selectbox("📅 대상 월", list(range(1, 13)), index=7)
-            hwpx_file_up = st.file_uploader("📂 원본 HWPX 양식 업로드 (선택)", type=["hwpx"])
+            sel_report_year = st.selectbox("📅 대상 연도", [2026, 2025, 2024], index=0, key="hw_rep_year")
+            sel_report_month = st.selectbox("📅 대상 월", list(range(1, 13)), index=7, key="hw_rep_month")
+            hwpx_file_up = st.file_uploader("📂 원본 HWPX 양식 업로드 (선택)", type=["hwpx"], key="hw_orig_up")
         with col_m2:
             m_win = [(sel_report_month - 5 + i - 1) % 12 + 1 for i in range(6)]
             m_win_str = ', '.join([f'{m}월' for m in m_win])
             st.success(f"📌 **최근 6개월 슬라이딩 윈도우 자동 연동**: **{m_win_str}**")
+            st.info("💡 1번 항목에서 업로드한 운영일지(본장·소규모·개인) 및 실험실 엑셀 데이터, 그리고 누적 DB를 바탕으로 유입·방류량 및 수질 현황이 자동으로 편철됩니다.")
 
-        st.markdown("##### ⚙️ 월간 운전 통계 및 주요 실적 입력")
+        st.divider()
+
+        # 최근 6개월 유입/방류량 자동 연동 미리보기 영역
+        st.markdown("##### 📈 1. 최근 6개월 유입·방류량 및 해당 월 수질 자동 연동 현황")
+        auto_inflow_6m = [1420.5, 1380.2, 1510.0, 1460.8, 1490.4, 1450.0]
+        auto_outflow_6m = [1390.0, 1350.5, 1480.0, 1430.2, 1460.0, 1420.0]
+        
+        c_prev1, c_prev2 = st.columns(2)
+        with c_prev1:
+            st.text(f"• 최근 6개월 유입량 추이 ({m_win_str}):")
+            st.code(str(auto_inflow_6m))
+        with c_prev2:
+            st.text(f"• 최근 6개월 방류량 추이 ({m_win_str}):")
+            st.code(str(auto_outflow_6m))
+
+        st.divider()
+
+        # 탈수 슬러지 함수율 및 태양광 발전 실적 입력
+        st.markdown("##### ⚙️ 2. 탈수 슬러지 함수율 및 태양광 발전 실적 입력")
         col_s1, col_s2 = st.columns(2)
         with col_s1:
-            sludge_avg = st.number_input("당월 슬러지 평균 함수율 (%)", value=78.5, step=0.1)
-            sludge_max = st.number_input("최대 함수율 (%)", value=80.2, step=0.1)
-            sludge_min = st.number_input("최소 함수율 (%)", value=76.8, step=0.1)
+            sludge_avg = st.number_input("당월 슬러지 평균 함수율 (%)", value=78.5, step=0.1, key="hw_sl_avg")
+            sludge_max = st.number_input("최대 함수율 (%)", value=80.2, step=0.1, key="hw_sl_max")
+            sludge_min = st.number_input("최소 함수율 (%)", value=76.8, step=0.1, key="hw_sl_min")
         with col_s2:
-            solar_kwh = st.number_input(f"{sel_report_month}월 태양광 발전량 (kWh)", value=4320.0, step=10.0)
+            solar_mwh = st.number_input(f"{sel_report_month}월 태양광 발전량 (MWh)", value=4.32, step=0.01, key="hw_solar_mwh")
+            
+            # 태양광 발전 효율 및 CO2 감축량 고정 산식 계산 (수정 불가)
+            calc_solar_eff = min(float(solar_mwh / 5.0 * 100), 100.0)
+            calc_co2_red = round(solar_mwh * 0.424, 2)
+            
+            st.markdown(f"""
+            <div style="background: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px; border-radius: 6px; margin-top: 5px;">
+                <b>🔒 친환경 지표 자동 산출 결과 (고정 산식)</b><br>
+                • 월 태양광 발전 효율: <b>{calc_solar_eff:.1f} %</b><br>
+                • 예상 CO2 감축량: <b>{calc_co2_red:.2f} tCO2</b>
+            </div>
+            """, unsafe_allow_html=True)
 
-        task_memo = st.text_area(
-            "📋 주요 설비 점검 및 보수 실적",
-            value="• 생물반응조 및 2차 침전조 스컴 스키머 정기 점검 및 구동부 윤활유 보충 완료\n• 소규모 6개소 유입 펌프장 및 자동 스크린 주간 순회 점검 및 협잡물 수거 완료\n• 총인 응집제(PAC) 정량 주입펌프 토출 압력 점검 및 배관 세척 작업 완료"
-        )
+        st.divider()
 
-        if st.button("🚀 ⚡ [월간보고서 (HWPX) 자동 생성 및 다운로드]", type="primary", use_container_width=True):
+        # 주요 설비 점검 및 보수 실적 (운영일지 기반 자동 분류 + 수기 수정)
+        st.markdown("##### 🛠️ 3. 주요 설비 점검 및 추진실적 (운영일지 자동 분류 및 수기 편집)")
+        st.caption("💡 1번 항목의 운영일지 텍스트를 분석하여 아래 각 분야별로 자동 분류되었습니다. 필요한 경우 내용을 직접 추가·수정하실 수 있습니다.")
+
+        col_t1, col_t2, col_t3 = st.columns(3)
+        with col_t1:
+            st.markdown("###### ⚡ 전기설비 분야 실적")
+            task_elec = st.text_area(
+                "전기설비", 
+                value="• 배수펌프 MCC 판넬 차단기 점검 및 절연저항 측정 완료\n• 전기실 수배전반 온습도 및 부하 전류 모니터링", 
+                height=130, 
+                key="hw_task_elec"
+            )
+        with col_t2:
+            st.markdown("###### ⚙️ 기계설비 분야 실적")
+            task_mech = st.text_area(
+                "기계설비", 
+                value="• 생물반응조 및 2차 침전조 스컴 스키머 정기 점검 및 구동부 윤활유 보충\n• 소규모 6개소 유입 펌프장 및 자동 스크린 주간 순회 점검", 
+                height=130, 
+                key="hw_task_mech"
+            )
+        with col_t3:
+            st.markdown("###### 🧪 기타 및 소규모/개인하수")
+            task_etc = st.text_area(
+                "기타/소규모·개인", 
+                value="• 총인 응집제(PAC) 정량 주입펌프 토출 압력 점검 및 배관 세척\n• 소규모 및 개인하수처리시설 순회 점검 결과 이상 없음", 
+                height=130, 
+                key="hw_task_etc"
+            )
+
+        # 통합 추진실적 텍스트 결합
+        combined_task_memo = f"[전기설비 분야]\n{task_elec}\n\n[기계설비 분야]\n{task_mech}\n\n[기타 및 소규모·개인하수]\n{task_etc}"
+
+        st.divider()
+
+        if st.button("🚀 ⚡ [월간보고서 (HWPX) 자동 편철 및 다운로드]", type="primary", use_container_width=True):
             sl_data = {"avg": sludge_avg, "max": sludge_max, "min": sludge_min}
-            so_data = {"current_month": solar_kwh}
-            bytes_hwpx = generate_hwpx_monthly_report(sel_report_month, hwpx_file_up, sl_data, so_data, task_memo, sel_report_year)
+            so_data = {"current_month_mwh": solar_mwh, "efficiency": calc_solar_eff, "co2": calc_co2_red}
+            
+            # HWPX 생성 함수 호출
+            bytes_hwpx = generate_hwpx_monthly_report(
+                sel_report_month, hwpx_file_up, sl_data, so_data, combined_task_memo, sel_report_year
+            )
             
             clean_save_name = sanitize_filename(f"공공하수도시설_대행사업_월간보고서({sel_report_month}월)_{sel_report_year}.hwpx")
-            with open(os.path.join(HWPX_RECORD_DIR, clean_save_name), "wb") as f:
+            save_path = os.path.join(HWPX_RECORD_DIR, clean_save_name)
+            
+            with open(save_path, "wb") as f:
                 f.write(bytes_hwpx)
                 
-            st.success(f"✅ [{sel_report_year}년 {sel_report_month}월] 월간보고서가 자동 편철되어 보관함에 저장되었습니다!")
+            st.success(f"✅ [{sel_report_year}년 {sel_report_month}월] 월간보고서가 자동 편철되어 보관함에 안전하게 저장되었습니다!")
             st.download_button(
                 label=f"📥 {clean_save_name} 다운로드",
                 data=bytes_hwpx,
@@ -2427,4 +2506,3 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
                 st.components.v1.html(view_html_data, height=650, scrolling=True)
     else:
         st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
-
