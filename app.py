@@ -2024,7 +2024,7 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
 # -------------------------------------------------------------
 # 6. Q&A 챗봇
 # -------------------------------------------------------------
-elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇":
+if menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇":
     st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미")
     st.caption("💧 단월 본장(1,700 ㎥/일, KNR+IPR) · 소규모 6개소 · 개인하수 6개소 · 송풍기/3대 약품/TMS 예측/비상운전 전 공정 전문 상담 (사내 폐쇄망 자체 엔진 연동)")
 
@@ -2032,11 +2032,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇":
         q = user_query.lower().strip()
         
         # [폐쇄망 로컬 AI 엔진 연동 영역]
-        # 외부 Gemini API 호출부를 제거하고 사내 온프레미스 서버(vLLM/로컬 sLLM) 연동 로직으로 대체합니다.
         try:
-            # 예시: 로컬 서버에 구축된 환경·수처리 전문 sLLM API 호출 (Requests 또는 Local Inference Module)
-            # response = local_llm_client.generate(prompt=user_query, system_prompt="양평군 단월공공하수처리시설 공정 전문가...")
-            # if response: return response
             pass
         except Exception as e:
             pass
