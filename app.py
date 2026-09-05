@@ -2039,7 +2039,6 @@ elif menu == "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% �
         if st.button("🧹 대화내용 초기화", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
-
 # -------------------------------------------------------------
 # 7. TBM 표준회의록 AI 자동작성/출력
 # -------------------------------------------------------------
@@ -2048,7 +2047,8 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.caption("🔒 작업명 입력 시 세부내용/3대 위험요인·감소대책 AI 자동완성 · 실시간 직접 수정 및 즉시 반영 · 초단위 감사추적 타임스탬프 탑재")
 
     record_dir = TBM_RECORD_DIR
-    if not os.path.exists(record_dir): os.makedirs(record_dir)
+    if not os.path.exists(record_dir): 
+        os.makedirs(record_dir)
 
     ai_risk_db = {
         "산음리 중계 펌프A 인양 및 인양 상태 점검 작업": {
@@ -2087,6 +2087,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
 
     is_weekly = st.checkbox("📅 **[별지1] 작업내용이 동일하여 1주일 단위로 작성하고자 할 경우 체크**", value=False)
     c1, c2 = st.columns([1, 1])
+    
     with c1:
         st.subheader("1️⃣ 작업 기본정보 & AI 맞춤 시나리오")
         tbm_date = st.date_input("TBM 일자", datetime.date(2026, 8, 20))
@@ -2163,14 +2164,27 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
 
         agree_privacy = st.checkbox("[필수] 전자서명법 제3조에 따른 전자서명 데이터 수집에 동의합니다.", value=True)
         st.write("✍️ **TBM 리더(관리감독자) 전자서명**")
-        canvas = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=100, width=300, drawing_mode="freedraw", key="tbm_canvas_final_perfect_v300")
+        
+        # 캔버스 컴포넌트 오류 방지를 위한 고유 키 적용 및 예외 처리
+        canvas = st_canvas(
+            stroke_width=2, 
+            stroke_color="#000000", 
+            background_color="#F8F9FA", 
+            height=100, 
+            width=300, 
+            drawing_mode="freedraw", 
+            key="tbm_canvas_final_perfect_v301"
+        )
 
     sign_img_base64 = ""
-    if canvas.image_data is not None and np.any(canvas.image_data[:, :, 3] > 0):
-        img = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        sign_img_base64 = base64.b64encode(buffered.getvalue()).decode()
+    try:
+        if canvas.image_data is not None and np.any(canvas.image_data[:, :, 3] > 0):
+            img = Image.fromarray(canvas.image_data.astype('uint8'), 'RGBA')
+            buffered = io.BytesIO()
+            img.save(buffered, format="PNG")
+            sign_img_base64 = base64.b64encode(buffered.getvalue()).decode()
+    except Exception:
+        sign_img_base64 = ""
 
     exact_timestamp = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
     unique_doc_id = f"DW-TBM-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
@@ -2248,7 +2262,8 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     with col_btn2:
         if st.button("☁️ 서명문서 자동보관함 저장", use_container_width=True):
             save_path = os.path.join(record_dir, active_filename)
-            with open(save_path, "w", encoding="utf-8") as f: f.write(active_html)
+            with open(save_path, "w", encoding="utf-8") as f: 
+                f.write(active_html)
             st.success("✅ 로컬 보관함에 안전하게 저장되었습니다!")
 
     st.divider()
@@ -2272,23 +2287,28 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         df_files = pd.DataFrame(file_meta)
         available_years = sorted(df_files["year"].unique(), reverse=True)
         col_f1, col_f2 = st.columns(2)
-        with col_f1: sel_year = st.selectbox("📅 1단계: 연도 선택", available_years, key="tbm_sel_y_v250")
+        with col_f1: 
+            sel_year = st.selectbox("📅 1단계: 연도 선택", available_years, key="tbm_sel_y_v250")
         df_year_filtered = df_files[df_files["year"] == sel_year]
         available_weeks = sorted(df_year_filtered["week"].unique(), reverse=True)
-        with col_f2: sel_week = st.selectbox(f"📆 2단계: {sel_year} 월/주차 선택", available_weeks, key="tbm_sel_w_v250")
+        with col_f2: 
+            sel_week = st.selectbox(f"📆 2단계: {sel_year} 월/주차 선택", available_weeks, key="tbm_sel_w_v250")
 
         df_week_filtered = df_year_filtered[df_year_filtered["week"] == sel_week].sort_values(by="date", ascending=False)
         target_file_list = df_week_filtered["filename"].tolist()
         st.write(f"📁 **[{sel_year} > {sel_week}] 검색 결과: 총 {len(target_file_list)}건의 회의록**")
         
         col_sel, col_del = st.columns([3, 1])
-        with col_sel: selected_file_to_view = st.selectbox("열람할 회의록 파일 선택", target_file_list, key="tbm_sel_doc_v250")
+        with col_sel: 
+            selected_file_to_view = st.selectbox("열람할 회의록 파일 선택", target_file_list, key="tbm_sel_doc_v250")
         with col_del:
-            st.write(""); st.write("")
+            st.write("")
+            st.write("")
             if st.button("🗑️ 선택 문서 영구 삭제", type="secondary", use_container_width=True, key="tbm_btn_del_v250"):
                 clean_tbm_del = sanitize_filename(selected_file_to_view)
                 file_to_delete = os.path.join(record_dir, clean_tbm_del)
-                if os.path.exists(file_to_delete): os.remove(file_to_delete)
+                if os.path.exists(file_to_delete): 
+                    os.remove(file_to_delete)
                 st.success(f"🗑️ '{clean_tbm_del}' 문서가 삭제되었습니다.")
                 st.rerun()
 
@@ -2296,7 +2316,8 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             clean_tbm_view = sanitize_filename(selected_file_to_view)
             file_full_path = os.path.join(record_dir, clean_tbm_view)
             if os.path.exists(file_full_path):
-                with open(file_full_path, "r", encoding="utf-8") as f: view_html_data = f.read()
+                with open(file_full_path, "r", encoding="utf-8") as f: 
+                    view_html_data = f.read()
                 st.components.v1.html(view_html_data, height=650, scrolling=True)
     else:
         st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
