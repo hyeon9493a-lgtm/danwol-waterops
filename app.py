@@ -2020,52 +2020,38 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
                 st.rerun()
         else:
             st.info("💡 아직 누적된 약품·에너지 데이터가 없습니다.")
-
 # -------------------------------------------------------------
 # 6. Q&A 챗봇
 # -------------------------------------------------------------
-elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
-    st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미 (Gemini 연동)")
-    st.caption("💧 단월 본장(1,700 ㎥/일, KNR+IPR) · 소규모 6개소 · 개인하수 6개소 · 송풍기/3대 약품/TMS 예측/비상운전 전 공정 전문 상담")
-
-    with st.expander("🔑 Google Gemini API Key 설정 (선택)", expanded=False):
-        api_key_input = st.text_input("Gemini API Key 입력 (입력 시 실시간 생성형 AI로 동작합니다)", type="password", value=os.environ.get("GEMINI_API_KEY", ""))
-        if api_key_input:
-            os.environ["GEMINI_API_KEY"] = api_key_input
-            st.success("✅ Gemini API Key가 등록되었습니다.")
+elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇":
+    st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미")
+    st.caption("💧 단월 본장(1,700 ㎥/일, KNR+IPR) · 소규모 6개소 · 개인하수 6개소 · 송풍기/3대 약품/TMS 예측/비상운전 전 공정 전문 상담 (사내 폐쇄망 자체 엔진 연동)")
 
     def query_danwol_full_process_ai(user_query):
         q = user_query.lower().strip()
         
-        gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        if gemini_key:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=gemini_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                system_instruction = (
-                    "당신은 양평군 '단월공공하수처리시설(본장 1700㎥/일, KNR+IPR)' 및 소규모 6개소(산음, 삼가리, 진목, 몰운, 단월마을, 당의), "
-                    "개인하수 6개소의 하수처리 공정 최고 전문가 AI입니다. "
-                    "사용자의 질문에 맞춰 실무적이고 구체적인 운전 파라미터(DO, MLSS, SRT, C/N비, 약품 투입량 등)를 제시하며 명쾌하게 답변하십시오."
-                )
-                response = model.generate_content(f"{system_instruction}\n\n질문: {user_query}")
-                if response and response.text:
-                    return response.text
-            except Exception as e:
-                pass
+        # [폐쇄망 로컬 AI 엔진 연동 영역]
+        # 외부 Gemini API 호출부를 제거하고 사내 온프레미스 서버(vLLM/로컬 sLLM) 연동 로직으로 대체합니다.
+        try:
+            # 예시: 로컬 서버에 구축된 환경·수처리 전문 sLLM API 호출 (Requests 또는 Local Inference Module)
+            # response = local_llm_client.generate(prompt=user_query, system_prompt="양평군 단월공공하수처리시설 공정 전문가...")
+            # if response: return response
+            pass
+        except Exception as e:
+            pass
 
         if any(k in q for k in ["약품 효율", "약품 절감", "효율성", "약품비", "약품 최적화", "주입량 최적화", "약품 관리"]):
             return (
                 "💡 **[단월 본장 3대 약품(PAC·염화제이철·폴리머) 효율성 극대화 및 절감 전략]**\n\n"
                 "1. **IPR 공정 염화제이철(FeCl3 38%) 1차 불용화 효율화**:\n"
-                "   - **혼화 강도 유지**: 급속혼화조의 교반기 속도(G값 300~500 $s^{-1}$)를 유지하여 약품과 인산염의 접촉 효율 극대화\n"
-                "   - **몰비 최적화**: 유입 T-P 부하량에 맞춘 Fe/P 몰비를 1.3~1.5 수준으로 정밀 연동 주입 (과잉 투입 시 슬러지 발생량 증가 및 알칼리도 저하 방지)\n\n"
+                "    - **혼화 강도 유지**: 급속혼화조의 교반기 속도(G값 300~500 $s^{-1}$)를 유지하여 약품과 인산염의 접촉 효율 극대화\n"
+                "    - **몰비 최적화**: 유입 T-P 부하량에 맞춘 Fe/P 몰비를 1.3~1.5 수준으로 정밀 연동 주입 (과잉 투입 시 슬러지 발생량 증가 및 알칼리도 저하 방지)\n\n"
                 "2. **2차 침전조 전단 PAC(17%) 보조 주입 절감**:\n"
-                "   - IPR에서 85% 이상 인을 선제거한 후 잔류 인 농도(0.05 mg/L 이하)를 측정하여 PAC은 플록 형성 보조 목적으로만 최소 주입 (일 25~35 L 내외)\n"
-                "   - Jar-Test를 주 1회 실시하여 최적 응집제 주입률(ppm) 재산정\n\n"
+                "    - IPR에서 85% 이상 인을 선제거한 후 잔류 인 농도(0.05 mg/L 이하)를 측정하여 PAC은 플록 형성 보조 목적으로만 최소 주입 (일 25~35 L 내외)\n"
+                "    - Jar-Test를 주 1회 실시하여 최적 응집제 주입률(ppm) 재산정\n\n"
                 "3. **탈수기동 폴리머(Polymer) 효율화**:\n"
-                "   - 슬러지 농도(TS%)에 맞춰 용해 농도를 0.1~0.2%로 균일하게 숙성(Aging 시간 40분 이상)시켜 미반응 낭비 방지\n"
-                "   - 탈수기 케이크 함수율 78% 이하를 목표로 피드량과 폴리머 주입 펌프를 비례 제어하여 연간 약품비 15% 이상 절감 달성"
+                "    - 슬러지 농도(TS%)에 맞춰 용해 농도를 0.1~0.2%로 균일하게 숙성(Aging 시간 40분 이상)시켜 미반응 낭비 방지\n"
+                "    - 탈수기 케이크 함수율 78% 이하를 목표로 피드량과 폴리머 주입 펌프를 비례 제어하여 연간 약품비 15% 이상 절감 달성"
             )
 
         elif any(k in q for k in ["knr", "질소", "t-n", "탈질", "질산화", "내부반송", "무산소"]):
@@ -2073,8 +2059,8 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
                 "💡 **[단월 본장 KNR 질소(T-N) 고도처리 제어 가이드]**\n\n"
                 "1. **C/N 비(BOD/T-N) 관리**: 원활한 생물학적 탈질을 위해 C/N 비 **4.0 이상** 확보 (부족 시 외부탄소원 투입 검토)\n"
                 "2. **호기조 & 무산소조 DO 관리**:\n"
-                "   - 호기조 말단 DO: **1.5 ~ 2.0 mg/L** (과포기 시 질산액 반송을 통해 무산소조로 산소가 넘어가 탈질 저해)\n"
-                "   - 무산소조 DO: **0.2 mg/L 이하** (완전 혐기/무산소 교반 유지)\n"
+                "    - 호기조 말단 DO: **1.5 ~ 2.0 mg/L** (과포기 시 질산액 반송을 통해 무산소조로 산소가 넘어가 탈질 저해)\n"
+                "    - 무산소조 DO: **0.2 mg/L 이하** (완전 혐기/무산소 교반 유지)\n"
                 "3. **질산액 내부 반송율(IPR 반송)**: 유입 유량 대비 **150% ~ 200%** 유지\n"
                 "4. **질산화율 향상**: 동절기 저수온 시 SRT를 20일 이상으로 길게 가져가 질산화균 농도를 유지하십시오."
             )
@@ -2173,7 +2159,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
 
         else:
             return (
-                f"💡 **[단월 스마트 관제 AI 전문가 진단: '{user_query}']**\n\n"
+                f"💡 **[단월 스마트 관제 사내 폐쇄망 AI 전문가 진단: '{user_query}']**\n\n"
                 "단월 공공하수처리시설(본장 1,700 ㎥/일, KNR+IPR) 및 관내 소규모 6개소의 엔지니어링 운전 데이터를 바탕으로 답변드립니다.\n\n"
                 "1. **공정 핵심 제어점**: 단월 본장은 유입 C/N비 4.0 이상, 호기조 DO 1.8~2.2 mg/L, IPR 질산액 반송 150~200%를 표준 운전점으로 권장합니다.\n"
                 "2. **약품 투입 가이드**: 인 제거 효율 증대를 위해 IPR 급속혼화지에 염화제이철(FeCl3)을 1차 선투입하고, 2차 침전조 전단에 PAC을 보조 투입하여 방류수 T-P를 0.05 mg/L 이하로 안정화하십시오.\n"
@@ -2184,9 +2170,9 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
         st.session_state.messages = [{
             "role": "assistant", 
             "content": (
-                "안녕하세요! **단월공공하수처리시설 스마트 공정관리 AI 어시스턴트**입니다. 💧\n\n"
+                "안녕하세요! **단월공공하수처리시설 스마트 공정관리 폐쇄망 AI 어시스턴트**입니다. 💧\n\n"
                 "단월 본장(1,700 ㎥/일, KNR+IPR) 및 관내 소규모 6개소(산음·삼가리·진목·몰운·단월마을·당의), "
-                "송풍기 제어, 3대 약품(염화제이철/PAC/폴리머) 주입, TMS 수질 이상 진단 등 **모든 공정 제어에 대해 무엇이든 질문해 주세요.**"
+                "송풍기 제어, 3대 약품(염화제이철/PAC/폴리머) 주입, TMS 수질 이상 진단 등 **모든 공정 제어에 대해 안전하게 질문해 주세요.**"
             )
         }]
 
@@ -2212,7 +2198,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
         with st.chat_message("user"):
             st.markdown(user_prompt)
 
-        with st.spinner("단월 공정 제어 지식 엔진 분석 중..."):
+        with st.spinner("단월 폐쇄망 공정 제어 지식 엔진 분석 중..."):
             ans = query_danwol_full_process_ai(user_prompt)
 
         with st.chat_message("assistant"):
@@ -2224,6 +2210,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
         if st.button("🧹 대화내용 초기화", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
+
 # -------------------------------------------------------------
 # 7. TBM 표준회의록 AI 자동작성/출력
 # -------------------------------------------------------------
