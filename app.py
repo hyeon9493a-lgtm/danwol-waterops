@@ -18,11 +18,12 @@ import io
 import zipfile
 import openpyxl
 import warnings
+from zoneinfo import ZoneInfo  # 👈 여기에 추가
 
 warnings.filterwarnings('ignore', category=UserWarning, module='openpyxl')
 
-# 한국 표준시(KST, UTC+9) 타임존 정의
-KST = datetime.timezone(datetime.timedelta(hours=9))
+# 한국 표준시(KST) 타임존 정의 (ZoneInfo 적용)
+KST = ZoneInfo("Asia/Seoul")  # 👈 이 부분으로 수정
 
 # 1. 페이지 설정 & 프리미엄 블루 테마 CSS
 st.set_page_config(
