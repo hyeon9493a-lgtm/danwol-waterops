@@ -2409,3 +2409,210 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     else:
         st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
 
+# -------------------------------------------------------------
+# 8. 약품 구매 및 사용 관리 시스템 (분기/상하반기/연간 조회 및 다운로드)
+# -------------------------------------------------------------
+elif menu == "🧪 8. 약품 구매 및 사용 관리":
+    st.title("🧪 단월처리시설 약품 구매 및 사용 통합 관리 시스템")
+    st.caption("📦 약품 구매·사용 내역 실시간 조회 · 분기/상반기/하반기/연간 자동 집계 · 기존 하수도 시스템 업로드 양식 호환 다운로드")
+
+    # 데이터 로드 함수 (기존 업로드 양식 틀 유지)
+    @st.cache_data
+    def load_chem_upload_templates():
+        try:
+            # 약품구매 파일 로드 (0행: 타이틀, 1행: 컬럼명, 2행부터 데이터)
+            buy_raw = pd.read_excel('약품구매.xlsx', header=None)
+            buy_title = buy_raw.iloc[0, 0] if not buy_raw.empty else "약품구매 업로드양식"
+            buy_cols = buy_raw.iloc[1].tolist() if len(buy_raw) > 1 else ['날짜', '약품', '구매량(kg)', '비용(원)', '구매형태']
+            buy_df = buy_raw.iloc[2:].copy()
+            buy_df.columns = buy_cols[:len(buy_df.columns)]
+            buy_df = buy_df.dropna(subset=[buy_df.columns[0], buy_df.columns[1]])
+            buy_df['날짜_dt'] = pd.to_datetime(buy_df[buy_df.columns[0]], errors='coerce')
+        except Exception as e:
+            buy_title = "약품구매 업로드양식"
+            buy_cols = ['날짜', '약품', '구매량(kg)', '비용(원)', '구매형태']
+            buy_df = pd.DataFrame(columns=buy_cols)
+            buy_df['날짜_dt'] = pd.Series(dtype='datetime64[ns]')
+
+        try:
+            # 약품사용 파일 로드 (0행: 타이틀, 1행: 컬럼명, 2행부터 데이터)
+            use_raw = pd.read_excel('약품사용.xlsx', header=None)
+            use_title = use_raw.iloc[0, 0] if not use_raw.empty else "약품사용 업로드양식"
+            use_cols = use_raw.iloc[1].tolist() if len(use_raw) > 1 else ['날짜', '약품', '사용량(kg)', '비용(원)', '사용장소', '사유']
+            use_df = use_raw.iloc[2:].copy()
+            use_df.columns = use_cols[:len(use_df.columns)]
+            use_df = use_df.dropna(subset=[use_df.columns[0], use_df.columns[1]])
+            use_df['날짜_dt'] = pd.to_datetime(use_df[use_df.columns[0]], errors='coerce')
+        except Exception as e:
+            use_title = "약품사용 업로드양식"
+            use_cols = ['날짜', '약품', '사용량(kg)', '비용(원)', '사용장소', '사유']
+            use_df = pd.DataFrame(columns=use_cols)
+            use_df['날짜_dt'] = pd.Series(dtype='datetime64[ns]')
+
+        return buy_df, use_df, buy_title, use_title, buy_cols, use_cols
+
+    buy_data, use_data, buy_title, use_title, buy_cols, use_cols = load_chem_upload_templates()
+
+    # 상단 탭 생성
+    tab1, tab2, tab3 = st.tabs(["🛒 약품 구매 내역 조회", "📊 약품 사용 내역 조회", "📈 하수도 시스템 업로드용 엑셀 다운로드"])
+
+    with tab1:
+        st.subheader("🛒 약품 구매 내역 및 기간별 조회")
+        if not buy_data.empty and '날짜_dt' in buy_data.columns:
+            buy_data['연도'] = buy_data['날짜_dt'].dt.year
+            available_years = sorted(buy_data['연도'].dropna().unique(), reverse=True)
+            
+            c_f1, c_f2 = st.columns(2)
+            with c_f1:
+                sel_buy_year = st.selectbox("조회 연도 선택", available_years, key="buy_year_sel")
+            with c_f2:
+                sel_buy_period = st.selectbox("기간 구분", ["전체", "1분기 (1~3월)", "2분기 (4~6월)", "상반기 (1~6월)", "3분기 (7~9월)", "4분기 (10~12월)", "하반기 (7~12월)"], key="buy_period_sel")
+
+            filtered_buy = buy_data[buy_data['연도'] == sel_buy_year].copy()
+            if "1분기" in sel_buy_period:
+                filtered_buy = filtered_buy[filtered_buy['날짜_dt'].dt.month.isin([1, 2, 3])]
+            elif "2분기" in sel_buy_period:
+                filtered_buy = filtered_buy[filtered_buy['날짜_dt'].dt.month.isin([4, 5, 6])]
+            elif "상반기" in sel_buy_period:
+                filtered_buy = filtered_buy[filtered_buy['날짜_dt'].dt.month.isin([1, 2, 3, 4, 5, 6])]
+            elif "3분기" in sel_buy_period:
+                filtered_buy = filtered_buy[filtered_buy['날짜_dt'].dt.month.isin([7, 8, 9])]
+            elif "4분기" in sel_buy_period:
+                filtered_buy = filtered_buy[filtered_buy['날짜_dt'].dt.month.isin([10, 11, 12])]
+            elif "하반기" in sel_buy_period:
+                filtered_buy = filtered_buy[filtered_buy['날짜_dt'].dt.month.isin([7, 8, 9, 10, 11, 12])]
+
+            display_buy = filtered_buy.drop(columns=['연도', '날짜_dt'], errors='ignore')
+            st.dataframe(display_buy, use_container_width=True)
+        else:
+            st.warning("⚠️ 약품 구매 데이터가 없습니다.")
+
+    with tab2:
+        st.subheader("📊 약품 사용 내역 및 기간별 조회")
+        if not use_data.empty and '날짜_dt' in use_data.columns:
+            use_data['연도'] = use_data['날짜_dt'].dt.year
+            available_use_years = sorted(use_data['연도'].dropna().unique(), reverse=True)
+            
+            uc_f1, uc_f2 = st.columns(2)
+            with uc_f1:
+                sel_use_year = st.selectbox("조회 연도 선택", available_use_years, key="use_year_sel")
+            with uc_f2:
+                sel_use_period = st.selectbox("기간 구분", ["전체", "1분기 (1~3월)", "2분기 (4~6월)", "상반기 (1~6월)", "3분기 (7~9월)", "4분기 (10~12월)", "하반기 (7~12월)"], key="use_period_sel")
+
+            filtered_use = use_data[use_data['연도'] == sel_use_year].copy()
+            if "1분기" in sel_use_period:
+                filtered_use = filtered_use[filtered_use['날짜_dt'].dt.month.isin([1, 2, 3])]
+            elif "2분기" in sel_use_period:
+                filtered_use = filtered_use[filtered_use['날짜_dt'].dt.month.isin([4, 5, 6])]
+            elif "상반기" in sel_use_period:
+                filtered_use = filtered_use[filtered_use['날짜_dt'].dt.month.isin([1, 2, 3, 4, 5, 6])]
+            elif "3분기" in sel_use_period:
+                filtered_use = filtered_use[filtered_use['날짜_dt'].dt.month.isin([7, 8, 9])]
+            elif "4분기" in sel_use_period:
+                filtered_use = filtered_use[filtered_use['날짜_dt'].dt.month.isin([10, 11, 12])]
+            elif "하반기" in sel_use_period:
+                filtered_use = filtered_use[filtered_use['날짜_dt'].dt.month.isin([7, 8, 9, 10, 11, 12])]
+
+            display_use = filtered_use.drop(columns=['연도', '날짜_dt'], errors='ignore')
+            st.dataframe(display_use, use_container_width=True)
+        else:
+            st.warning("⚠️ 약품 사용 데이터가 없습니다.")
+
+    with tab3:
+        st.subheader("📈 하수도 종합시스템 업로드용 맞춤 양식 다운로드")
+        st.markdown("기존에 사용하시던 **원본 업로드 양식 틀(첫 행 타이틀 + 두 번째 행 컬럼 구조)**을 그대로 유지한 채, 선택한 기간의 데이터만 담아 파일로 다운로드합니다.")
+
+        report_year = st.selectbox("📥 대상 연도 선택", [2025, 2024, 2023], key="report_year_sel")
+        report_term = st.selectbox("📥 기간 단위 선택", [
+            "연간 전체 (1년치)", 
+            "상반기 (1~6월)", 
+            "하반기 (7~12월)", 
+            "1분기 (1~3월)", 
+            "2분기 (4~6월)", 
+            "3분기 (7~9월)", 
+            "4분기 (10~12월)"
+        ], key="report_term_sel")
+
+        col_dl1, col_dl2 = st.columns(2)
+
+        # 1. 약품구매 양식 다운로드 버튼
+        with col_dl1:
+            if st.button("🛒 [약품구매] 업로드 양식 파일 생성", use_container_width=True, type="primary"):
+                import io
+                r_buy = buy_data[buy_data['날짜_dt'].dt.year == report_year].copy() if not buy_data.empty else pd.DataFrame()
+
+                if "상반기" in report_term:
+                    r_buy = r_buy[r_buy['날짜_dt'].dt.month.isin([1, 2, 3, 4, 5, 6])]
+                elif "하반기" in report_term:
+                    r_buy = r_buy[r_buy['날짜_dt'].dt.month.isin([7, 8, 9, 10, 11, 12])]
+                elif "1분기" in report_term:
+                    r_buy = r_buy[r_buy['날짜_dt'].dt.month.isin([1, 2, 3])]
+                elif "2분기" in report_term:
+                    r_buy = r_buy[r_buy['날짜_dt'].dt.month.isin([4, 5, 6])]
+                elif "3분기" in report_term:
+                    r_buy = r_buy[r_buy['날짜_dt'].dt.month.isin([7, 8, 9])]
+                elif "4분기" in report_term:
+                    r_buy = r_buy[r_buy['날짜_dt'].dt.month.isin([10, 11, 12])]
+
+                output_buy = io.BytesIO()
+                with pd.ExcelWriter(output_buy, engine='openpyxl') as writer:
+                    # 원본 양식의 첫 행(타이틀), 두 번째 행(헤더) 구조를 맞추어 기록
+                    clean_buy = r_buy.drop(columns=['연도', '날짜_dt'], errors='ignore')
+                    
+                    # 엑셀 시트에 직접 쓰기 (header=False로 처리 후 커스텀 작성)
+                    temp_df = pd.DataFrame([ [buy_title] + [None]*(len(buy_cols)-1) ])
+                    temp_df.loc[1] = buy_cols
+                    final_buy_export = pd.concat([temp_df, clean_buy], ignore_index=True)
+                    final_buy_export.to_excel(writer, sheet_name='약품구매', index=False, header=False)
+
+                buy_bytes = output_buy.getvalue()
+                fn_suffix = report_term.split(" ")[0]
+                
+                st.download_button(
+                    label=f"💾 약품구매 양식 다운로드 ({report_year}년 {fn_suffix})",
+                    data=buy_bytes,
+                    file_name=f"약품구매_{report_year}_{fn_suffix}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_buy_btn",
+                    use_container_width=True
+                )
+
+        # 2. 약품사용 양식 다운로드 버튼
+        with col_dl2:
+            if st.button("📊 [약품사용] 업로드 양식 파일 생성", use_container_width=True, type="primary"):
+                import io
+                r_use = use_data[use_data['날짜_dt'].dt.year == report_year].copy() if not use_data.empty else pd.DataFrame()
+
+                if "상반기" in report_term:
+                    r_use = r_use[r_use['날짜_dt'].dt.month.isin([1, 2, 3, 4, 5, 6])]
+                elif "하반기" in report_term:
+                    r_use = r_use[r_use['날짜_dt'].dt.month.isin([7, 8, 9, 10, 11, 12])]
+                elif "1분기" in report_term:
+                    r_use = r_use[r_use['날짜_dt'].dt.month.isin([1, 2, 3])]
+                elif "2분기" in report_term:
+                    r_use = r_use[r_use['날짜_dt'].dt.month.isin([4, 5, 6])]
+                elif "3분기" in report_term:
+                    r_use = r_use[r_use['날짜_dt'].dt.month.isin([7, 8, 9])]
+                elif "4분기" in report_term:
+                    r_use = r_use[r_use['날짜_dt'].dt.month.isin([10, 11, 12])]
+
+                output_use = io.BytesIO()
+                with pd.ExcelWriter(output_use, engine='openpyxl') as writer:
+                    clean_use = r_use.drop(columns=['연도', '날짜_dt'], errors='ignore')
+                    
+                    temp_df_u = pd.DataFrame([ [use_title] + [None]*(len(use_cols)-1) ])
+                    temp_df_u.loc[1] = use_cols
+                    final_use_export = pd.concat([temp_df_u, clean_use], ignore_index=True)
+                    final_use_export.to_excel(writer, sheet_name='약품사용', index=False, header=False)
+
+                use_bytes = output_use.getvalue()
+                fn_suffix = report_term.split(" ")[0]
+
+                st.download_button(
+                    label=f"💾 약품사용 양식 다운로드 ({report_year}년 {fn_suffix})",
+                    data=use_bytes,
+                    file_name=f"약품사용_{report_year}_{fn_suffix}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_use_btn",
+                    use_container_width=True
+                )
