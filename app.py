@@ -2412,17 +2412,19 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
 
 
 # -------------------------------------------------------------
-# 8. 약품 구매 및 사용 관리 시스템 (분기/상하반기/연간 조회 및 다운로드)
+# 8. 약품 구매 및 사용 관리 시스템 (파일 업로드, 조회, 다운로드)
 # -------------------------------------------------------------
 elif menu == "🧪 8. 약품 구매 및 사용 관리":
     st.title("🧪 단월처리시설 약품 구매 및 사용 통합 관리 시스템")
-    st.caption("📦 약품 구매·사용 내역 실시간 조회 · 분기/상반기/하반기/연간 자동 집계 · 기존 하수도 시스템 업로드 양식 호환 다운로드")
+    st.caption("📦 약품 구매·사용 내역 실시간 조회 · 데이터 업로드 및 저장 · 분기/상반기/하반기/연간 자동 집계 · 호환 양식 다운로드")
+
+    import os
+    import io
 
     # 데이터 로드 함수 (기존 업로드 양식 틀 유지)
     @st.cache_data
     def load_chem_upload_templates():
         try:
-            # 약품구매 파일 로드 (0행: 타이틀, 1행: 컬럼명, 2행부터 데이터)
             buy_raw = pd.read_excel('약품구매.xlsx', header=None)
             buy_title = buy_raw.iloc[0, 0] if not buy_raw.empty else "약품구매 업로드양식"
             buy_cols = buy_raw.iloc[1].tolist() if len(buy_raw) > 1 else ['날짜', '약품', '구매량(kg)', '비용(원)', '구매형태']
@@ -2437,7 +2439,6 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
             buy_df['날짜_dt'] = pd.Series(dtype='datetime64[ns]')
 
         try:
-            # 약품사용 파일 로드 (0행: 타이틀, 1행: 컬럼명, 2행부터 데이터)
             use_raw = pd.read_excel('약품사용.xlsx', header=None)
             use_title = use_raw.iloc[0, 0] if not use_raw.empty else "약품사용 업로드양식"
             use_cols = use_raw.iloc[1].tolist() if len(use_raw) > 1 else ['날짜', '약품', '사용량(kg)', '비용(원)', '사용장소', '사유']
@@ -2455,10 +2456,53 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
 
     buy_data, use_data, buy_title, use_title, buy_cols, use_cols = load_chem_upload_templates()
 
-    # 상단 탭 생성
-    tab1, tab2, tab3 = st.tabs(["🛒 약품 구매 내역 조회", "📊 약품 사용 내역 조회", "📈 하수도 시스템 업로드용 엑셀 다운로드"])
+    # 상단 탭 생성 (업로드 및 데이터 관리 탭 추가)
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📤 약품 데이터 업로드 및 저장", 
+        "🛒 약품 구매 내역 조회", 
+        "📊 약품 사용 내역 조회", 
+        "📈 하수도 시스템 업로드용 엑셀 다운로드"
+    ])
 
+    # [탭 1] 파일 업로드 및 서버 저장
     with tab1:
+        st.subheader("📤 약품 구매 및 사용 엑셀 파일 업로드")
+        st.markdown("하수도 공공 시스템 양식에 맞춘 엑셀 파일을 업로드하여 서버에 안전하게 저장할 수 있습니다.")
+
+        up_col1, up_col2 = st.columns(2)
+
+        with up_col1:
+            st.markdown("### 🛒 약품구매 데이터 업로드")
+            uploaded_buy_file = st.file_uploader("약품구매 엑셀 파일 선택 (.xlsx)", type=["xlsx"], key="up_buy_file")
+            if uploaded_buy_file is not None:
+                if st.button("💾 약품구매 파일 서버에 저장", key="save_buy_btn", type="primary"):
+                    try:
+                        # 업로드된 파일을 '약품구매.xlsx'로 저장
+                        with open("약품구매.xlsx", "wb") as f:
+                            f.write(uploaded_buy_file.getbuffer())
+                        st.success("✅ '약품구매.xlsx' 파일이 성공적으로 저장되었습니다! 캐시를 갱신합니다.")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 저장 중 오류 발생: {e}")
+
+        with up_col2:
+            st.markdown("### 📊 약품사용 데이터 업로드")
+            uploaded_use_file = st.file_uploader("약품사용 엑셀 파일 선택 (.xlsx)", type=["xlsx"], key="up_use_file")
+            if uploaded_use_file is not None:
+                if st.button("💾 약품사용 파일 서버에 저장", key="save_use_btn", type="primary"):
+                    try:
+                        # 업로드된 파일을 '약품사용.xlsx'로 저장
+                        with open("약품사용.xlsx", "wb") as f:
+                            f.write(uploaded_use_file.getbuffer())
+                        st.success("✅ '약품사용.xlsx' 파일이 성공적으로 저장되었습니다! 캐시를 갱신합니다.")
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 저장 중 오류 발생: {e}")
+
+    # [탭 2] 약품 구매 내역 조회
+    with tab2:
         st.subheader("🛒 약품 구매 내역 및 기간별 조회")
         if not buy_data.empty and '날짜_dt' in buy_data.columns:
             buy_data['연도'] = buy_data['날짜_dt'].dt.year
@@ -2487,9 +2531,10 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
             display_buy = filtered_buy.drop(columns=['연도', '날짜_dt'], errors='ignore')
             st.dataframe(display_buy, use_container_width=True)
         else:
-            st.warning("⚠️ 약품 구매 데이터가 없습니다.")
+            st.warning("⚠️ 등록된 약품 구매 데이터가 없습니다. 첫 번째 탭에서 파일을 업로드해 주세요.")
 
-    with tab2:
+    # [탭 3] 약품 사용 내역 조회
+    with tab3:
         st.subheader("📊 약품 사용 내역 및 기간별 조회")
         if not use_data.empty and '날짜_dt' in use_data.columns:
             use_data['연도'] = use_data['날짜_dt'].dt.year
@@ -2518,13 +2563,14 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
             display_use = filtered_use.drop(columns=['연도', '날짜_dt'], errors='ignore')
             st.dataframe(display_use, use_container_width=True)
         else:
-            st.warning("⚠️ 약품 사용 데이터가 없습니다.")
+            st.warning("⚠️ 등록된 약품 사용 데이터가 없습니다. 첫 번째 탭에서 파일을 업로드해 주세요.")
 
-    with tab3:
+    # [탭 4] 하수도 시스템 업로드용 엑셀 다운로드
+    with tab4:
         st.subheader("📈 하수도 종합시스템 업로드용 맞춤 양식 다운로드")
         st.markdown("기존에 사용하시던 **원본 업로드 양식 틀(첫 행 타이틀 + 두 번째 행 컬럼 구조)**을 그대로 유지한 채, 선택한 기간의 데이터만 담아 파일로 다운로드합니다.")
 
-        report_year = st.selectbox("📥 대상 연도 선택", [2025, 2024, 2023], key="report_year_sel")
+        report_year = st.selectbox("📥 대상 연도 선택", [2026, 2025, 2024, 2023], key="report_year_sel")
         report_term = st.selectbox("📥 기간 단위 선택", [
             "연간 전체 (1년치)", 
             "상반기 (1~6월)", 
@@ -2540,7 +2586,6 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
         # 1. 약품구매 양식 다운로드 버튼
         with col_dl1:
             if st.button("🛒 [약품구매] 업로드 양식 파일 생성", use_container_width=True, type="primary"):
-                import io
                 r_buy = buy_data[buy_data['날짜_dt'].dt.year == report_year].copy() if not buy_data.empty else pd.DataFrame()
 
                 if "상반기" in report_term:
@@ -2580,7 +2625,6 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
         # 2. 약품사용 양식 다운로드 버튼
         with col_dl2:
             if st.button("📊 [약품사용] 업로드 양식 파일 생성", use_container_width=True, type="primary"):
-                import io
                 r_use = use_data[use_data['날짜_dt'].dt.year == report_year].copy() if not use_data.empty else pd.DataFrame()
 
                 if "상반기" in report_term:
