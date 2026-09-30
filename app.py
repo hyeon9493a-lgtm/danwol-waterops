@@ -2556,10 +2556,8 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
 
                 output_buy = io.BytesIO()
                 with pd.ExcelWriter(output_buy, engine='openpyxl') as writer:
-                    # 원본 양식의 첫 행(타이틀), 두 번째 행(헤더) 구조를 맞추어 기록
                     clean_buy = r_buy.drop(columns=['연도', '날짜_dt'], errors='ignore')
                     
-                    # 엑셀 시트에 직접 쓰기 (header=False로 처리 후 커스텀 작성)
                     temp_df = pd.DataFrame([ [buy_title] + [None]*(len(buy_cols)-1) ])
                     temp_df.loc[1] = buy_cols
                     final_buy_export = pd.concat([temp_df, clean_buy], ignore_index=True)
