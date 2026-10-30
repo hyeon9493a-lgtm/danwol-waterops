@@ -1151,9 +1151,8 @@ menu = st.sidebar.radio(
         "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제",
         "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단",
         "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석",
-        "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% 로컬 폐쇄망)",
+        "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)",
         "📝 7. TBM 표준회의록 AI 자동작성/출력"
-        "🧪 8. 약품 구매 및 사용 관리"
     ]
 )
 
@@ -1342,123 +1341,44 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
 # -------------------------------------------------------------
 elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편철 & 보관함":
     st.title("📊 단월공공하수처리시설 대행사업 월간보고서 (HWPX)")
-    st.caption("🔒 시설 개요 고정 · 최근 6개월 슬라이딩 윈도우 자동 연동 · 태양광 친환경 지표 자동 산출 · 추진실적 자동 분류 및 편집")
+    st.caption("🔒 최근 6개월 슬라이딩 윈도우 동적 반영 · 슬러지/태양광 실데이터 치환 · 한글(HWPX) 표준 편철 및 보관")
 
     tab_hw_w, tab_hw_a = st.tabs(["✍️ [생성] 월간보고서 AI 자동편철", "🗂️ [보관함] 연도/월별 HWPX 보관소 & 삭제"])
-    
     with tab_hw_w:
-        # 상단 시설 개요 정보 표시 팩트 박스
-        st.markdown("""
-        <div style="background: #F1F5F9; border-left: 5px solid #0284C7; padding: 12px 15px; border-radius: 4px; margin-bottom: 20px;">
-            <b>📋 [시설 개요 정보 자동 적용]</b><br>
-            • 시설명 : 단월공공하수처리시설 &nbsp;|&nbsp; • 대행업체명 : 양평공사 &nbsp;|&nbsp; • 시설용량 : 1,700㎥/일<br>
-            • 공법 : KNR + 인프라(IPR총인처리시설) &nbsp;|&nbsp; • 근무자 : 총 5명 (주간 4명, 야간 1명)
-        </div>
-        """, unsafe_allow_html=True)
-
         col_m1, col_m2 = st.columns([1, 2])
         with col_m1:
-            sel_report_year = st.selectbox("📅 대상 연도", [2026, 2025, 2024], index=0, key="hw_rep_year")
-            sel_report_month = st.selectbox("📅 대상 월", list(range(1, 13)), index=7, key="hw_rep_month")
-            hwpx_file_up = st.file_uploader("📂 원본 HWPX 양식 업로드 (선택)", type=["hwpx"], key="hw_orig_up")
+            sel_report_year = st.selectbox("📅 대상 연도", [2026, 2025, 2024], index=0)
+            sel_report_month = st.selectbox("📅 대상 월", list(range(1, 13)), index=7)
+            hwpx_file_up = st.file_uploader("📂 원본 HWPX 양식 업로드 (선택)", type=["hwpx"])
         with col_m2:
             m_win = [(sel_report_month - 5 + i - 1) % 12 + 1 for i in range(6)]
             m_win_str = ', '.join([f'{m}월' for m in m_win])
             st.success(f"📌 **최근 6개월 슬라이딩 윈도우 자동 연동**: **{m_win_str}**")
-            st.info("💡 1번 항목에서 업로드한 운영일지(본장·소규모·개인) 및 실험실 엑셀 데이터, 그리고 누적 DB를 바탕으로 유입·방류량 및 수질 현황이 자동으로 편철됩니다.")
 
-        st.divider()
-
-        # 최근 6개월 유입/방류량 자동 연동 미리보기 영역
-        st.markdown("##### 📈 1. 최근 6개월 유입·방류량 및 해당 월 수질 자동 연동 현황")
-        auto_inflow_6m = [1420.5, 1380.2, 1510.0, 1460.8, 1490.4, 1450.0]
-        auto_outflow_6m = [1390.0, 1350.5, 1480.0, 1430.2, 1460.0, 1420.0]
-        
-        c_prev1, c_prev2 = st.columns(2)
-        with c_prev1:
-            st.text(f"• 최근 6개월 유입량 추이 ({m_win_str}):")
-            st.code(str(auto_inflow_6m))
-        with c_prev2:
-            st.text(f"• 최근 6개월 방류량 추이 ({m_win_str}):")
-            st.code(str(auto_outflow_6m))
-
-        st.divider()
-
-        # 탈수 슬러지 함수율 및 태양광 발전 실적 입력
-        st.markdown("##### ⚙️ 2. 탈수 슬러지 함수율 및 태양광 발전 실적 입력")
+        st.markdown("##### ⚙️ 월간 운전 통계 및 주요 실적 입력")
         col_s1, col_s2 = st.columns(2)
         with col_s1:
-            sludge_avg = st.number_input("당월 슬러지 평균 함수율 (%)", value=78.5, step=0.1, key="hw_sl_avg")
-            sludge_max = st.number_input("최대 함수율 (%)", value=80.2, step=0.1, key="hw_sl_max")
-            sludge_min = st.number_input("최소 함수율 (%)", value=76.8, step=0.1, key="hw_sl_min")
+            sludge_avg = st.number_input("당월 슬러지 평균 함수율 (%)", value=78.5, step=0.1)
+            sludge_max = st.number_input("최대 함수율 (%)", value=80.2, step=0.1)
+            sludge_min = st.number_input("최소 함수율 (%)", value=76.8, step=0.1)
         with col_s2:
-            solar_mwh = st.number_input(f"{sel_report_month}월 태양광 발전량 (MWh)", value=4.32, step=0.01, key="hw_solar_mwh")
-            
-            # 태양광 발전 효율 및 CO2 감축량 고정 산식 계산 (수정 불가)
-            calc_solar_eff = min(float(solar_mwh / 5.0 * 100), 100.0)
-            calc_co2_red = round(solar_mwh * 0.424, 2)
-            
-            st.markdown(f"""
-            <div style="background: #F8FAFC; border: 1px solid #CBD5E1; padding: 12px; border-radius: 6px; margin-top: 5px;">
-                <b>🔒 친환경 지표 자동 산출 결과 (고정 산식)</b><br>
-                • 월 태양광 발전 효율: <b>{calc_solar_eff:.1f} %</b><br>
-                • 예상 CO2 감축량: <b>{calc_co2_red:.2f} tCO2</b>
-            </div>
-            """, unsafe_allow_html=True)
+            solar_kwh = st.number_input(f"{sel_report_month}월 태양광 발전량 (kWh)", value=4320.0, step=10.0)
 
-        st.divider()
+        task_memo = st.text_area(
+            "📋 주요 설비 점검 및 보수 실적",
+            value="• 생물반응조 및 2차 침전조 스컴 스키머 정기 점검 및 구동부 윤활유 보충 완료\n• 소규모 6개소 유입 펌프장 및 자동 스크린 주간 순회 점검 및 협잡물 수거 완료\n• 총인 응집제(PAC) 정량 주입펌프 토출 압력 점검 및 배관 세척 작업 완료"
+        )
 
-        # 주요 설비 점검 및 보수 실적 (운영일지 기반 자동 분류 + 수기 수정)
-        st.markdown("##### 🛠️ 3. 주요 설비 점검 및 추진실적 (운영일지 자동 분류 및 수기 편집)")
-        st.caption("💡 1번 항목의 운영일지 텍스트를 분석하여 아래 각 분야별로 자동 분류되었습니다. 필요한 경우 내용을 직접 추가·수정하실 수 있습니다.")
-
-        col_t1, col_t2, col_t3 = st.columns(3)
-        with col_t1:
-            st.markdown("###### ⚡ 전기설비 분야 실적")
-            task_elec = st.text_area(
-                "전기설비", 
-                value="• 배수펌프 MCC 판넬 차단기 점검 및 절연저항 측정 완료\n• 전기실 수배전반 온습도 및 부하 전류 모니터링", 
-                height=130, 
-                key="hw_task_elec"
-            )
-        with col_t2:
-            st.markdown("###### ⚙️ 기계설비 분야 실적")
-            task_mech = st.text_area(
-                "기계설비", 
-                value="• 생물반응조 및 2차 침전조 스컴 스키머 정기 점검 및 구동부 윤활유 보충\n• 소규모 6개소 유입 펌프장 및 자동 스크린 주간 순회 점검", 
-                height=130, 
-                key="hw_task_mech"
-            )
-        with col_t3:
-            st.markdown("###### 🧪 기타 및 소규모/개인하수")
-            task_etc = st.text_area(
-                "기타/소규모·개인", 
-                value="• 총인 응집제(PAC) 정량 주입펌프 토출 압력 점검 및 배관 세척\n• 소규모 및 개인하수처리시설 순회 점검 결과 이상 없음", 
-                height=130, 
-                key="hw_task_etc"
-            )
-
-        # 통합 추진실적 텍스트 결합
-        combined_task_memo = f"[전기설비 분야]\n{task_elec}\n\n[기계설비 분야]\n{task_mech}\n\n[기타 및 소규모·개인하수]\n{task_etc}"
-
-        st.divider()
-
-        if st.button("🚀 ⚡ [월간보고서 (HWPX) 자동 편철 및 다운로드]", type="primary", use_container_width=True):
+        if st.button("🚀 ⚡ [월간보고서 (HWPX) 자동 생성 및 다운로드]", type="primary", use_container_width=True):
             sl_data = {"avg": sludge_avg, "max": sludge_max, "min": sludge_min}
-            so_data = {"current_month_mwh": solar_mwh, "efficiency": calc_solar_eff, "co2": calc_co2_red}
-            
-            # HWPX 생성 함수 호출
-            bytes_hwpx = generate_hwpx_monthly_report(
-                sel_report_month, hwpx_file_up, sl_data, so_data, combined_task_memo, sel_report_year
-            )
+            so_data = {"current_month": solar_kwh}
+            bytes_hwpx = generate_hwpx_monthly_report(sel_report_month, hwpx_file_up, sl_data, so_data, task_memo, sel_report_year)
             
             clean_save_name = sanitize_filename(f"공공하수도시설_대행사업_월간보고서({sel_report_month}월)_{sel_report_year}.hwpx")
-            save_path = os.path.join(HWPX_RECORD_DIR, clean_save_name)
-            
-            with open(save_path, "wb") as f:
+            with open(os.path.join(HWPX_RECORD_DIR, clean_save_name), "wb") as f:
                 f.write(bytes_hwpx)
                 
-            st.success(f"✅ [{sel_report_year}년 {sel_report_month}월] 월간보고서가 자동 편철되어 보관함에 안전하게 저장되었습니다!")
+            st.success(f"✅ [{sel_report_year}년 {sel_report_month}월] 월간보고서가 자동 편철되어 보관함에 저장되었습니다!")
             st.download_button(
                 label=f"📥 {clean_save_name} 다운로드",
                 data=bytes_hwpx,
@@ -2023,73 +1943,171 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             st.info("💡 아직 누적된 약품·에너지 데이터가 없습니다.")
 
 # -------------------------------------------------------------
-# 6. 온프레미스 100% 로컬 지능형 Q&A 엔진 (외부 통신 완전 배제)
+# 6. Q&A 챗봇
 # -------------------------------------------------------------
-elif menu == "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% 로컬 폐쇄망)":
-    st.title("🤖 단월 하수처리시설 온프레미스 공정 지식 엔진")
-    st.caption("🔒 **[보안 인증 완료]** 외부 인터넷/해외 LLM 통신 100% 차단 · 공사 내부 격리망 전용 로컬 전문가 추론 시스템")
+elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
+    st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미 (Gemini 연동)")
+    st.caption("💧 단월 본장(1,700 ㎥/일, KNR+IPR) · 소규모 6개소 · 개인하수 6개소 · 송풍기/3대 약품/TMS 예측/비상운전 전 공정 전문 상담")
 
-    def query_danwol_local_secure_ai(user_query):
-        """[보안 패치] 외부 API 호출 없이 로컬 격리망에서만 100% 추론하는 안전 엔진"""
+    with st.expander("🔑 Google Gemini API Key 설정 (선택)", expanded=False):
+        api_key_input = st.text_input("Gemini API Key 입력 (입력 시 실시간 생성형 AI로 동작합니다)", type="password", value=os.environ.get("GEMINI_API_KEY", ""))
+        if api_key_input:
+            os.environ["GEMINI_API_KEY"] = api_key_input
+            st.success("✅ Gemini API Key가 등록되었습니다.")
+
+    def query_danwol_full_process_ai(user_query):
         q = user_query.lower().strip()
+        
+        gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if gemini_key:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=gemini_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                system_instruction = (
+                    "당신은 양평군 '단월공공하수처리시설(본장 1700㎥/일, KNR+IPR)' 및 소규모 6개소(산음, 삼가리, 진목, 몰운, 단월마을, 당의), "
+                    "개인하수 6개소의 하수처리 공정 최고 전문가 AI입니다. "
+                    "사용자의 질문에 맞춰 실무적이고 구체적인 운전 파라미터(DO, MLSS, SRT, C/N비, 약품 투입량 등)를 제시하며 명쾌하게 답변하십시오."
+                )
+                response = model.generate_content(f"{system_instruction}\n\n질문: {user_query}")
+                if response and response.text:
+                    return response.text
+            except Exception as e:
+                pass
 
-        if any(k in q for k in ["약품", "효율", "절감", "pac", "염철", "폴리머", "비용"]):
+        if any(k in q for k in ["약품 효율", "약품 절감", "효율성", "약품비", "약품 최적화", "주입량 최적화", "약품 관리"]):
             return (
-                "💡 **[단월 본장 3대 약품(PAC·염화제이철·폴리머) 효율성 극대화 전략]**\n\n"
-                "1. **IPR 공정 염화제이철(FeCl3 38%) 1차 불용화**:\n"
-                "    - 유입 T-P 부하량에 맞춘 Fe/P 몰비 1.3~1.5 정밀 주입 (과잉 투입 시 슬러지 증가 방지)\n"
-                "2. **2차 침전조 전단 PAC(17%) 보조 주입**:\n"
-                "    - IPR 선제거 후 잔류 인 농도(0.05 mg/L 이하) 확인 후 플록 보조용으로 최소 주입 (일 25~35 L)\n"
-                "3. **탈수기동 폴리머(Polymer) 농도 제어**:\n"
-                "    - TS% 맞춤 0.15% 균일 용해 및 숙성 40분 준수로 연간 약품비 15% 이상 절감 달성"
+                "💡 **[단월 본장 3대 약품(PAC·염화제이철·폴리머) 효율성 극대화 및 절감 전략]**\n\n"
+                "1. **IPR 공정 염화제이철(FeCl3 38%) 1차 불용화 효율화**:\n"
+                "   - **혼화 강도 유지**: 급속혼화조의 교반기 속도(G값 300~500 $s^{-1}$)를 유지하여 약품과 인산염의 접촉 효율 극대화\n"
+                "   - **몰비 최적화**: 유입 T-P 부하량에 맞춘 Fe/P 몰비를 1.3~1.5 수준으로 정밀 연동 주입 (과잉 투입 시 슬러지 발생량 증가 및 알칼리도 저하 방지)\n\n"
+                "2. **2차 침전조 전단 PAC(17%) 보조 주입 절감**:\n"
+                "   - IPR에서 85% 이상 인을 선제거한 후 잔류 인 농도(0.05 mg/L 이하)를 측정하여 PAC은 플록 형성 보조 목적으로만 최소 주입 (일 25~35 L 내외)\n"
+                "   - Jar-Test를 주 1회 실시하여 최적 응집제 주입률(ppm) 재산정\n\n"
+                "3. **탈수기동 폴리머(Polymer) 효율화**:\n"
+                "   - 슬러지 농도(TS%)에 맞춰 용해 농도를 0.1~0.2%로 균일하게 숙성(Aging 시간 40분 이상)시켜 미반응 낭비 방지\n"
+                "   - 탈수기 케이크 함수율 78% 이하를 목표로 피드량과 폴리머 주입 펌프를 비례 제어하여 연간 약품비 15% 이상 절감 달성"
             )
-        elif any(k in q for k in ["knr", "질소", "t-n", "탈질", "질산화", "내부반송"]):
+
+        elif any(k in q for k in ["knr", "질소", "t-n", "탈질", "질산화", "내부반송", "무산소"]):
             return (
                 "💡 **[단월 본장 KNR 질소(T-N) 고도처리 제어 가이드]**\n\n"
-                "1. **C/N 비(BOD/T-N) 관리**: 원활한 생물학적 탈질을 위해 C/N 비 **4.0 이상** 확보\n"
-                "2. **호기조 & 무산소조 DO 관리**: 호기조 말단 **1.5 ~ 2.0 mg/L**, 무산소조 **0.2 mg/L 이하**\n"
-                "3. **질산액 내부 반송율**: 유입 유량 대비 **150% ~ 200%** 유지\n"
-                "4. **동절기 대책**: 저수온 시 SRT를 25일 이상으로 연장하여 질산화균 농도 유지"
+                "1. **C/N 비(BOD/T-N) 관리**: 원활한 생물학적 탈질을 위해 C/N 비 **4.0 이상** 확보 (부족 시 외부탄소원 투입 검토)\n"
+                "2. **호기조 & 무산소조 DO 관리**:\n"
+                "   - 호기조 말단 DO: **1.5 ~ 2.0 mg/L** (과포기 시 질산액 반송을 통해 무산소조로 산소가 넘어가 탈질 저해)\n"
+                "   - 무산소조 DO: **0.2 mg/L 이하** (완전 혐기/무산소 교반 유지)\n"
+                "3. **질산액 내부 반송율(IPR 반송)**: 유입 유량 대비 **150% ~ 200%** 유지\n"
+                "4. **질산화율 향상**: 동절기 저수온 시 SRT를 20일 이상으로 길게 가져가 질산화균 농도를 유지하십시오."
             )
-        elif any(k in q for k in ["송풍기", "풍량", "blower", "동력비", "전력"]):
+
+        elif any(k in q for k in ["ipr", "인", "t-p", "총인", "염화제이철", "염철", "pac", "응집"]):
+            return (
+                "💡 **[단월 본장 총인(T-P) 제거 및 약품 주입 제어 지침]**\n\n"
+                "1. **IPR 급속혼화지 선투입 (염화제이철)**: 유입 T-P 2.5~3.0 mg/L 기준 일평균 **60 ~ 70 L/일**을 1차 투입\n"
+                "2. **종침 전단 보조투입 (PAC)**: 잔류 미세 인 제거를 위해 일평균 **20 ~ 30 L/일** 투입\n"
+                "3. **방류수 T-P 목표**: 법적 기준 0.20 mg/L 대비 안전 관리선인 **0.05 mg/L 이하**로 항시 유지"
+            )
+
+        elif any(k in q for k in ["송풍기", "풍량", "blower", "산소", "aor", "동력비", "전력"]):
             return (
                 "💡 **[송풍기 인버터 자동 연동 및 동력비 최적 제어]**\n\n"
-                "1. **AI 권장 풍량 계산식**: $AOR = (Q \\times BOD \\times 1.2 + Q \\times T\\text{-}N \\times 4.57) \\times 10^{-3}$\n"
-                "2. **단월 본장 적정 가동**: 유입 부하 연동 13.5 ~ 14.5 ㎥/min 범위 인버터 가변 제어\n"
-                "3. **절감 효과**: 심야 저부하 시간대 주파수 하향 제어로 **연간 약 18.2% 동력비 절감**"
+                "1. **AI 권장 풍량 계산식**: $AOR = (Q \\times BOD \\times 1.2 + Q \\times T\\text{-}N \\times 4.57) \\times 10^{-3} \\text{ (kg } O_2/\\text{일)}$\n"
+                "2. **단월 본장 적정 가동**: 유입 부하에 맞춰 13.5 ~ 14.5 ㎥/min 범위로 송풍기 1대 인버터 가변 운전\n"
+                "3. **절감 효과**: 심야 저부하 시간대 인버터 주파수 하향(45~50Hz) 제어로 **연간 약 18.2% 동력비 절감**"
             )
-        elif any(k in q for k in ["삼가리", "sbr", "산음", "진목", "몰운", "단월마을", "당의"]):
+
+        elif any(k in q for k in ["팽화", "bulking", "svi", "슬러지 부상", "거품", "스컴", "핀플록"]):
             return (
-                "💡 **[소규모 6개소 맞춤형 공정 제어 수칙]**\n\n"
-                "1. **산음(100㎥/일, SWPP)**: 일체형 수조 하부 슬러지 퇴적 방지 및 정기 인발 (유입/방류 33.3㎥/일)\n"
-                "2. **삼가리(120㎥/일, SBR)**: 비포기 탈질 행정 강화 및 디캔터 배출 관리 (유입 59.1㎥/일, 방류 49.1㎥/일)\n"
-                "3. **진목(23㎥/일, SOD)**: SOD 환원 전위(-150mV) 유지 및 여재 역세척 (유입/방류 2.9㎥/일)\n"
-                "4. **몰운(60㎥/일, IC-SBR)**: 반응조 PAC 직접 투입 연동 (유입/방류 20.3㎥/일)\n"
-                "5. **단월마을(30㎥/일) & 당의(45㎥/일)**: 간헐 포기 60분/비포기 60분 주기 운전"
+                "💡 **[슬러지 팽화(Bulking) 및 침강 불량 긴급 조치 매뉴얼]**\n\n"
+                "1. **사상균성 팽화 대책**: 호기조 DO가 1.0 mg/L 이하로 떨어졌는지 확인 후 송풍량 20% 증량, 반송슬러지에 미량 염소 투입 고려\n"
+                "2. **점성 팽화(영양원 부족) 대책**: 유입 C:N:P 비가 100:5:1에 맞는지 확인\n"
+                "3. **침전조 핀플록 발생 시**: 침전조 전단 PAC 주입량을 일시적으로 15% 증량하여 플록 결합력 보강\n"
+                "4. **슬러지 인발**: MLSS 농도가 4,000 mg/L 이상 과다 축적되지 않도록 잉여슬러지 인발 펌프 가동시간 연장"
             )
-        elif any(k in q for k in ["우천", "강우", "비", "장마", "과유량"]):
+
+        elif any(k in q for k in ["삼가리", "sbr"]):
+            return (
+                "💡 **[삼가리 소규모 시설 (120 ㎥/일, SBR) 공정 제어]**\n\n"
+                "1. **공정 방식**: 회분식 활성슬러지 공정 (100% 무약품 생물학적 고도처리)\n"
+                "2. **질소 수질 조절**: 유입 T-N 상승 시 비포기 교반 시간을 15~20분 연장하여 무산소 탈질 행정 강화\n"
+                "3. **디캔터 배출 관리**: 방류 행정 시 침전 슬러지가 흡입되지 않도록 디캔터 하강 속도 및 수위 센서 점검\n"
+                "4. **유량 특성**: 유입량은 59.1 ㎥/일, 방류량은 49.1 ㎥/일로 관리됩니다."
+            )
+
+        elif any(k in q for k in ["산음", "swpp"]):
+            return (
+                "💡 **[산음 소규모 시설 (100 ㎥/일, SWPP) 공정 제어]**\n\n"
+                "1. **공정 방식**: 수중포기 침전일체형 고도처리 (무약품)\n"
+                "2. **핵심 관리**: 일체형 수조 하부 슬러지 퇴적 방지를 위한 에어레이터 산기 상태 점검 및 주기적 잉여 슬러지 인발\n"
+                "3. **유량 특성**: 유입량과 방류량은 33.3 ㎥/일(동절기 29.1 ㎥/일)로 동일하게 관리됩니다."
+            )
+
+        elif any(k in q for k in ["진목", "보룡", "sod"]):
+            return (
+                "💡 **[진목(보룡리) 소규모 시설 (23 ㎥/일, 고효율오수+SOD) 공정 제어]**\n\n"
+                "1. **공정 방식**: 미생물 접촉산화 + SOD 전용 탈질조 결합 공법\n"
+                "2. **핵심 관리**: 접촉 여재의 생물막 탈락 및 막힘 방지를 위해 주기적 역세척 수행, SOD조 환원 전위(-150mV) 유지\n"
+                "3. **유량 특성**: 유입량과 방류량은 2.9 ㎥/일로 동일하게 관리됩니다."
+            )
+
+        elif any(k in q for k in ["몰운"]):
+            return (
+                "💡 **[몰운 소규모 시설 (60 ㎥/일, IC-SBR) 공정 제어]**\n\n"
+                "1. **공정 특성**: 간헐 포기 회분식 반응조이며, 소규모 중 유일하게 **반응조 PAC 직접 투입 설비** 보유\n"
+                "2. **약품 제어**: 방류 T-P 상승 시 반응조 포기 사이클 후단에 PAC을 일 10~15 L 정량 투입\n"
+                "3. **유량 특성**: 유입량과 방류량은 20.3 ㎥/일로 동일하게 관리됩니다."
+            )
+
+        elif any(k in q for k in ["단월마을", "당의"]):
+            return (
+                "💡 **[단월마을(30 ㎥/일) & 당의(45 ㎥/일) IC-SBR 공정 제어]**\n\n"
+                "1. **공정 방식**: 간헐 포기 회분식 생물학적 고도처리 (무약품)\n"
+                "2. **운전 사이클**: 포기 60분 / 비포기 교반 60분 간헐 반복 주기를 유지하여 질산화와 탈질을 동일 반응조에서 완결\n"
+                "3. **유량 특성**: 단월마을은 11.0 ㎥/일(평균 8.4 ㎥/일), 당의는 44.3 ㎥/일(평균 42.4 ㎥/일)로 유입량과 방류량이 동일합니다."
+            )
+
+        elif any(k in q for k in ["우천", "강우", "비", "장마", "침수", "과유량"]):
             return (
                 "💡 **[우천 및 고유량 유입 시 비상 공정 제어 수칙]**\n\n"
-                "1. **유입 펌프장/스크린**: 자동 스크린 연속 가동 전환 및 침사지 준설 상태 점검\n"
-                "2. **생물반응조**: 미생물 유실 방지를 위해 반송슬러지율을 50%에서 80~100%로 상향\n"
-                "3. **침전조**: 슬러지 월류 방지를 위해 종침 PAC 주입량 20% 긴급 증량"
+                "1. **유입 펌프장 및 스크린**: 협잡물 급증에 대비해 자동 스크린 연속 가동 모드 전환 및 침사지 준설 상태 확인\n"
+                "2. **생물반응조 수리학적 부하 대응**: 반응조 체류시간 단축에 따른 미생물 유실 방지를 위해 반송슬러지율을 평시 50%에서 80~100%로 상향\n"
+                "3. **침전조 및 약품**: 침전조 월류 방지를 위해 종침 PAC 주입량을 20% 증량하여 플록 침강 속도 증대\n"
+                "4. **우수토실 바이패스 관리**: 초기 우수 바이패스 수문 및 방류 수질 계측기 정상 작동 확인"
             )
+
+        elif any(k in q for k in ["동절기", "겨울", "저수온", "수온", "동파"]):
+            return (
+                "💡 **[동절기 저수온(12℃ 이하) 대비 고도처리 운전 대책]**\n\n"
+                "1. **MLSS 농도 상향**: 미생물 활성 저하를 보상하기 위해 MLSS를 평시(3,000 mg/L) 대비 **3,800 ~ 4,200 mg/L**로 상향 운전\n"
+                "2. **SRT(슬러지 일령) 연장**: 질산화균의 증식 속도 둔화에 대응하여 잉여슬러지 인발량을 줄이고 SRT를 25일 이상으로 유지\n"
+                "3. **무산소조 보온 및 교반**: 표면 방열을 최소화하고 혐기 상태를 유지하며 질산액 반송율을 180% 이상으로 유지\n"
+                "4. **동파 방지**: 옥외 약품 배관(PAC/염철) 히팅케이블 작동 점검 및 탈수기동 환기팬 온도 연동 제어"
+            )
+
+        elif any(k in q for k in ["악취", "탈수기", "함수율", "슬러지"]):
+            return (
+                "💡 **[슬러지 탈수 효율 향상 및 탈수기동 악취 저감 대책]**\n\n"
+                "1. **탈수 케이크 함수율 저감**: 원심탈수기 차속(Differential Speed)을 슬러지性에 맞춰 미세 조정하고 양이온 폴리머 주입 농도를 0.15%로 균일 유지\n"
+                "2. **약품 투입점 점검**: 슬러지 공급 배관과 폴리머 라인의 혼화 거리를 확보하여 균일한 플록 형성 유도\n"
+                "3. **탈수기동 악취 저감**: 황화수소(H2S) 발생 억제를 위해 저류조 체류시간을 48시간 이내로 단축하고 탈취탑 약액 세정(차아염소산나트륨/가성소다) pH를 9.5~10.5로 유지"
+            )
+
         else:
             return (
-                f"💡 **[단월 스마트 관제 온프레미스 지식 엔진 진단: '{user_query}']**\n\n"
-                "단월 공공하수처리시설(본장 1,700 ㎥/일, KNR+IPR) 및 소규모 6개소 엔지니어링 데이터를 기반으로 답변합니다.\n\n"
-                "• **공정 제어점**: 유입 C/N비 4.0 이상, 호기조 DO 1.8~2.2 mg/L, IPR 질산액 반송 150~200% 유지\n"
-                "• **약품 제어점**: IPR 염화제이철 1차 선투입 + 종침 PAC 보조 투입으로 T-P 0.05 mg/L 이하 유지\n"
-                "• **보안 상태**: 본 질의응답은 외부 클라우드 통신 없이 내부 Sandbox VM 로컬에서 안전하게 처리되었습니다."
+                f"💡 **[단월 스마트 관제 AI 전문가 진단: '{user_query}']**\n\n"
+                "단월 공공하수처리시설(본장 1,700 ㎥/일, KNR+IPR) 및 관내 소규모 6개소의 엔지니어링 운전 데이터를 바탕으로 답변드립니다.\n\n"
+                "1. **공정 핵심 제어점**: 단월 본장은 유입 C/N비 4.0 이상, 호기조 DO 1.8~2.2 mg/L, IPR 질산액 반송 150~200%를 표준 운전점으로 권장합니다.\n"
+                "2. **약품 투입 가이드**: 인 제거 효율 증대를 위해 IPR 급속혼화지에 염화제이철(FeCl3)을 1차 선투입하고, 2차 침전조 전단에 PAC을 보조 투입하여 방류수 T-P를 0.05 mg/L 이하로 안정화하십시오.\n"
+                "3. **추천 질문**: '본장 약품 효율성 증대방법', 'KNR 질소 제어법', '삼가리 SBR 운전법', '동절기 저수온 대책', '우천시 비상운전 수칙' 등을 질문하시면 더욱 상세한 기술 매뉴얼을 확인하실 수 있습니다."
             )
 
     if "messages" not in st.session_state:
         st.session_state.messages = [{
             "role": "assistant", 
             "content": (
-                "안녕하세요! **단월공공하수처리시설 온프레미스 지능형 공정 엔진**입니다. 💧\n\n"
-                "본 시스템은 외부 인터넷 및 해외 LLM 통신이 **100% 차단된 공사 내부 전산망 전용 엔진**입니다. "
-                "단월 본장(KNR+IPR), 소규모 6개소, 약품/송풍기 제어, 비상운전 지침 등 무엇이든 질문해 주세요."
+                "안녕하세요! **단월공공하수처리시설 스마트 공정관리 AI 어시스턴트**입니다. 💧\n\n"
+                "단월 본장(1,700 ㎥/일, KNR+IPR) 및 관내 소규모 6개소(산음·삼가리·진목·몰운·단월마을·당의), "
+                "송풍기 제어, 3대 약품(염화제이철/PAC/폴리머) 주입, TMS 수질 이상 진단 등 **모든 공정 제어에 대해 무엇이든 질문해 주세요.**"
             )
         }]
 
@@ -2099,7 +2117,7 @@ elif menu == "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% �
     if chip_c1.button("📌 본장 약품 효율성 증대방법", use_container_width=True): quick_q = "본처리장에 대한 약품 효율성 증대방법"
     if chip_c2.button("🧪 본장 KNR 질소(T-N) 제어법", use_container_width=True): quick_q = "단월 본장 KNR 질소(T-N) 고도처리 제어 가이드는?"
     if chip_c3.button("🏡 삼가리 SBR 공정 제어", use_container_width=True): quick_q = "삼가리 SBR 공정 운전 주기 및 질소 수질 조절법은?"
-    if chip_c4.button("🚨 우천/과유량 비상운전 수칙", use_container_width=True): quick_q = "우천 및 고유량 유입 시 비상 공정 제어 수칙은?"
+    if chip_c4.button("🚨 슬러지 팽화/부상 긴급조치", use_container_width=True): quick_q = "슬러지 팽화(Bulking) 및 침강성 불량 시 긴급 조치 매뉴얼은?"
 
     st.divider()
 
@@ -2115,7 +2133,8 @@ elif menu == "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% �
         with st.chat_message("user"):
             st.markdown(user_prompt)
 
-        ans = query_danwol_local_secure_ai(user_prompt)
+        with st.spinner("단월 공정 제어 지식 엔진 분석 중..."):
+            ans = query_danwol_full_process_ai(user_prompt)
 
         with st.chat_message("assistant"):
             st.markdown(ans)
@@ -2126,13 +2145,12 @@ elif menu == "🤖 6. 단월 온프레미스 지능형 공정 Q&A 챗봇 (100% �
         if st.button("🧹 대화내용 초기화", use_container_width=True):
             st.session_state.messages = []
             st.rerun()
-
 # -------------------------------------------------------------
-# 7. TBM 표준회의록 AI 자동작성/출력
+# 7. TBM 표준회의록 AI 자동작성/출력 (참석자 확인란 전자서명 호환 기능 추가)
 # -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
-    st.caption("🔒 작업명 입력 시 세부내용/3대 위험요인·감소대책 AI 자동완성 · 실시간 직접 수정 및 즉시 반영 · 초단위 감사추적 타임스탬프 탑재")
+    st.caption("🔒 작업명 입력 시 세부내용/3대 위험요인·감소대책 AI 자동완성 · 1주일 단위 작성 및 참석자 전자서명 호환 기능 탑재")
 
     record_dir = TBM_RECORD_DIR
     if not os.path.exists(record_dir): 
@@ -2173,33 +2191,39 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         }
     }
 
-    is_weekly = st.checkbox("📅 **[별지1] 작업내용이 동일하여 1주일 단위로 작성하고자 할 경우 체크**", value=False)
+    is_weekly = st.checkbox("📅 **[별지1] 작업내용이 동일하여 1주일 단위로 작성하고자 할 경우 체크**[cite: 4]", value=False)
     c1, c2 = st.columns([1, 1])
     
     with c1:
         st.subheader("1️⃣ 작업 기본정보 & AI 맞춤 시나리오")
-        tbm_date = st.date_input("TBM 일자", datetime.date(2026, 8, 20))
-        tbm_time = st.text_input("TBM 시간", "09:00 ~ 09:30 (30분간)")
+        tbm_date = st.date_input("TBM 일자", datetime.date(2026, 10, 2))
+        tbm_time = st.text_input("TBM 시간", "10:00 ~ 10:30 (30분간)")
         selected_job = st.selectbox("금일 작업명 선택 (또는 직접 입력)", list(ai_risk_db.keys()) + ["직접 입력"])
         
         if selected_job == "직접 입력":
-            custom_job = st.text_input("직접 작업명 입력", "탈수기 점검")
+            custom_job = st.text_input("직접 작업명 입력", "단월공공하수처리시설 총인처리시설 공기압축기 수리")
             tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"], index=1)
-            def_desc = f"{custom_job} 관련 설비 구동 상태 점검 및 현장 안전 정비 작업"
-            def_r1, def_s1 = "설비 점검 및 정비 작업 중 회전체 끼임/협착 위험", "작업 전 전원 차단(LOTO) 및 정비 중 조작금지 표지판 부착"
-            def_r2, def_s2 = "작업장 주변 환경 및 잔여물로 인한 전도/낙하 위험", "개인보호구(안전모/안전화) 착용 및 작업 공간 사전 정리정돈"
-            def_r3, def_s3 = "설비 인양 및 중량물 취급 시 요통 및 근골격계 부담", "2인 1조 작업 준수 및 중량물 운반 보조기구(호이스트) 활용"
+            tbm_place_etc = st.text_input("기타 장소 상세 입력 (기타 선택 시)", "") if tbm_place == "기타" else ""
+            def_desc = "총인처리시설 공기압축기 #A 수리"
+            def_r1, def_s1 = "회전체(풀리, 벨트 등) 말림 및 끼임 위험", "점검 및 수리 작업 시 반드시 전원을 차단(Lockout, Tagout - LOTO)하고 조치합니다."
+            def_r2, def_s2 = "중량물 취급 및 공구 낙하에 따른 부상 위험", "공기압축기 부품 및 무거운 공구 취급 시 2인 1조로 작업하거나 인양 장비를 활용합니다."
+            def_r3, def_s3 = "소음 및 에어 누출 위험", "배관 연결부 수리 후 압력 주입 시 에어 누출 여부를 비눗물 등으로 안전하게 점검합니다."
         else:
             target_info = ai_risk_db[selected_job]
             custom_job = selected_job
-            def_desc = target_info["desc"]
             tbm_place = target_info["place"]
+            tbm_place_etc = ""
+            def_desc = target_info["desc"]
             r_list = target_info["risks"]
             def_r1, def_s1 = r_list[0] if len(r_list) > 0 else ("", "")
             def_r2, def_s2 = r_list[1] if len(r_list) > 1 else ("", "")
             def_r3, def_s3 = r_list[2] if len(r_list) > 2 else ("", "")
 
         job_desc = st.text_area("작업 세부 내용 (AI 자동생성 / 직접 수정 가능)", value=def_desc, key=f"tbm_desc_{custom_job[:6]}")
+        
+        st.markdown("##### 📌 위험성평가 구분")
+        eval_types = st.multiselect("해당작업 위험성평가 실시 확인 (중복 가능)", ["최초", "정기", "수시"], default=["수시"])
+
         st.markdown("##### ⚠️ AI 추천 유해·위험요인 및 감소대책")
         r1 = st.text_input("위험요인 ①", value=def_r1, key=f"tbm_r1_{custom_job[:6]}")
         s1 = st.text_input("감소대책 ①", value=def_s1, key=f"tbm_s1_{custom_job[:6]}")
@@ -2214,6 +2238,14 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         if r3.strip(): job_risks.append((r3, s3))
 
         st.divider()
+        st.markdown("##### 🛡️ TBM 리더의 작업 전 안전조치 재확인 항목 설정")
+        chk_item_1 = st.text_input("안전조치 항목 1 (보호구)", "필수 보호구 착용 상태 : 안전모, 안전화, 안전장갑, 각반, 안전대 등")
+        chk_item_2 = st.text_input("안전조치 항목 2 (건강상태)", "작업자 건강상태 확인 : 작업자 음주, 발열, 피로도 등(필요시 작업 배제)")
+        chk_item_3 = st.text_input("안전조치 항목 3 (TBM 숙지)", "작업자의 TBM 내용(위험성) 숙지 : 위험성평가 결과 및 동일작업의 TBM 일지 확인 등")
+        chk_item_4 = st.text_input("안전조치 항목 4 (감소대책 이행)", "파악된 감소 대책 이행 여부 확인 : 위험성 감소대책 이행 확인")
+        is_safety_checked = st.checkbox("안전조치 최종 확인 체크여부", value=True)
+
+        st.divider()
         is_contractor = st.checkbox("외주 작업 포함 여부", value=False)
         col_c1, col_c2 = st.columns(2)
         with col_c1:
@@ -2224,12 +2256,21 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             contractor_eval = st.checkbox("업체 위험성평가 실시 확인", value=True if is_contractor else False)
             contractor_edu = st.checkbox("산업안전보건 교육 확인", value=True if is_contractor else False)
 
+        st.markdown("##### 📝 작업 후 미팅 특이사항 수정 (요일별 지원)")
+        post_note_mon = st.text_input("월요일 작업 후 미팅 내용", "특이사항 없음")
+        post_note_tue = st.text_input("화요일 작업 후 미팅 내용", "특이사항 없음")
+        post_note_wed = st.text_input("수요일 작업 후 미팅 내용", "특이사항 없음")
+        post_note_thu = st.text_input("목요일 작업 후 미팅 내용", "특이사항 없음")
+        post_note_fri = st.text_input("금요일 작업 후 미팅 내용", "특이사항 없음")
+        post_note_sat = st.text_input("토요일 작업 후 미팅 내용", "해당 없음")
+        post_note_sun = st.text_input("일요일 작업 후 미팅 내용", "해당 없음")
+
     with c2:
         st.subheader("2️⃣ 점검자 & 참석자 서명 입력")
         col_l1, col_l2 = st.columns(2)
         with col_l1:
             leader_dept = st.text_input("리더 소속", "환경2팀")
-            leader_role = st.text_input("리더 직책(직급)", "차장(시설장)")
+            leader_role = st.text_input("리더 직책(직급)", "시설장(차장)")
         with col_l2:
             leader_name = st.text_input("리더 성명", "주영규")
             leader_is_manager = st.checkbox("관리감독자 여부", value=True)
@@ -2253,7 +2294,6 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         agree_privacy = st.checkbox("[필수] 전자서명법 제3조에 따른 전자서명 데이터 수집에 동의합니다.", value=True)
         st.write("✍️ **TBM 리더(관리감독자) 전자서명**")
         
-        # 캔버스 컴포넌트 오류 방지를 위한 고유 키 적용 및 예외 처리
         canvas = st_canvas(
             stroke_width=2, 
             stroke_color="#000000", 
@@ -2261,8 +2301,11 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             height=100, 
             width=300, 
             drawing_mode="freedraw", 
-            key="tbm_canvas_final_perfect_v301"
+            key="tbm_canvas_final_perfect_v305"
         )
+        
+        # 추가옵션: 참석자 확인란에도 전자서명 패널 서명 적용 여부 선택
+        apply_signature_to_workers = st.checkbox("✍️ 참석자 확인란 서명란에 위 전자서명 이미지 일괄 적용 (체크 시 서명란에 리더 서명이 반영됨)", value=False)
 
     sign_img_base64 = ""
     try:
@@ -2281,13 +2324,30 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
 
     st.divider()
     st.subheader("3️⃣ 단월 공식 표준 TBM 회의록 양식 미리보기")
+    
+    # 리더 및 참석자 서명 태그 생성 로직 호환 처리
     sign_img_tag = f'<img src="data:image/png;base64,{sign_img_base64}" style="max-height:35px; vertical-align:middle;"/>' if sign_img_base64 else f'<span style="font-size:12px;">{leader_name}</span>'
     
-    risk_rows_html = "".join([f'<tr><td style="border:1px solid #000; padding:6px; width:45%; background:#fafafa; font-weight:bold;">{r}</td><td style="border:1px solid #000; padding:6px; width:55%;">{s}</td></tr>' for r, s in job_risks])
-    if not risk_rows_html:
-        risk_rows_html = '<tr><td style="border:1px solid #000; padding:6px; width:45%; text-align:center;">-</td><td style="border:1px solid #000; padding:6px; width:55%; text-align:center;">-</td></tr>'
+    def get_worker_sign_cell(w_name):
+        if not w_name.strip():
+            return ""
+        if apply_signature_to_workers and sign_img_base64:
+            return f'<img src="data:image/png;base64,{sign_img_base64}" style="max-height:22px; vertical-align:middle;"/>'
+        else:
+            return f'<span style="font-size:9.5px; color:#333;">(서명)</span>'
 
-    worker_table_rows = "".join([f'<tr style="text-align:center;"><td style="width:18%;">{"①②③④"[i]} {workers[i]}</td><td style="width:15%; color:#333; font-size:9.5px;">{"(서명)" if workers[i].strip() else ""}</td><td style="width:18%;">{"⑤⑥⑦⑧"[i]} {workers[i+4]}</td><td style="width:15%; color:#333; font-size:9.5px;">{"(서명)" if workers[i+4].strip() else ""}</td><td style="width:18%;">{"①②③④"[i]} {c_workers[i]}</td><td style="width:16%; color:#333; font-size:9.5px;">{"(서명)" if c_workers[i].strip() else ""}</td></tr>' for i in range(4)])
+    risk_rows_html = "".join([f'<tr><td style="border:1px solid #000; padding:5px; width:45%; background:#fafafa; font-size:10.5px;">{r}</td><td style="border:1px solid #000; padding:5px; width:55%; font-size:10.5px;">{s}</td></tr>' for r, s in job_risks])
+    if not risk_rows_html:
+        risk_rows_html = '<tr><td style="border:1px solid #000; padding:5px; width:45%; text-align:center;">-</td><td style="border:1px solid #000; padding:5px; width:55%; text-align:center;">-</td></tr>'
+
+    worker_table_rows = "".join([f'''<tr style="text-align:center; height:24px;">
+        <td style="width:16%;">{"①②③④"[i]} {workers[i]}</td>
+        <td style="width:17%;">{get_worker_sign_cell(workers[i])}</td>
+        <td style="width:16%;">{"⑤⑥⑦⑧"[i]} {workers[i+4]}</td>
+        <td style="width:17%;">{get_worker_sign_cell(workers[i+4])}</td>
+        <td style="width:18%;">{"①②③④"[i]} {c_workers[i]}</td>
+        <td style="width:16%;">{get_worker_sign_cell(c_workers[i])}</td>
+    </tr>''' for i in range(4)])
 
     audit_trail_html = f"""
     <div style="border: 1px dashed #444; background-color: #f9fbfd; padding: 6px 10px; margin-top: 6px; font-size: 10px; line-height: 1.45; color: #222;">
@@ -2297,43 +2357,182 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     </div>
     """
 
-    tbm_standard_html = f"""
+    # 1주일 단위 작성 양식 (이미지 양식 반영)[cite: 4]
+    weekly_worker_rows = "".join([f'<tr style="text-align:center; height:24px;"><td style="font-weight:bold; background:#fafafa; font-size:10px;">{w}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td></tr>' for w in workers if w.strip()])
+    if not weekly_worker_rows:
+        weekly_worker_rows = '<tr style="text-align:center;"><td colspan="8">참석자 없음</td></tr>'
+
+    tbm_weekly_html = f"""
     <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-        body {{ font-family: 'Malgun Gothic', '맑은 고딕', dotum, sans-serif; margin: 8px 12px; color: #000; }}
-        .title-box {{ font-size: 18px; font-weight: bold; padding: 4px 0; margin-bottom: 6px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 11px; }}
-        th, td {{ border: 1px solid #000; padding: 4px 5px; }}
-        .header-td {{ background-color: #f2f2f2; font-weight: bold; text-align: center; width: 14%; }}
+        body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 5px 8px; color: #000; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 10px; }}
+        th, td {{ border: 1px solid #000; padding: 3px 4px; text-align: center; }}
+        .header-td {{ background-color: #f2f2f2; font-weight: bold; }}
     </style></head><body>
-        <div class="title-box">[시설명: 단월처리시설 ] TBM(Tool Box Meeting) 회의록</div>
+        <div style="font-size: 11px; margin-bottom: 3px;">(인원 초과 시 뒷면 추가 작성, 동일 1주일 작업 참석자는 별지1 작성 가능)[cite: 4]</div>
+        <div style="font-size: 11px; font-weight: bold; margin-bottom: 6px;">[별지1. 작업내용이 동일하여, TBM을 1주일 단위로 하고자 할 경우의 양식, 매 작업마다 TBM 작성 원칙][cite: 4]</div>
         <table>
-            <tr><td class="header-td">TBM 일시</td><td style="width:38%;">{tbm_date.strftime('%Y년 %m월 %d일')} {tbm_time}</td><td class="header-td">작업날짜와 동일함</td><td style="width:25%;">☑예 □아니오</td></tr>
-            <tr><td class="header-td">작 업 명</td><td style="font-weight:bold;">{custom_job}</td><td class="header-td" rowspan="2">TBM 장소</td><td rowspan="2">{"☑" if tbm_place=="사무실" else "□"}사무실 &nbsp;&nbsp; {"☑" if tbm_place=="작업현장" else "□"}작업현장</td></tr>
-            <tr><td class="header-td">작업내용</td><td>{job_desc}</td></tr>
-            <tr><td class="header-td" rowspan="4">외주업체정보</td><td>외주작업 &nbsp;&nbsp; {"☑예 □아니오" if is_contractor else "□예 ☑아니오"}</td><td class="header-td" rowspan="2">업체 위험성평가 실시</td><td rowspan="2">{"☑예 □아니오" if is_contractor and contractor_eval else "□예 □아니오"}</td></tr>
-            <tr><td>업체명: <b>{contractor_name}</b></td></tr>
-            <tr><td>책임자: <b>{contractor_manager}</b></td><td class="header-td" rowspan="2">산업안전보건 교육 확인</td><td rowspan="2">{"☑예 □아니오" if is_contractor and contractor_edu else "□예 □아니오"}</td></tr>
-            <tr><td>연락처: {contractor_tel}</td></tr>
+            <tr class="header-td">
+                <td style="width:16%;">구분</td>
+                <td style="width:12%;">월</td><td style="width:12%;">화</td><td style="width:12%;">수</td><td style="width:12%;">목</td><td style="width:12%;">금</td><td style="width:12%;">토</td><td style="width:12%;">일</td>
+            </tr>
+            <tr>
+                <td class="header-td">TBM 장소</td>
+                <td>{tbm_place}</td><td>{tbm_place}</td><td>{tbm_place}</td><td>{tbm_place}</td><td>{tbm_place}</td><td>{tbm_place}</td><td>{tbm_place}</td>
+            </tr>
+            <tr>
+                <td class="header-td">TBM 리더 서명<br>(안전조치 확인자)</td>
+                <td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td>
+            </tr>
         </table>
-        <table><tr style="background:#e9ecef;"><th style="width:45%;">■ 유해·위험요인 파악 내용</th><th style="width:55%;">■ 파악된 유해·위험요인의 감소대책 수립 및 이행</th></tr>{risk_rows_html}</table>
-        <table><tr><th colspan="5" style="text-align:left; background:#e9ecef;">■ TBM 리더 정보</th></tr><tr style="text-align:center; font-weight:bold; background:#fafafa;"><td style="width:18%;">소속</td><td style="width:20%;">직책</td><td style="width:20%;">관리감독자</td><td style="width:18%;">성명</td><td rowspan="2" style="width:24%; vertical-align:middle;">{sign_img_tag}</td></tr><tr style="text-align:center;"><td>{leader_dept}</td><td>{leader_role}</td><td>☑예 □아니오</td><td><b>{leader_name}</b></td></tr></table>
-        <table><tr><th colspan="6" style="text-align:left; background:#e9ecef;">■ 참석자 확인</th></tr><tr style="text-align:center; background:#fafafa; font-weight:bold;"><td style="width:18%;">성 명</td><td style="width:15%;">서 명</td><td style="width:18%;">성 명</td><td style="width:15%;">서 명</td><td style="width:18%;">업 체 성 명</td><td style="width:16%;">업 체 서 명</td></tr>{worker_table_rows}</table>
+
+        <table>
+            <tr><th colspan="9" class="header-td" style="background:#e9ecef; text-align:center;">참석자 서명[cite: 4]</th></tr>
+            <tr class="header-td">
+                <td style="width:16%;">요일<br>참석자</td>
+                <td style="width:12%;">월</td><td style="width:12%;">화</td><td style="width:12%;">수</td><td style="width:12%;">목</td><td style="width:12%;">금</td><td style="width:12%;">토</td><td style="width:12%;">일</td>
+            </tr>
+            {weekly_worker_rows}
+        </table>
+
+        <table>
+            <tr class="header-td"><td colspan="2" style="text-align:left;">■ 작업 후 미팅 내용[cite: 4]</td></tr>
+            <tr><td style="width:15%; background:#fafafa;" class="header-td">· (월)</td><td style="text-align:left; padding-left:6px;">{post_note_mon}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (화)</td><td style="text-align:left; padding-left:6px;">{post_note_tue}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (수)</td><td style="text-align:left; padding-left:6px;">{post_note_wed}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (목)</td><td style="text-align:left; padding-left:6px;">{post_note_thu}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (금)</td><td style="text-align:left; padding-left:6px;">{post_note_fri}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (토)</td><td style="text-align:left; padding-left:6px;">{post_note_sat}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (일)</td><td style="text-align:left; padding-left:6px;">{post_note_sun}</td></tr>
+        </table>
         {audit_trail_html}
     </body></html>
     """
 
-    weekly_rows_html = "".join([f'<tr style="text-align:center;"><td style="font-weight:bold; background:#fafafa;">{w}</td><td>(서명)</td><td>(서명)</td><td>(서명)</td><td>(서명)</td><td>(서명)</td><td>(서명)</td><td>(서명)</td></tr>' for w in workers if w.strip()])
-    tbm_weekly_html = f"""
+    tbm_standard_html = f"""
     <!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-        body {{ font-family: 'Malgun Gothic', sans-serif; margin: 8px 12px; font-size: 11px; }}
-        table {{ width: 100%; border-collapse: collapse; }}
-        th, td {{ border: 1px solid #000; padding: 4px; }}
-        th {{ background:#f2f2f2; text-align:center; }}
+        body {{ font-family: 'Malgun Gothic', '맑은 고딕', dotum, sans-serif; margin: 5px 8px; color: #000; }}
+        .title-box {{ font-size: 16px; font-weight: bold; padding: 2px 0; margin-bottom: 4px; text-align: left; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 10.5px; }}
+        th, td {{ border: 1px solid #000; padding: 3px 4px; }}
+        .header-td {{ background-color: #f2f2f2; font-weight: bold; text-align: center; }}
     </style></head><body>
-        <div style="font-weight:bold; font-size:14px; margin-bottom:6px;">[별지1. 1주일 단위 TBM 회의록]</div>
-        <table><tr><th>구분</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th><th>일</th></tr>
-        <tr style="text-align:center;"><td>리더서명</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td><td>{leader_name}</td></tr>
-        <tr><th colspan="8" style="background:#e9ecef;">참석자 서명</th></tr>{weekly_rows_html}</table>
+        <div class="title-box">[시설명: 단월하수처리시설 ] TBM(Tool Box Meeting) 회의록</div>
+        <table>
+            <tr>
+                <td class="header-td" style="width:13%;">TBM 일시</td>
+                <td style="width:37%;">{tbm_date.strftime('%Y년 %m월 %d일')} {tbm_time}</td>
+                <td class="header-td" style="width:28%;">작업날짜와 동일함</td>
+                <td style="width:22%; text-align:center;">☑예 □아니오</td>
+            </tr>
+            <tr>
+                <td class="header-td">작 업 명</td>
+                <td style="font-weight:bold;">{custom_job}</td>
+                <td class="header-td" rowspan="2">TBM 장소</td>
+                <td rowspan="2" style="font-size:10px;">
+                    {"☑" if tbm_place=="사무실" else "□"}사무실<br>
+                    {"☑" if tbm_place=="작업현장" else "□"}작업현장<br>
+                    {"☑" if tbm_place=="기타" else "□"}기타({tbm_place_etc if tbm_place=="기타" else ""})
+                </td>
+            </tr>
+            <tr>
+                <td class="header-td">작업내용</td>
+                <td>{job_desc}</td>
+            </tr>
+            <tr>
+                <td class="header-td" rowspan="4">외주업체정보<br><span style="font-size:9px; font-weight:normal;">(해당시 작성)</span></td>
+                <td>외주작업 &nbsp;&nbsp; {"☑예 □아니오" if is_contractor else "□예 ☑아니오"}</td>
+                <td class="header-td" rowspan="2">업체 위험성평가 실시</td>
+                <td rowspan="2" style="text-align:center; font-size:10px;">
+                    {"☑예 □아니오" if is_contractor and contractor_eval else "□예 □아니오"}<br>
+                    <span style="font-size:8.5px; color:#555;">*미이조 시 직영 훈련 표기</span>
+                </td>
+            </tr>
+            <tr>
+                <td>업체명: <b>{contractor_name}</b></td>
+            </tr>
+            <tr>
+                <td>책임자: <b>{contractor_manager}</b></td>
+                <td class="header-td" rowspan="2">산업안전보건 교육 확인</td>
+                <td rowspan="2" style="text-align:center; font-size:10px;">
+                    {"☑예 □아니오" if is_contractor and contractor_edu else "□예 □아니오"}<br>
+                    <span style="font-size:8.5px; color:#555;">*교육 미수료시 직영 불가</span>
+                </td>
+            </tr>
+            <tr>
+                <td>연락처: {contractor_tel}</td>
+            </tr>
+        </table>
+
+        <table>
+            <tr>
+                <td class="header-td" style="width:30%; background:#f2f2f2;">■ 해당작업 위험성평가 실시 확인</td>
+                <td style="padding:4px;">
+                    &nbsp;{"☑" if "최초" in eval_types else "□"} 최초 &nbsp;&nbsp;&nbsp;&nbsp; 
+                    &nbsp;{"☑" if "정기" in eval_types else "□"} 정기 &nbsp;&nbsp;&nbsp;&nbsp; 
+                    &nbsp;{"☑" if "수시" in eval_types else "□"} 수시 (중복 가능)
+                </td>
+            </tr>
+        </table>
+
+        <table>
+            <tr style="background:#e9ecef;">
+                <th style="width:45%; border:1px solid #000;">■ 유해·위험요인 파악 내용</th>
+                <th style="width:55%; border:1px solid #000;">■ 파악된 유해·위험요인의 감소대책 수립 및 이행</th>
+            </tr>
+            {risk_rows_html}
+        </table>
+
+        <table>
+            <tr style="background:#f2f2f2;"><th colspan="2" style="text-align:left; border:1px solid #000;">■ TBM 리더의 작업 전 안전조치 여부 재확인</th></tr>
+            <tr>
+                <td style="width:75%; padding:4px; font-size:10px; line-height: 1.4;">
+                    • {chk_item_1}<br>
+                    • {chk_item_2}<br>
+                    • {chk_item_3}<br>
+                    • {chk_item_4}
+                </td>
+                <td style="width:25%; text-align:center; vertical-align:middle; font-weight:bold; font-size:11px;">
+                    {"☑" if is_safety_checked else "□"} 확인
+                </td>
+            </tr>
+        </table>
+
+        <table>
+            <tr style="background:#f2f2f2;"><td style="border:1px solid #000; font-weight:bold;">■ 작업 후 미팅 <span style="font-weight:normal; font-size:9.5px;">※ 위험성 감소대책의 실효성, 미치사고 내용, 근로자 건의사항 등을 작성</span></td></tr>
+            <tr><td style="border:1px solid #000; padding:5px; height:24px; font-size:10.5px;">{post_note_mon}</td></tr>
+        </table>
+
+        <table>
+            <tr><th colspan="5" style="text-align:left; background:#e9ecef; border:1px solid #000;">■ TBM 리더 정보</th></tr>
+            <tr style="text-align:center; font-weight:bold; background:#fafafa;">
+                <td style="width:18%; border:1px solid #000;">소속</td>
+                <td style="width:20%; border:1px solid #000;">직책(또는 직급)</td>
+                <td style="width:20%; border:1px solid #000;">관리감독자</td>
+                <td style="width:18%; border:1px solid #000;">성명</td>
+                <td style="width:24%; border:1px solid #000;">서명란</td>
+            </tr>
+            <tr style="text-align:center;">
+                <td style="border:1px solid #000;">{leader_dept}</td>
+                <td style="border:1px solid #000;">{leader_role}</td>
+                <td style="border:1px solid #000;">☑예 □아니오</td>
+                <td style="border:1px solid #000; font-weight:bold;">{leader_name}</td>
+                <td style="border:1px solid #000; vertical-align:middle; height:30px;">{sign_img_tag}</td>
+            </tr>
+        </table>
+
+        <table>
+            <tr><th colspan="6" style="text-align:left; background:#e9ecef; border:1px solid #000;">■ 참석자 확인 <span style="font-weight:normal; font-size:9.5px;">※ 외주 업체 포함 참석</span></th></tr>
+            <tr style="text-align:center; background:#fafafa; font-weight:bold; font-size:10px;">
+                <td style="width:16%; border:1px solid #000;">성 명</td>
+                <td style="width:17%; border:1px solid #000;">서 명</td>
+                <td style="width:16%; border:1px solid #000;">성 명</td>
+                <td style="width:17%; border:1px solid #000;">서 명</td>
+                <td style="width:18%; border:1px solid #000;">업 체 성 명</td>
+                <td style="width:16%; border:1px solid #000;">업 체 서 명</td>
+            </tr>
+            {worker_table_rows}
+        </table>
         {audit_trail_html}
     </body></html>
     """
@@ -2376,11 +2575,11 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         available_years = sorted(df_files["year"].unique(), reverse=True)
         col_f1, col_f2 = st.columns(2)
         with col_f1: 
-            sel_year = st.selectbox("📅 1단계: 연도 선택", available_years, key="tbm_sel_y_v250")
+            sel_year = st.selectbox("📅 1단계: 연도 선택", available_years, key="tbm_sel_y_v252")
         df_year_filtered = df_files[df_files["year"] == sel_year]
         available_weeks = sorted(df_year_filtered["week"].unique(), reverse=True)
         with col_f2: 
-            sel_week = st.selectbox(f"📆 2단계: {sel_year} 월/주차 선택", available_weeks, key="tbm_sel_w_v250")
+            sel_week = st.selectbox(f"📆 2단계: {sel_year} 월/주차 선택", available_weeks, key="tbm_sel_w_v252")
 
         df_week_filtered = df_year_filtered[df_year_filtered["week"] == sel_week].sort_values(by="date", ascending=False)
         target_file_list = df_week_filtered["filename"].tolist()
@@ -2388,11 +2587,11 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         
         col_sel, col_del = st.columns([3, 1])
         with col_sel: 
-            selected_file_to_view = st.selectbox("열람할 회의록 파일 선택", target_file_list, key="tbm_sel_doc_v250")
+            selected_file_to_view = st.selectbox("열람할 회의록 파일 선택", target_file_list, key="tbm_sel_doc_v252")
         with col_del:
             st.write("")
             st.write("")
-            if st.button("🗑️ 선택 문서 영구 삭제", type="secondary", use_container_width=True, key="tbm_btn_del_v250"):
+            if st.button("🗑️ 선택 문서 영구 삭제", type="secondary", use_container_width=True, key="tbm_btn_del_v252"):
                 clean_tbm_del = sanitize_filename(selected_file_to_view)
                 file_to_delete = os.path.join(record_dir, clean_tbm_del)
                 if os.path.exists(file_to_delete): 
@@ -2409,7 +2608,6 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
                 st.components.v1.html(view_html_data, height=650, scrolling=True)
     else:
         st.info("💡 아직 보관함에 저장된 TBM 회의록이 없습니다.")
-
 # -------------------------------------------------------------
 # 8. 약품 구매 및 사용 관리 시스템 (분기/상하반기/연간 조회 및 다운로드)
 # -------------------------------------------------------------
@@ -2557,8 +2755,10 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
 
                 output_buy = io.BytesIO()
                 with pd.ExcelWriter(output_buy, engine='openpyxl') as writer:
+                    # 원본 양식의 첫 행(타이틀), 두 번째 행(헤더) 구조를 맞추어 기록
                     clean_buy = r_buy.drop(columns=['연도', '날짜_dt'], errors='ignore')
                     
+                    # 엑셀 시트에 직접 쓰기 (header=False로 처리 후 커스텀 작성)
                     temp_df = pd.DataFrame([ [buy_title] + [None]*(len(buy_cols)-1) ])
                     temp_df.loc[1] = buy_cols
                     final_buy_export = pd.concat([temp_df, clean_buy], ignore_index=True)
@@ -2615,3 +2815,5 @@ elif menu == "🧪 8. 약품 구매 및 사용 관리":
                     key="dl_use_btn",
                     use_container_width=True
                 )
+
+  
