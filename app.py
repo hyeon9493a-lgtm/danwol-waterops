@@ -156,7 +156,7 @@ menu = st.sidebar.radio(
 
 if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
-    st.caption("🔒 작업명 입력 시 세부내용/3대 위험요인·감소대책 AI 자동완성 · 리더 및 참석자 전자서명 개별 분리 탑재")
+    st.caption("🔒 작업명 입력 시 세부내용/3대 위험요인·감소대책 AI 자동완성 · 사진 양식 100% 동일 비율 적용")
 
     record_dir = TBM_RECORD_DIR
     if not os.path.exists(record_dir): os.makedirs(record_dir)
@@ -181,6 +181,10 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     }
 
     is_weekly = st.checkbox("📅 **[별지1] 작업내용이 동일하여 1주일 단위로 작성하고자 할 경우 체크**", value=False)
+
+    post_note_mon = post_note_tue = post_note_wed = post_note_thu = post_note_fri = "특이사항 없음"
+    post_note_sat = post_note_sun = "해당 없음"
+    single_post_note = "특이사항 없음"
 
     c1, c2 = st.columns([1, 1])
     with c1:
@@ -210,18 +214,15 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
 
         eval_type = st.selectbox("위험성평가 실시 구분", ["수시", "최초", "정기"])
 
-        post_note_mon = post_note_tue = post_note_wed = post_note_thu = post_note_fri = "특이사항 없음"
-        post_note_sat = post_note_sun = "해당 없음"
-        single_post_note = "특이사항 없음"
-
         if is_weekly:
-            st.markdown("##### 📝 1주일 단위(별지1) 미팅 특이사항 일괄 설정")
-            batch_same = st.checkbox("월~금 미팅 내용을 동일하게 일괄 적용", value=True)
-            if batch_same:
-                common_note = st.text_input("월~금 공통 미팅 내용", "특이사항 없음")
+            st.markdown("##### 📝 1주일 단위(별지1) 작업 후 미팅 특이사항")
+            batch_apply = st.checkbox("월~금 미팅 내용을 동일하게 일괄 적용", value=True)
+            if batch_apply:
+                common_note = st.text_input("월~금 공통 미팅 내용 입력", "특이사항 없음")
                 post_note_mon = post_note_tue = post_note_wed = post_note_thu = post_note_fri = common_note
-                post_note_sat = st.text_input("토요일 미팅 내용", "해당 없음")
-                post_note_sun = st.text_input("일요일 미팅 내용", "해당 없음")
+                col_wk1, col_wk2 = st.columns(2)
+                with col_wk1: post_note_sat = st.text_input("토요일 미팅 내용", "해당 없음")
+                with col_wk2: post_note_sun = st.text_input("일요일 미팅 내용", "해당 없음")
             else:
                 post_note_mon = st.text_input("월요일 미팅 내용", "특이사항 없음")
                 post_note_tue = st.text_input("화요일 미팅 내용", "특이사항 없음")
@@ -239,17 +240,29 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         leader_role = st.text_input("리더 직책", "시설장(차장)")
         leader_name = st.text_input("리더 성명", "주영규")
         
-        st.markdown("##### 👥 자체 참석자 명단 (①~④)")
-        w1 = st.text_input("① 성명", "하신호")
-        w2 = st.text_input("② 성명", "최태수")
-        w3 = st.text_input("③ 성명", "이현진")
-        w4 = st.text_input("④ 성명", "")
+        st.markdown("##### 👥 자체 참석자 명단 및 서명 방식 선택")
+        worker_mode = st.radio("참석자 확인란 서명 방식", ["전자서명 캔버스 그림 적용", "직접 텍스트(이름) 입력"], horizontal=True)
+        
+        w1 = st.text_input("① 참석자 성명", "하신호")
+        w2 = st.text_input("② 참석자 성명", "최태수")
+        w3 = st.text_input("③ 참석자 성명", "이현진")
+        w4 = st.text_input("④ 참석자 성명", "")
         workers = [w1, w2, w3, w4]
+
+        custom_worker_signs = ["", "", "", ""]
+        if worker_mode == "직접 텍스트(이름) 입력":
+            col_ws1, col_ws2 = st.columns(2)
+            with col_ws1:
+                cw1 = st.text_input("① 서명 대체 텍스트", "하신호")
+                cw2 = st.text_input("② 서명 대체 텍스트", "최태수")
+            with col_ws2:
+                cw3 = st.text_input("③ 서명 대체 텍스트", "이현진")
+                cw4 = st.text_input("④ 서명 대체 텍스트", "")
+            custom_worker_signs = [cw1, cw2, cw3, cw4]
 
         st.markdown("---")
         st.markdown("##### ✍️ 전자서명 입력 (캔버스 분리)")
-        
-        tab_sig_leader, tab_sig_worker = st.tabs(["🛡️ TBM 리더 서명", "👥 참석자 공용 서명"])
+        tab_sig_leader, tab_sig_worker = st.tabs(["🛡️ TBM 리더 서명", "👥 참석자 공용 서명 (그림)"])
         
         with tab_sig_leader:
             st.caption("TBM 리더(관리감독자) 전용 서명 칸입니다.")
@@ -259,7 +272,6 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             st.caption("참석자 확인란에 들어갈 서명 칸입니다.")
             canvas_worker = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=75, width=260, key="canvas_worker_sig")
 
-    # 리더 서명 처리
     leader_sig_base64 = ""
     try:
         if canvas_leader.image_data is not None and np.any(canvas_leader.image_data[:, :, 3] > 0):
@@ -267,13 +279,9 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             buf_l = io.BytesIO()
             img_l.save(buf_l, format="PNG")
             leader_sig_base64 = base64.b64encode(buf_l.getvalue()).decode()
-            
-            # 리더 서명 영구 보관
-            leader_sig_filename = sanitize_filename(f"leader_signature_{leader_name}.png")
-            img_l.save(os.path.join(SIGNATURE_DIR, leader_sig_filename))
+            img_l.save(os.path.join(SIGNATURE_DIR, sanitize_filename(f"leader_signature_{leader_name}.png")))
     except: pass
 
-    # 참석자 서명 처리
     worker_sig_base64 = ""
     try:
         if canvas_worker.image_data is not None and np.any(canvas_worker.image_data[:, :, 3] > 0):
@@ -283,39 +291,42 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             worker_sig_base64 = base64.b64encode(buf_w.getvalue()).decode()
     except: pass
 
-    sign_tag = f'<img src="data:image/png;base64,{leader_sig_base64}" style="max-height:30px; vertical-align:middle;"/>' if leader_sig_base64 else leader_name
+    sign_tag = f'<img src="data:image/png;base64,{leader_sig_base64}" style="max-height:28px; vertical-align:middle;"/>' if leader_sig_base64 else leader_name
 
-    def get_worker_sign_cell(w_name):
+    def get_worker_sign_cell(idx, w_name):
         if not w_name.strip(): return ""
-        if worker_sig_base64:
-            return f'<img src="data:image/png;base64,{worker_sig_base64}" style="max-height:20px; vertical-align:middle;"/>'
+        if worker_mode == "직접 텍스트(이름) 입력":
+            return custom_worker_signs[idx] if idx < len(custom_worker_signs) and custom_worker_signs[idx].strip() else w_name
         else:
-            return '(서명)'
+            if worker_sig_base64:
+                return f'<img src="data:image/png;base64,{worker_sig_base64}" style="max-height:18px; vertical-align:middle;"/>'
+            else:
+                return '(서명)'
 
-    weekly_worker_rows = "".join([f'<tr style="text-align:center; height:24px;"><td style="font-weight:bold; background:#fafafa;">{w}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td><td>{get_worker_sign_cell(w)}</td></tr>' for w in workers if w.strip()])
+    weekly_worker_rows = "".join([f'<tr style="text-align:center; height:24px;"><td style="font-weight:bold; background:#fafafa;">{workers[i]}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td></tr>' for i in range(len(workers)) if workers[i].strip()])
     if not weekly_worker_rows: weekly_worker_rows = '<tr style="text-align:center;"><td colspan="8">참석자 없음</td></tr>'
 
-    # 표준 TBM HTML 양식
+    # 사진 양식(image_a5716a.png)의 열 비율과 크기를 100% 일치시킨 표준 TBM HTML 양식
     tbm_standard_html = f"""
     <!DOCTYPE html>
     <html>
     <head>
     <meta charset="UTF-8">
     <style>
-        body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 10px; color: #000; font-size: 11px; }}
-        .title-box {{ font-size: 16px; font-weight: bold; margin-bottom: 6px; text-align: left; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 10px; }}
-        th, td {{ border: 1px solid #000; padding: 4px 5px; vertical-align: middle; }}
+        body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 8px; color: #000; font-size: 10.5px; }}
+        .title-box {{ font-size: 15px; font-weight: bold; margin-bottom: 5px; text-align: left; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5px; }}
+        th, td {{ border: 1px solid #000; padding: 3px 4px; vertical-align: middle; }}
         .header-td {{ background-color: #f2f2f2; font-weight: bold; text-align: center; }}
-        .sub-table td {{ border: none; padding: 2px; }}
+        .sub-table td {{ border: none; padding: 1px 2px; }}
     </style>
     </head>
     <body>
         <div class="title-box">[시설명: 단월하수처리시설 ] TBM(Tool Box Meeting) 회의록</div>
         <table>
             <tr>
-                <td class="header-td" style="width:13%;">TBM 일시</td>
-                <td style="width:37%;">{tbm_date.strftime('%Y년 %m월 %d일')} {tbm_time}</td>
+                <td class="header-td" style="width:12%;">TBM 일시</td>
+                <td style="width:38%;">{tbm_date.strftime('%Y년 %m월 %d일')} {tbm_time}</td>
                 <td class="header-td" style="width:28%;">작업날짜와 동일함</td>
                 <td style="width:22%; text-align:center;">☑예 □아니오</td>
             </tr>
@@ -323,7 +334,7 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
                 <td class="header-td">작 업 명</td>
                 <td style="font-weight:bold;">{custom_job}</td>
                 <td class="header-td" rowspan="2">TBM 장소</td>
-                <td rowspan="2" style="font-size:10px;">
+                <td rowspan="2" style="font-size:9.5px;">
                     {"☑" if tbm_place=="사무실" else "□"}사무실 &nbsp;&nbsp; {"☑" if tbm_place=="작업현장" else "□"}작업현장<br>
                     {"☑" if tbm_place=="기타" else "□"}기타(&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)
                 </td>
@@ -332,12 +343,33 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
                 <td class="header-td">작업내용</td>
                 <td>{job_desc}</td>
             </tr>
+            <tr>
+                <td class="header-td" rowspan="4">외주업체정보<br><span style="font-size:8px; font-weight:normal;">(해당시 작성)</span></td>
+                <td>외주작업 &nbsp;&nbsp; □예 ☑아니오</td>
+                <td class="header-td" rowspan="2">업체 위험성평가 실시</td>
+                <td rowspan="2" style="text-align:center; font-size:9px;">
+                    □예 □아니오<br><span style="font-size:7.5px; color:#555;">*미이조 시 직영 훈련 표기</span>
+                </td>
+            </tr>
+            <tr>
+                <td>업체명: </td>
+            </tr>
+            <tr>
+                <td>책임자: </td>
+                <td class="header-td" rowspan="2">산업안전보건 교육 확인</td>
+                <td rowspan="2" style="text-align:center; font-size:9px;">
+                    □예 □아니오<br><span style="font-size:7.5px; color:#555;">*교육 미수료시 작업 불가</span>
+                </td>
+            </tr>
+            <tr>
+                <td>연락처: </td>
+            </tr>
         </table>
 
         <table>
             <tr>
                 <td class="header-td" style="width:28%; background:#f2f2f2;">■ 해당작업 위험성평가 실시 확인</td>
-                <td style="padding:4px;">
+                <td style="padding:3px;">
                     &nbsp;{"☑" if eval_type=="최초" else "□"} 최초 &nbsp;&nbsp;&nbsp;&nbsp; 
                     &nbsp;{"☑" if eval_type=="정기" else "□"} 정기 &nbsp;&nbsp;&nbsp;&nbsp; 
                     &nbsp;{"☑" if eval_type=="수시" else "□"} 수시 (중복 가능)
@@ -360,21 +392,21 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             <tr>
                 <td style="width:78%; padding:0;">
                     <table class="sub-table" style="width:100%;">
-                        <tr><td style="width:35%; border-bottom:1px solid #ccc; padding:3px 5px;">• 필수 보호구 착용 상태</td><td style="border-bottom:1px solid #ccc; padding:3px 5px;">안전모, 안전화, 안전장갑, 각반, 안전대 등</td></tr>
-                        <tr><td style="width:35%; border-bottom:1px solid #ccc; padding:3px 5px;">• 작업자 건강상태 확인</td><td style="border-bottom:1px solid #ccc; padding:3px 5px;">작업자 음주, 발열, 피로도 등(필요시 작업 배제)</td></tr>
-                        <tr><td style="width:35%; border-bottom:1px solid #ccc; padding:3px 5px;">• 작업자의 TBM 내용 숙지</td><td style="border-bottom:1px solid #ccc; padding:3px 5px;">위험성평가 결과 및 동일작업의 TBM 일지 확인 등</td></tr>
-                        <tr><td style="padding:3px 5px;">• 파악된 감소 대책 이행 여부</td><td style="padding:3px 5px;">위험성 감소대책 이행 확인</td></tr>
+                        <tr><td style="width:35%; border-bottom:1px solid #ccc; padding:2px 4px;">• 필수 보호구 착용 상태</td><td style="border-bottom:1px solid #ccc; padding:2px 4px;">안전모, 안전화, 안전장갑, 각반, 안전대 등</td></tr>
+                        <tr><td style="width:35%; border-bottom:1px solid #ccc; padding:2px 4px;">• 작업자 건강상태 확인</td><td style="border-bottom:1px solid #ccc; padding:2px 4px;">작업자 음주, 발열, 피로도 등(필요시 작업 배제)</td></tr>
+                        <tr><td style="width:35%; border-bottom:1px solid #ccc; padding:2px 4px;">• 작업자의 TBM 내용 숙지</td><td style="border-bottom:1px solid #ccc; padding:2px 4px;">위험성평가 결과 및 동일작업의 TBM 일지 확인 등</td></tr>
+                        <tr><td style="padding:2px 4px;">• 파악된 감소 대책 이행 여부</td><td style="padding:2px 4px;">위험성 감소대책 이행 확인</td></tr>
                     </table>
                 </td>
-                <td style="width:22%; text-align:center; vertical-align:middle; font-weight:bold; font-size:12px; background:#fff;">
+                <td style="width:22%; text-align:center; vertical-align:middle; font-weight:bold; font-size:11px; background:#fff;">
                     ☑ 확인
                 </td>
             </tr>
         </table>
 
         <table>
-            <tr style="background:#f2f2f2;"><td style="border:1px solid #000; font-weight:bold;">■ 작업 후 미팅 <span style="font-weight:normal; font-size:9.5px;">※ 위험성 감소대책의 실효성, 미치사고 내용, 근로자 건의사항 등을 작성</span></td></tr>
-            <tr><td style="border:1px solid #000; padding:5px; height:22px; font-size:10.5px;">{single_post_note}</td></tr>
+            <tr style="background:#f2f2f2;"><td style="border:1px solid #000; font-weight:bold;">■ 작업 후 미팅 <span style="font-weight:normal; font-size:8.5px;">※ 위험성 감소대책의 실효성, 미치사고 내용, 근로자 건의사항 등을 작성</span></td></tr>
+            <tr><td style="border:1px solid #000; padding:4px; height:20px; font-size:10px;">{single_post_note}</td></tr>
         </table>
 
         <table>
@@ -383,19 +415,19 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
                 <td style="width:18%;">소속</td><td style="width:20%;">직책(또는 직급)</td><td style="width:20%;">관리감독자</td><td style="width:18%;">성명</td><td style="width:24%;">서명란</td>
             </tr>
             <tr style="text-align:center;">
-                <td>{leader_dept}</td><td>{leader_role}</td><td>☑예 □아니오</td><td style="font-weight:bold;">{leader_name}</td><td style="height:32px;">{sign_tag}</td>
+                <td>{leader_dept}</td><td>{leader_role}</td><td>☑예 □아니오</td><td style="font-weight:bold;">{leader_name}</td><td style="height:28px;">{sign_tag}</td>
             </tr>
         </table>
 
         <table>
-            <tr><th colspan="6" style="text-align:left; background:#f2f2f2; border:1px solid #000;">■ 참석자 확인 <span style="font-weight:normal; font-size:9.5px;">※ 외주 업체 포함 참석</span></th></tr>
-            <tr style="text-align:center; background:#fafafa; font-weight:bold; font-size:10px;">
+            <tr><th colspan="6" style="text-align:left; background:#f2f2f2; border:1px solid #000;">■ 참석자 확인 <span style="font-weight:normal; font-size:8.5px;">※ 외주 업체 포함 참석</span></th></tr>
+            <tr style="text-align:center; background:#fafafa; font-weight:bold; font-size:9.5px;">
                 <td style="width:16%;">성 명</td><td style="width:17%;">서 명</td><td style="width:16%;">성 명</td><td style="width:17%;">서 명</td><td style="width:18%;">업 체 성 명</td><td style="width:16%;">업 체 서 명</td>
             </tr>
-            <tr style="text-align:center; height:24px;"><td>① {workers[0]}</td><td>{get_worker_sign_cell(workers[0])}</td><td>⑤</td><td></td><td>①</td><td></td></tr>
-            <tr style="text-align:center; height:24px;"><td>② {workers[1]}</td><td>{get_worker_sign_cell(workers[1])}</td><td>⑥</td><td></td><td>②</td><td></td></tr>
-            <tr style="text-align:center; height:24px;"><td>③ {workers[2]}</td><td>{get_worker_sign_cell(workers[2])}</td><td>⑦</td><td></td><td>③</td><td></td></tr>
-            <tr style="text-align:center; height:24px;"><td>④ {workers[3]}</td><td>{get_worker_sign_cell(workers[3])}</td><td>⑧</td><td></td><td>④</td><td></td></tr>
+            <tr style="text-align:center; height:22px;"><td>① {workers[0]}</td><td>{get_worker_sign_cell(0, workers[0])}</td><td>⑤</td><td></td><td>①</td><td></td></tr>
+            <tr style="text-align:center; height:22px;"><td>② {workers[1]}</td><td>{get_worker_sign_cell(1, workers[1])}</td><td>⑥</td><td></td><td>②</td><td></td></tr>
+            <tr style="text-align:center; height:22px;"><td>③ {workers[2]}</td><td>{get_worker_sign_cell(2, workers[2])}</td><td>⑦</td><td></td><td>③</td><td></td></tr>
+            <tr style="text-align:center; height:22px;"><td>④ {workers[3]}</td><td>{get_worker_sign_cell(3, workers[3])}</td><td>⑧</td><td></td><td>④</td><td></td></tr>
         </table>
     </body>
     </html>
@@ -408,14 +440,14 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     <head>
     <meta charset="UTF-8">
     <style>
-        body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 10px; color: #000; font-size: 11px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-bottom: 5px; font-size: 10px; }}
-        th, td {{ border: 1px solid #000; padding: 4px 5px; vertical-align: middle; text-align: center; }}
+        body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 8px; color: #000; font-size: 10.5px; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 4px; font-size: 9.5px; }}
+        th, td {{ border: 1px solid #000; padding: 3px 4px; vertical-align: middle; text-align: center; }}
         .header-td {{ background-color: #f2f2f2; font-weight: bold; }}
     </style>
     </head>
     <body>
-        <div style="font-size: 10.5px; font-weight: bold; margin-bottom: 6px;">[별지1. 작업내용이 동일하여, TBM을 1주일 단위로 하고자 할 경우의 양식]</div>
+        <div style="font-size: 10px; font-weight: bold; margin-bottom: 5px;">[별지1. 작업내용이 동일하여, TBM을 1주일 단위로 하고자 할 경우의 양식]</div>
         <table>
             <tr class="header-td">
                 <td style="width:16%;">구분</td>
@@ -442,19 +474,19 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
 
         <table>
             <tr class="header-td"><td colspan="2" style="text-align:left;">■ 작업 후 미팅 내용</td></tr>
-            <tr><td style="width:15%; background:#fafafa;" class="header-td">· (월)</td><td style="text-align:left; padding-left:6px;">{post_note_mon}</td></tr>
-            <tr><td style="background:#fafafa;" class="header-td">· (화)</td><td style="text-align:left; padding-left:6px;">{post_note_tue}</td></tr>
-            <tr><td style="background:#fafafa;" class="header-td">· (수)</td><td style="text-align:left; padding-left:6px;">{post_note_wed}</td></tr>
-            <tr><td style="background:#fafafa;" class="header-td">· (목)</td><td style="text-align:left; padding-left:6px;">{post_note_thu}</td></tr>
-            <tr><td style="background:#fafafa;" class="header-td">· (금)</td><td style="text-align:left; padding-left:6px;">{post_note_fri}</td></tr>
-            <tr><td style="background:#fafafa;" class="header-td">· (토)</td><td style="text-align:left; padding-left:6px;">{post_note_sat}</td></tr>
-            <tr><td style="background:#fafafa;" class="header-td">· (일)</td><td style="text-align:left; padding-left:6px;">{post_note_sun}</td></tr>
+            <tr><td style="width:15%; background:#fafafa;" class="header-td">· (월)</td><td style="text-align:left; padding-left:5px;">{post_note_mon}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (화)</td><td style="text-align:left; padding-left:5px;">{post_note_tue}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (수)</td><td style="text-align:left; padding-left:5px;">{post_note_wed}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (목)</td><td style="text-align:left; padding-left:5px;">{post_note_thu}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (금)</td><td style="text-align:left; padding-left:5px;">{post_note_fri}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (토)</td><td style="text-align:left; padding-left:5px;">{post_note_sat}</td></tr>
+            <tr><td style="background:#fafafa;" class="header-td">· (일)</td><td style="text-align:left; padding-left:5px;">{post_note_sun}</td></tr>
         </table>
     </body>
     </html>
     """
 
-    active_html = tbm_weekly_html if is_weekly else tbm_standard_html
+    active_html = tbm_weekly_html if is_weekly else t_bm_standard_html = tbm_standard_html
 
     st.divider()
     st.subheader("📋 TBM 표준회의록 공식 양식 미리보기")
@@ -465,7 +497,7 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         st.download_button("📥 TBM 회의록 인쇄/PDF 다운로드", data=active_html, file_name=f"TBM회의록_{tbm_date}.html", mime="text/html", type="primary", use_container_width=True)
     with col_btn2:
         if st.button("💾 전자서명 저장 확인", use_container_width=True):
-            st.success("✅ 리더 및 참석자 서명 데이터가 각각 분리되어 안전하게 반영되었습니다!")
+            st.success("✅ 리더 및 참석자 서명 옵션이 성공적으로 반영되었습니다!")
 
 elif menu == "💊 8. 약품 구매 및 사용 관리":
     st.title("💊 단월공공하수처리시설 약품 구매 및 사용 관리")
