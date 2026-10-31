@@ -89,7 +89,7 @@ PLANT_DESIGN_SPECS = {
     "당의": {"cap": 45.0, "method": "IC-SBR", "blower_cap": 2.0, "has_chem": False, "chem_type": "무약품", "desc": "간헐 포기 회분식 고도처리"}
 }
 
-# 3. 보관 디렉토리 및 DB 파일
+# 3. 보관 디렉토리 및 DB 파일 (기존 데이터 보호를 위해 폴더 존재 확인 후 생성)
 KHAS_RECORD_DIR = "monthly_khas_records"
 TBM_RECORD_DIR = "tbm_records"
 SIGNATURE_DIR = "signature_storage"
@@ -120,7 +120,7 @@ def load_system_config():
         try:
             with open(SYSTEM_CONFIG_FILE, "r", encoding="utf-8") as f: return json.load(f)
         except: pass
-    return {"maintenance_mode": True, "maintenance_msg": "단월 스마트 자율운전 관제 플랫폼 고도화 및 DB 최적화 작업이 진행 중입니다."}
+    return {"maintenance_mode": False, "maintenance_msg": "단월 스마트 자율운전 관제 플랫폼 정상 가동 중"}
 
 def save_system_config(cfg):
     try:
@@ -1379,9 +1379,9 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             <tr>
                 <td class="header-td" style="width:28%; background:#f2f2f2;">■ 해당작업 위험성평가 실시 확인</td>
                 <td style="padding:3px;">
-                    &nbsp;{"☑" if "최초" in eval_types else "□"} 최초 &nbsp;&nbsp;&nbsp;&nbsp; 
-                    &nbsp;{"☑" if "정기" in eval_types else "□"} 정기 &nbsp;&nbsp;&nbsp;&nbsp; 
-                    &nbsp;{"☑" if "수시" in eval_types else "□"} 수시 (중복 가능)
+                    &nbsp;{"☑" if eval_type == "최초" else "□"} 최초 &nbsp;&nbsp;&nbsp;&nbsp; 
+                    &nbsp;{"☑" if eval_type == "정기" else "□"} 정기 &nbsp;&nbsp;&nbsp;&nbsp; 
+                    &nbsp;{"☑" if eval_type == "수시" else "□"} 수시 (중복 가능)
                 </td>
             </tr>
         </table>
