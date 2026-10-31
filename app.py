@@ -432,7 +432,6 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     </html>
     """
 
-    # 1주일 단위 별지1 TBM HTML 양식
     tbm_weekly_html = f"""
     <!DOCTYPE html>
     <html>
