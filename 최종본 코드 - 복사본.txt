@@ -306,7 +306,6 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     weekly_worker_rows = "".join([f'<tr style="text-align:center; height:24px;"><td style="font-weight:bold; background:#fafafa;">{workers[i]}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td></tr>' for i in range(len(workers)) if workers[i].strip()])
     if not weekly_worker_rows: weekly_worker_rows = '<tr style="text-align:center;"><td colspan="8">참석자 없음</td></tr>'
 
-    # 사진 양식(image_a5716a.png)의 열 비율과 크기를 100% 일치시킨 표준 TBM HTML 양식
     tbm_standard_html = f"""
     <!DOCTYPE html>
     <html>
@@ -486,7 +485,7 @@ if menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     </html>
     """
 
-    active_html = tbm_weekly_html if is_weekly else t_bm_standard_html = tbm_standard_html
+    active_html = tbm_weekly_html if is_weekly else tbm_standard_html
 
     st.divider()
     st.subheader("📋 TBM 표준회의록 공식 양식 미리보기")
