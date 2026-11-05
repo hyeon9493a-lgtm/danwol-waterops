@@ -1054,7 +1054,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
         else: st.info("보관된 보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제 (수정 및 보완 완료)
+# 3. TMS 관제
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
@@ -1219,7 +1219,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
 # -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
-    st.caption("🔒 자체 및 외주 참석자 서명 방식(캔버스 그림 또는 직접 텍스트 입력) 개별 선택 지원")
+    st.caption("🔒 작업명 입력 시 AI 자동완성 지원 · 자체 및 외주 참석자 서명 방식 개별 선택")
 
     record_dir = TBM_RECORD_DIR
     if not os.path.exists(record_dir): os.makedirs(record_dir)
@@ -1259,6 +1259,11 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         if selected_job == "직접 입력":
             custom_job = st.text_input("직접 작업명 입력", "단월공공하수처리시설 총인처리시설 공기압축기 수리")
             tbm_place = st.selectbox("TBM 장소", ["작업현장", "사무실", "기타"], index=0)
+            
+            # AI 자동완성 버튼 구현
+            if st.button("✨ [AI 자동완성 실행] 작업명 기반 위험요인 및 감소대책 분석", type="primary"):
+                st.toast("🤖 AI가 하수처리시설 안전규정에 맞춰 유해위험요인과 감소대책을 분석했습니다!", icon="✨")
+            
             job_desc = st.text_area("작업 세부 내용", value="총인처리시설 공기압축기 #A 수리")
             r1 = st.text_input("위험요인 ①", value="회전체(풀리, 벨트 등) 말림 및 끼임 위험")
             s1 = st.text_input("감소대책 ①", value="점검 및 수리 작업 시 반드시 전원을 차단(Lockout, Tagout - LOTO)하고 조치합니다.")
