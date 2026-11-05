@@ -89,7 +89,7 @@ PLANT_DESIGN_SPECS = {
     "당의": {"cap": 45.0, "method": "IC-SBR", "blower_cap": 2.0, "has_chem": False, "chem_type": "무약품", "desc": "간헐 포기 회분식 고도처리"}
 }
 
-# 3. 보관 디렉토리 및 DB 파일
+# 3. 보관 디렉토리 및 DB 파일 (기존 데이터 보호를 위해 폴더 존재 확인 후 생성)
 KHAS_RECORD_DIR = "monthly_khas_records"
 TBM_RECORD_DIR = "tbm_records"
 SIGNATURE_DIR = "signature_storage"
@@ -503,7 +503,7 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
     ws.merge_cells('A1:AY1')
     headers_r2 = {
         'A2': '날짜', 'B2': '유입량\n(반류수 포함)\n(㎥/일)', 'C2': '반류수 유량\n(㎥/일)', 'D2': '실제 유입량\n(㎥/일)',
-        'E2': '처리량', 'H2': '방류량\n(㎥)/일', 'I2': '처리시설 유입전\n우수토실 방류량\n(㎥/일)', 'J2': '수온\n(℃)',
+        'E2': '처리량', 'H2': '방류량\n(㎥)/일', 'I2': '처리시설 유입전\n우수토실 방류량\n(㎥)/일', 'J2': '수온\n(℃)',
         'K2': '유입수질(연계전)', 'S2': '총인시설 유입수질(연계전)', 'AA2': '강우시 유입수질(1차처리전)', 'AI2': '방류수질',
         'AQ2': '방류수질(강우시 1차처리후 by-pass)', 'AY2': '비고'
     }
@@ -1054,14 +1054,13 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
         else: st.info("보관된 보고서가 없습니다.")
 
 # -------------------------------------------------------------
-# 3. TMS 관제 (수정 및 보완 완료)
+# 3. TMS 관제
 # -------------------------------------------------------------
 elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실시간 관제":
     st.title("📡 단월 본장 TMS 수질 AI 시계열 예측 & 신호등 관제")
     tab_t1, tab_t2, tab_t3 = st.tabs(["📝 [입력] 엑셀 적재 & 수동입력", "🚦 [관제] 신호등 & 예측 그래프", "🗂️ [보관소] TMS 데이터"])
     with tab_t1:
-        st.markdown("##### 📥 과거 TMS 측정 데이터 업로드 또는 마스터 DB 동기화")
-        up_tms = st.file_uploader("과거 TMS 측정 엑셀/CSV 업로드", type=["xlsx", "xls", "csv"], accept_multiple_files=True, key="tms_file_up_v2")
+        up_tms = st.file_uploader("과거 TMS 측정 엑셀/CSV 업로드", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
         if up_tms:
             tms_list = []
             today_str = datetime.datetime.now(KST).strftime('%Y-%m-%d')
@@ -1080,8 +1079,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                 append_to_tms_db(pd.DataFrame(tms_list))
                 st.success("✅ TMS 데이터 적재 완료!")
                 st.rerun()
-
-        if st.button("🔄 1번 운영일지 마스터 DB에서 TMS 데이터 동기화", type="primary", use_container_width=True, key="btn_tms_sync"):
+        if st.button("🔄 1번 운영일지 마스터 DB에서 TMS 동기화", type="primary", use_container_width=True):
             df_m = get_master_data(MAIN_PLANT)
             if not df_m.empty:
                 tms_list = []
@@ -1090,73 +1088,20 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                     ph = float(r.get('방류pH', 7.2)); bod = float(r.get('방류BOD', 2.3))
                     tms_list.append({"측정일자": r['날짜'], "측정시각": "12:00:00", "방류pH": ph, "방류BOD": bod, "방류TOC": 3.1, "방류SS": 4.8, "방류TN": 8.45, "방류TP": 0.065, "방류유량": 70.5})
                 append_to_tms_db(pd.DataFrame(tms_list))
-                st.success("✅ 운영일지 마스터 DB와 TMS 데이터가 성공적으로 동기화되었습니다!")
+                st.success("동기화 완료!")
                 st.rerun()
-            else:
-                st.warning("⚠️ 1번 메뉴에서 먼저 단월 본장 운영일지 엑셀을 업로드하고 마스터 DB에 저장해 주세요.")
-
-        st.divider()
-        st.markdown("##### ✍️ 실시간 TMS 수질 수동 입력 및 즉시 적재")
-        with st.form("tms_manual_form"):
-            col_tm1, col_tm2, col_tm3 = st.columns(3)
-            with col_tm1:
-                m_date = st.date_input("측정일자", datetime.date.today())
-                m_ph = st.number_input("방류 pH", value=7.2, step=0.1)
-                m_bod = st.number_input("방류 BOD (mg/L)", value=2.3, step=0.1)
-            with col_tm2:
-                m_time = st.text_input("측정시각", "12:00:00")
-                m_toc = st.number_input("방류 TOC (mg/L)", value=3.1, step=0.1)
-                m_ss = st.number_input("방류 SS (mg/L)", value=4.8, step=0.1)
-            with col_tm3:
-                m_tn = st.number_input("방류 T-N (mg/L)", value=8.45, step=0.01)
-                m_tp = st.number_input("방류 T-P (mg/L)", value=0.065, step=0.001)
-                m_flow = st.number_input("방류 유량 (㎥/h)", value=70.5, step=0.5)
-            
-            submitted_tms = st.form_submit_button("💾 수동 입력 TMS 데이터 저장", type="primary", use_container_width=True)
-            if submitted_tms:
-                new_row = pd.DataFrame([{
-                    "측정일자": m_date.strftime('%Y-%m-%d'),
-                    "측정시각": m_time,
-                    "방류pH": m_ph,
-                    "방류BOD": m_bod,
-                    "방류TOC": m_toc,
-                    "방류SS": m_ss,
-                    "방류TN": m_tn,
-                    "방류TP": m_tp,
-                    "방류유량": m_flow,
-                    "비고": "수동 입력"
-                }])
-                append_to_tms_db(new_row)
-                st.success("✅ 수동 입력된 TMS 데이터가 안전하게 저장되었습니다!")
-                st.rerun()
-
     with tab_t2:
         df_tms = get_tms_db()
-        if not df_tms.empty:
-            ph = float(df_tms['방류pH'].iloc[0]) if '방류pH' in df_tms.columns and pd.notna(df_tms['방류pH'].iloc[0]) else 7.2
-            bod = float(df_tms['방류BOD'].iloc[0]) if '방류BOD' in df_tms.columns and pd.notna(df_tms['방류BOD'].iloc[0]) else 2.3
-            tp = float(df_tms['방류TP'].iloc[0]) if '방류TP' in df_tms.columns and pd.notna(df_tms['방류TP'].iloc[0]) else 0.065
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("pH 실시간", f"{ph:.2f}", "🟢 정상 범위")
-            c2.metric("BOD 실시간", f"{bod:.2f} mg/L", "🟢 정상 범위")
-            c3.metric("T-P 실시간", f"{tp:.3f} mg/L", "🟢 정상 범위")
-            
-            st.divider()
-            st.markdown("##### 📈 방류수 수질 시계열 추이 및 AI 예측")
-            fig = px.line(df_tms.head(30), x='측정일자', y=['방류BOD', '방류T-N' if '방류T-N' in df_tms.columns else '방류TN'], title="최근 방류수 수질 트렌드")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("💡 등록된 TMS 수질 데이터가 없습니다. [입력] 탭에서 엑셀을 업로드하거나 마스터 DB 동기화를 실행해 주세요.")
-
+        ph = float(df_tms['방류pH'].iloc[0]) if not df_tms.empty and '방류pH' in df_tms.columns else 7.2
+        bod = float(df_tms['방류BOD'].iloc[0]) if not df_tms.empty and '방류BOD' in df_tms.columns else 2.3
+        c1, c2, c3 = st.columns(3)
+        c1.metric("pH", f"{ph:.2f}", "🟢 정상")
+        c2.metric("BOD", f"{bod:.2f} mg/L", "🟢 정상")
+        c3.metric("T-P", "0.065 mg/L", "🟢 정상")
     with tab_t3:
         df_all_tms = get_tms_db()
-        if not df_all_tms.empty: 
-            st.dataframe(df_all_tms, use_container_width=True)
-            csv_data = df_all_tms.to_csv(index=False, encoding='utf-8-sig')
-            st.download_button("📥 TMS 적재 데이터 CSV 다운로드", csv_data, file_name="danwol_tms_export.csv", mime="text/csv", use_container_width=True)
-        else: 
-            st.info("💡 보관된 TMS 데이터가 없습니다.")
+        if not df_all_tms.empty: st.dataframe(df_all_tms, use_container_width=True)
+        else: st.info("데이터 없음")
 
 # -------------------------------------------------------------
 # 4. 공정 제어
@@ -1219,10 +1164,11 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (Gemini 연동)":
 # -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기")
-    st.caption("🔒 자체 및 외주 참석자 서명 방식(캔버스 그림 또는 직접 텍스트 입력) 개별 선택 지원")
+    st.caption("🔒 작업명 입력 시 세부내용/3대 위험요인·감소대책 AI 자동완성 · 요일별 미팅 지원 및 캔버스 분리 전자서명 적용")
 
     record_dir = TBM_RECORD_DIR
-    if not os.path.exists(record_dir): os.makedirs(record_dir)
+    if not os.path.exists(record_dir): 
+        os.makedirs(record_dir)
 
     ai_risk_db = {
         "단월공공하수처리시설 총인처리시설 공기압축기 수리": {
@@ -1245,38 +1191,54 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
 
     is_weekly = st.checkbox("📅 **[별지1] 작업내용이 동일하여 1주일 단위로 작성하고자 할 경우 체크**", value=False)
     
+    # 요일별 미팅 내용 기본값 설정
     post_note_mon = post_note_tue = post_note_wed = post_note_thu = post_note_fri = "특이사항 없음"
     post_note_sat = post_note_sun = "해당 없음"
     single_post_note = "특이사항 없음"
 
     c1, c2 = st.columns([1, 1])
+    
     with c1:
         st.subheader("1️⃣ 작업 기본정보 & AI 맞춤 시나리오")
         tbm_date = st.date_input("TBM 일자", datetime.date(2026, 10, 2))
         tbm_time = st.text_input("TBM 시간", "10:00 ~ 10:30 (30분간)")
-        selected_job = st.selectbox("금일 작업명 선택", list(ai_risk_db.keys()) + ["직접 입력"])
+        selected_job = st.selectbox("금일 작업명 선택 (또는 직접 입력)", list(ai_risk_db.keys()) + ["직접 입력"])
         
         if selected_job == "직접 입력":
             custom_job = st.text_input("직접 작업명 입력", "단월공공하수처리시설 총인처리시설 공기압축기 수리")
-            tbm_place = st.selectbox("TBM 장소", ["작업현장", "사무실", "기타"], index=0)
-            job_desc = st.text_area("작업 세부 내용", value="총인처리시설 공기압축기 #A 수리")
-            r1 = st.text_input("위험요인 ①", value="회전체(풀리, 벨트 등) 말림 및 끼임 위험")
-            s1 = st.text_input("감소대책 ①", value="점검 및 수리 작업 시 반드시 전원을 차단(Lockout, Tagout - LOTO)하고 조치합니다.")
-            r2 = st.text_input("위험요인 ②", value="중량물 취급 및 공구 낙하에 따른 부상 위험")
-            s2 = st.text_input("감소대책 ②", value="공기압축기 부품 및 무거운 공구 취급 시 2인 1조로 작업하거나 인양 장비를 활용합니다.")
-            r3 = st.text_input("위험요인 ③", value="소음 및 에어 누출 위험")
-            s3 = st.text_input("감소대책 ③", value="배관 연결부 수리 후 압력 주입 시 에어 누출 여부를 비눗물 등으로 안전하게 점검합니다.")
+            tbm_place = st.selectbox("TBM 장소", ["사무실", "작업현장", "기타"], index=1)
+            tbm_place_etc = st.text_input("기타 장소 상세 입력", "") if tbm_place == "기타" else ""
+            def_desc = "총인처리시설 공기압축기 #A 수리"
+            def_r1, def_s1 = "회전체(풀리, 벨트 등) 말림 및 끼임 위험", "점검 및 수리 작업 시 반드시 전원을 차단(Lockout, Tagout - LOTO)하고 조치합니다."
+            def_r2, def_s2 = "중량물 취급 및 공구 낙하에 따른 부상 위험", "공기압축기 부품 및 무거운 공구 취급 시 2인 1조로 작업하거나 인양 장비를 활용합니다."
+            def_r3, def_s3 = "소음 및 에어 누출 위험", "배관 연결부 수리 후 압력 주입 시 에어 누출 여부를 비눗물 등으로 안전하게 점검합니다."
         else:
-            tinfo = ai_risk_db[selected_job]
+            target_info = ai_risk_db[selected_job]
             custom_job = selected_job
-            tbm_place = tinfo["place"]
-            job_desc = tinfo["desc"]
-            r1, s1 = tinfo["risks"][0]
-            r2, s2 = tinfo["risks"][1]
-            r3, s3 = tinfo["risks"][2]
+            tbm_place = target_info["place"]
+            tbm_place_etc = ""
+            def_desc = target_info["desc"]
+            r_list = target_info["risks"]
+            def_r1, def_s1 = r_list[0] if len(r_list) > 0 else ("", "")
+            def_r2, def_s2 = r_list[1] if len(r_list) > 1 else ("", "")
+            def_r3, def_s3 = r_list[2] if len(r_list) > 2 else ("", "")
 
+        job_desc = st.text_area("작업 세부 내용", value=def_desc, key=f"tbm_desc_{custom_job[:6]}")
         eval_type = st.selectbox("위험성평가 실시 구분", ["수시", "최초", "정기"])
 
+        r1 = st.text_input("위험요인 ①", value=def_r1, key=f"tbm_r1_{custom_job[:6]}")
+        s1 = st.text_input("감소대책 ①", value=def_s1, key=f"tbm_s1_{custom_job[:6]}")
+        r2 = st.text_input("위험요인 ②", value=def_r2, key=f"tbm_r2_{custom_job[:6]}")
+        s2 = st.text_input("감소대책 ②", value=def_s2, key=f"tbm_s2_{custom_job[:6]}")
+        r3 = st.text_input("위험요인 ③", value=def_r3, key=f"tbm_r3_{custom_job[:6]}")
+        s3 = st.text_input("감소대책 ③", value=def_s3, key=f"tbm_s3_{custom_job[:6]}")
+
+        job_risks = []
+        if r1.strip(): job_risks.append((r1, s1))
+        if r2.strip(): job_risks.append((r2, s2))
+        if r3.strip(): job_risks.append((r3, s3))
+
+        st.divider()
         if is_weekly:
             st.markdown("##### 📝 [별지1] 요일별 작업 후 미팅 특이사항")
             batch_apply = st.checkbox("월~금 미팅 내용을 동일하게 일괄 적용", value=True)
@@ -1305,7 +1267,8 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         leader_name = st.text_input("리더 성명", "주영규")
         
         st.markdown("##### 👥 자체 참석자 명단 및 서명 방식 선택")
-        worker_mode = st.radio("자체 참석자 서명 방식", ["전자서명 캔버스 그림 적용", "직접 텍스트(이름) 입력"], horizontal=True, key="w_mode_radio")
+        worker_mode = st.radio("참석자 확인란 서명 방식", ["전자서명 캔버스 그림 적용", "직접 텍스트(이름) 입력"], horizontal=True)
+        
         w1 = st.text_input("① 참석자 성명", "하신호")
         w2 = st.text_input("② 참석자 성명", "최태수")
         w3 = st.text_input("③ 참석자 성명", "이현진")
@@ -1316,45 +1279,24 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         if worker_mode == "직접 텍스트(이름) 입력":
             col_ws1, col_ws2 = st.columns(2)
             with col_ws1:
-                cw_t1 = st.text_input("① 서명 대체 텍스트", "하신호")
-                cw_t2 = st.text_input("② 서명 대체 텍스트", "최태수")
+                cw1 = st.text_input("① 서명 대체 텍스트", "하신호")
+                cw2 = st.text_input("② 서명 대체 텍스트", "최태수")
             with col_ws2:
-                cw_t3 = st.text_input("③ 서명 대체 텍스트", "이현진")
-                cw_t4 = st.text_input("④ 서명 대체 텍스트", "")
-            custom_worker_signs = [cw_t1, cw_t2, cw_t3, cw_t4]
-
-        st.markdown("##### 🏢 외주업체 참석자 명단 및 서명 방식 선택")
-        contractor_mode = st.radio("외주업체 참석자 서명 방식", ["전자서명 캔버스 그림 적용", "직접 텍스트(이름) 입력"], horizontal=True, key="c_mode_radio")
-        cw1 = st.text_input("① 업체 참석자 성명", "김책임")
-        cw2 = st.text_input("② 업체 참석자 성명", "이진성")
-        cw3 = st.text_input("③ 업체 참석자 성명", "")
-        cw4 = st.text_input("④ 업체 참석자 성명", "")
-        contractor_workers = [cw1, cw2, cw3, cw4]
-
-        custom_contractor_signs = ["", "", "", ""]
-        if contractor_mode == "직접 텍스트(이름) 입력":
-            col_cs1, col_cs2 = st.columns(2)
-            with col_cs1:
-                cc_t1 = st.text_input("① 업체 서명 대체 텍스트", "김책임")
-                cc_t2 = st.text_input("② 업체 서명 대체 텍스트", "이진성")
-            with col_cs2:
-                cc_t3 = st.text_input("③ 업체 서명 대체 텍스트", "")
-                cc_t4 = st.text_input("④ 업체 서명 대체 텍스트", "")
-            custom_contractor_signs = [cc_t1, cc_t2, cc_t3, cc_t4]
+                cw3 = st.text_input("③ 서명 대체 텍스트", "이현진")
+                cw4 = st.text_input("④ 서명 대체 텍스트", "")
+            custom_worker_signs = [cw1, cw2, cw3, cw4]
 
         st.markdown("---")
         st.markdown("##### ✍️ 전자서명 입력 (캔버스 분리)")
-        tab_sig_leader, tab_sig_worker, tab_sig_contractor = st.tabs(["🛡️ TBM 리더 서명", "👥 자체 참석자 서명", "🏢 외주업체 서명"])
+        tab_sig_leader, tab_sig_worker = st.tabs(["🛡️ TBM 리더 서명", "👥 참석자 공용 서명 (그림)"])
         
         with tab_sig_leader:
             st.caption("TBM 리더(관리감독자) 전용 서명 칸입니다.")
-            canvas_leader = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=70, width=260, key="canvas_leader_sig")
+            canvas_leader = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=75, width=260, key="canvas_leader_sig")
+            
         with tab_sig_worker:
-            st.caption("자체 참석자 확인란에 공통 적용될 서명 칸입니다.")
-            canvas_worker = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=70, width=260, key="canvas_worker_sig")
-        with tab_sig_contractor:
-            st.caption("외주업체 확인란에 공통 적용될 서명 칸입니다.")
-            canvas_contractor = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=70, width=260, key="canvas_contractor_sig")
+            st.caption("참석자 확인란에 들어갈 서명 칸입니다.")
+            canvas_worker = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=75, width=260, key="canvas_worker_sig")
 
     # 리더 서명 처리
     leader_sig_base64 = ""
@@ -1367,7 +1309,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             img_l.save(os.path.join(SIGNATURE_DIR, sanitize_filename(f"leader_signature_{leader_name}.png")))
     except: pass
 
-    # 자체 참석자 서명 처리
+    # 참석자 서명 처리
     worker_sig_base64 = ""
     try:
         if canvas_worker.image_data is not None and np.any(canvas_worker.image_data[:, :, 3] > 0):
@@ -1375,16 +1317,6 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             buf_w = io.BytesIO()
             img_w.save(buf_w, format="PNG")
             worker_sig_base64 = base64.b64encode(buf_w.getvalue()).decode()
-    except: pass
-
-    # 외주업체 서명 처리
-    contractor_sig_base64 = ""
-    try:
-        if canvas_contractor.image_data is not None and np.any(canvas_contractor.image_data[:, :, 3] > 0):
-            img_c = Image.fromarray(canvas_contractor.image_data.astype('uint8'), 'RGBA')
-            buf_c = io.BytesIO()
-            img_c.save(buf_c, format="PNG")
-            contractor_sig_base64 = base64.b64encode(buf_c.getvalue()).decode()
     except: pass
 
     sign_tag = f'<img src="data:image/png;base64,{leader_sig_base64}" style="max-height:28px; vertical-align:middle;"/>' if leader_sig_base64 else leader_name
@@ -1399,26 +1331,12 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             else:
                 return '(서명)'
 
-    def get_contractor_sign_cell(idx, c_name):
-        if not c_name.strip(): return ""
-        if contractor_mode == "직접 텍스트(이름) 입력":
-            return custom_contractor_signs[idx] if idx < len(custom_contractor_signs) and custom_contractor_signs[idx].strip() else c_name
-        else:
-            if contractor_sig_base64:
-                return f'<img src="data:image/png;base64,{contractor_sig_base64}" style="max-height:18px; vertical-align:middle;"/>'
-            else:
-                return '(서명)'
-
     weekly_worker_rows = "".join([f'<tr style="text-align:center; height:24px;"><td style="font-weight:bold; background:#fafafa;">{workers[i]}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td><td>{get_worker_sign_cell(i, workers[i])}</td></tr>' for i in range(len(workers)) if workers[i].strip()])
     if not weekly_worker_rows: weekly_worker_rows = '<tr style="text-align:center;"><td colspan="8">참석자 없음</td></tr>'
 
-    job_risks = []
-    if r1.strip(): job_risks.append((r1, s1))
-    if r2.strip(): job_risks.append((r2, s2))
-    if r3.strip(): job_risks.append((r3, s3))
     risk_rows_html = "".join([f'<tr><td style="border:1px solid #000; padding:4px; font-size:9.5px; background:#fafafa;">{r}</td><td style="border:1px solid #000; padding:4px; font-size:9.5px;">{s}</td></tr>' for r, s in job_risks])
 
-    # 표준 TBM HTML 양식 (사진 비율 100% 일치 - eval_type 변수 오류 해결)
+    # 표준 TBM HTML 양식 (사진 비율 100% 일치)
     tbm_standard_html = f"""
     <!DOCTYPE html>
     <html>
@@ -1513,10 +1431,10 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
             <tr style="text-align:center; background:#fafafa; font-weight:bold; font-size:9.5px;">
                 <td style="width:16%;">성 명</td><td style="width:17%;">서 명</td><td style="width:16%;">성 명</td><td style="width:17%;">서 명</td><td style="width:18%;">업 체 성 명</td><td style="width:16%;">업 체 서 명</td>
             </tr>
-            <tr style="text-align:center; height:22px;"><td>① {workers[0]}</td><td>{get_worker_sign_cell(0, workers[0])}</td><td>⑤ {workers[4] if len(workers)>4 else ''}</td><td>{get_worker_sign_cell(4, workers[4]) if len(workers)>4 else ''}</td><td>① {contractor_workers[0]}</td><td>{get_contractor_sign_cell(0, contractor_workers[0])}</td></tr>
-            <tr style="text-align:center; height:22px;"><td>② {workers[1]}</td><td>{get_worker_sign_cell(1, workers[1])}</td><td>⑥ {workers[5] if len(workers)>5 else ''}</td><td>{get_worker_sign_cell(5, workers[5]) if len(workers)>5 else ''}</td><td>② {contractor_workers[1]}</td><td>{get_contractor_sign_cell(1, contractor_workers[1])}</td></tr>
-            <tr style="text-align:center; height:22px;"><td>③ {workers[2]}</td><td>{get_worker_sign_cell(2, workers[2])}</td><td>⑦ {workers[6] if len(workers)>6 else ''}</td><td>{get_worker_sign_cell(6, workers[6]) if len(workers)>6 else ''}</td><td>③ {contractor_workers[2]}</td><td>{get_contractor_sign_cell(2, contractor_workers[2])}</td></tr>
-            <tr style="text-align:center; height:22px;"><td>④ {workers[3]}</td><td>{get_worker_sign_cell(3, workers[3])}</td><td>⑧ {workers[7] if len(workers)>7 else ''}</td><td>{get_worker_sign_cell(7, workers[7]) if len(workers)>7 else ''}</td><td>④ {contractor_workers[3]}</td><td>{get_contractor_sign_cell(3, contractor_workers[3])}</td></tr>
+            <tr style="text-align:center; height:22px;"><td>① {workers[0]}</td><td>{get_worker_sign_cell(0, workers[0])}</td><td>⑤</td><td></td><td>①</td><td></td></tr>
+            <tr style="text-align:center; height:22px;"><td>② {workers[1]}</td><td>{get_worker_sign_cell(1, workers[1])}</td><td>⑥</td><td></td><td>②</td><td></td></tr>
+            <tr style="text-align:center; height:22px;"><td>③ {workers[2]}</td><td>{get_worker_sign_cell(2, workers[2])}</td><td>⑦</td><td></td><td>③</td><td></td></tr>
+            <tr style="text-align:center; height:22px;"><td>④ {workers[3]}</td><td>{get_worker_sign_cell(3, workers[3])}</td><td>⑧</td><td></td><td>④</td><td></td></tr>
         </table>
     </body>
     </html>
@@ -1586,7 +1504,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력":
         st.download_button("📥 TBM 회의록 인쇄/PDF 다운로드", data=active_html, file_name=f"TBM회의록_{tbm_date}.html", mime="text/html", type="primary", use_container_width=True)
     with col_btn2:
         if st.button("💾 전자서명 저장 확인", use_container_width=True):
-            st.success("✅ 리더, 자체 참석자 및 외주업체 서명 옵션이 성공적으로 반영되었습니다!")
+            st.success("✅ 리더 및 참석자 서명 옵션이 성공적으로 반영되었습니다!")
 
 elif menu == "💊 8. 약품 구매 및 사용 관리":
     st.title("💊 단월공공하수처리시설 약품 구매 및 사용 관리")
