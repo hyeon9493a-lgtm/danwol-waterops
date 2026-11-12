@@ -1851,53 +1851,179 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함":
                 st.success(f"✅ TBM 영구 보관함({save_path})에 안전하게 저장되었습니다! 상단 [보관함] 탭에서 언제든 열람하실 수 있습니다.")
 
     with tab_tbm_chk:
-        st.subheader("☑️ TBM 실행 체크리스트 (안전보건 점검표)")
-        st.markdown("""
-        **[유의사항]**  
-        ◆ TBM은 작업 전 TBM 리더와 작업자 간 실행하는 안전보건 회의입니다.  
-        ◆ 이 체크리스트는 TBM 리더에게 효과적인 TBM 실행 팁을 제공하기 위해 제작된 것으로 사내 TBM 절차가 있는 경우 이와 함께 보완적으로 사용합니다.  
-        ◆ 작업별 위험요인은 위험성평가 결과 또는 별도의 자료를 활용하시기 바랍니다.
-        """)
+        st.subheader("☑️ TBM[Tool Box Meeting] 실행 체크리스트 작성 및 인쇄")
+        st.caption("🔒 항목별 체크(YES / NO / 해당없음) 후 하단에서 공식 양식 그대로 미리보기·다운로드·인쇄 및 영구 보관함 저장이 가능합니다.")
 
-        # 일괄 동의(모두 YES 체크) 버튼
-        if st.button("✨ [일괄 동의] 모든 항목에 'YES' 체크하기", type="primary"):
-            for i in range(1, 14):
-                st.session_state[f"chk_{i}"] = "YES"
-            st.toast("모든 체크리스트 항목이 'YES'로 일괄 선택되었습니다!", icon="✅")
-            st.rerun()
+        col_c_top1, col_c_top2 = st.columns([1.5, 1.5])
+        with col_c_top1:
+            chk_date = st.date_input("체크리스트 점검 일자", tbm_date, key="chk_date_input")
+        with col_c_top2:
+            st.write("")
+            if st.button("✨ [일괄 동의] 13개 전 항목 'YES' 일괄 체크하기", type="primary", use_container_width=True):
+                for i in range(1, 14):
+                    st.session_state[f"chk_{i}"] = "YES"
+                st.toast("모든 체크리스트 항목이 'YES'로 일괄 선택되었습니다!", icon="✅")
+                st.rerun()
 
         chk_items = [
-            ("1. TBM 사전준비", 1, "① 해당 작업의 위험성평가를 실시하였다. (해당 작업의 위험성평가 결과가 있다.)"),
-            ("1. TBM 사전준비", 2, "② 해당 작업에서 발생한 사고보고서(아차사고 포함)의 내용을 확인하였다."),
-            ("1. TBM 사전준비", 3, "③ 작업 물량과 범위, 작업내용을 충분히 숙지하였다."),
-            ("1. TBM 사전준비", 4, "④ 위험성평가 결과, 사고보고서, 안전작업 지침의 내용을 여러 번 읽어 숙지하였다."),
-            ("1. TBM 사전준비", 5, "⑤ 작업에 필요한 개인보호구(안전모, 안전화, 각반 등)를 지급하고, 착용방법을 숙지하고 있다."),
-            ("2. TBM 실행과정", 6, "① 작업자가 음주, 발열, 약물 복용 등으로 작업에 적합한지 여부를 확인하였다."),
-            ("2. TBM 실행과정", 7, "② 작업내용 / 위험요인 / 안전 작업절차 / 대책에 대해 긍정적인 분위기로 대화하였다"),
-            ("2. TBM 실행과정", 8, "③ 작업자와 중점 위험요인과 대책을 도출하고 이를 숙지하도록 하였다."),
-            ("2. TBM 실행과정", 9, "④ 위험요인, 불안전한 상태 발견시 멈추고, 확인하고, 생각한 후 작업하도록 하였다."),
-            ("2. TBM 실행과정", 10, "⑤ 작업 후 정리 정돈 상태를 확인하였다."),
-            ("3. TBM 후속조치", 11, "① 작업자가 제기한 불만사항, 질문, 제안 사항을 검토하였다."),
-            ("3. TBM 후속조치", 12, "② TBM 결과를 충실하게 기록하고 보관 한다."),
-            ("3. TBM 후속조치", 13, "③ 관련 조치결과는 작업자에게 피드백 한다.")
+            ("1 TBM 사전준비", 1, "① 해당 작업의 위험성평가를 실시하였다.<br>&nbsp;&nbsp;&nbsp;&nbsp;(해당 작업의 위험성평가 결과가 있다.)", "① 해당 작업의 위험성평가를 실시하였다. (해당 작업의 위험성평가 결과가 있다.)"),
+            ("1 TBM 사전준비", 2, "② 해당 작업에서 발생한 사고보고서(아차<br>&nbsp;&nbsp;&nbsp;&nbsp;사고 포함)의 내용을 확인하였다.", "② 해당 작업에서 발생한 사고보고서(아차사고 포함)의 내용을 확인하였다."),
+            ("1 TBM 사전준비", 3, "③ 작업 물량과 범위, 작업내용을 충분히 숙<br>&nbsp;&nbsp;&nbsp;&nbsp;지하였다.", "③ 작업 물량과 범위, 작업내용을 충분히 숙지하였다."),
+            ("1 TBM 사전준비", 4, "④ 위험성평가 결과, 사고보고서, 안전작업<br>&nbsp;&nbsp;&nbsp;&nbsp;지침의 내용을 여러 번 읽어 숙지하였다.", "④ 위험성평가 결과, 사고보고서, 안전작업 지침의 내용을 여러 번 읽어 숙지하였다."),
+            ("1 TBM 사전준비", 5, "⑤ 작업에 필요한 개인보호구(안전모, 안전화,<br>&nbsp;&nbsp;&nbsp;&nbsp;각반 등)를 지급하고, 착용방법을 숙지하<br>&nbsp;&nbsp;&nbsp;&nbsp;고 있다.", "⑤ 작업에 필요한 개인보호구(안전모, 안전화, 각반 등)를 지급하고, 착용방법을 숙지하고 있다."),
+            ("2 TBM 실행과정", 6, "① 작업자가 음주, 발열, 약물 복용 등으로<br>&nbsp;&nbsp;&nbsp;&nbsp;작업에 적합한지 여부를 확인하였다.", "① 작업자가 음주, 발열, 약물 복용 등으로 작업에 적합한지 여부를 확인하였다."),
+            ("2 TBM 실행과정", 7, "② 작업내용 / 위험요인 / 안전 작업절차 / 대책에<br>&nbsp;&nbsp;&nbsp;&nbsp;대해 긍정적인 분위기로 대화하였다", "② 작업내용 / 위험요인 / 안전 작업절차 / 대책에 대해 긍정적인 분위기로 대화하였다"),
+            ("2 TBM 실행과정", 8, "③ 작업자와 중점 위험요인과 대책을 도출<br>&nbsp;&nbsp;&nbsp;&nbsp;하고 이를 숙지하도록 하였다.", "③ 작업자와 중점 위험요인과 대책을 도출하고 이를 숙지하도록 하였다."),
+            ("2 TBM 실행과정", 9, "④ 위험요인, 불안전한 상태 발견시 멈추고,<br>&nbsp;&nbsp;&nbsp;&nbsp;확인하고, 생각한 후 작업하도록 하였다.", "④ 위험요인, 불안전한 상태 발견시 멈추고, 확인하고, 생각한 후 작업하도록 하였다."),
+            ("2 TBM 실행과정", 10, "⑤ 작업 후 정리 정돈 상태를 확인하였다.", "⑤ 작업 후 정리 정돈 상태를 확인하였다."),
+            ("3 TBM 후속조치", 11, "① 작업자가 제기한 불만사항, 질문, 제안<br>&nbsp;&nbsp;&nbsp;&nbsp;사항을 검토하였다.", "① 작업자가 제기한 불만사항, 질문, 제안 사항을 검토하였다."),
+            ("3 TBM 후속조치", 12, "② TBM 결과를 충실하게 기록하고 보관 한다.", "② TBM 결과를 충실하게 기록하고 보관 한다."),
+            ("3 TBM 후속조치", 13, "③ 관련 조치결과는 작업자에게 피드백 한다.", "③ 관련 조치결과는 작업자에게 피드백 한다.")
         ]
 
-        checklist_data = []
-        for cat, idx, q_text in chk_items:
-            st.markdown(f"**[{cat}]** {q_text}")
-            col_opt, col_memo = st.columns([1.2, 2])
-            with col_opt:
-                val = st.radio("해당사항 체크", ["YES", "NO", "해당없음"], index=0, key=f"chk_{idx}", horizontal=True, label_visibility="collapsed")
-            with col_memo:
-                memo = st.text_input("'아니오'인 경우 필요한 조치내용", key=f"memo_{idx}", placeholder="아니오 선택 시 조치내용 입력", label_visibility="collapsed")
-            checklist_data.append({"구분": cat, "확인사항": q_text, "해당사항": val, "조치내용": memo})
-            st.markdown("---")
+        for i in range(1, 14):
+            if f"chk_{i}" not in st.session_state:
+                st.session_state[f"chk_{i}"] = "YES"
+            if f"memo_{i}" not in st.session_state:
+                st.session_state[f"memo_{i}"] = ""
 
-        if st.button("💾 TBM 실행 체크리스트 결과 저장", type="primary", use_container_width=True):
-            df_chk = pd.DataFrame(checklist_data)
-            chk_path = os.path.join(TBM_RECORD_DIR, sanitize_filename(f"TBM체크리스트_{tbm_date}.csv"))
-            df_chk.to_csv(chk_path, index=False, encoding='utf-8-sig')
-            st.success(f"✅ TBM 실행 체크리스트 결과가 영구 보관함({chk_path})에 안전하게 저장되었습니다!")
+        with st.expander("📝 항목별 개별 체크 및 조치내용 입력 열기/닫기", expanded=True):
+            checklist_data = []
+            cur_cat = ""
+            for cat, idx, q_html, q_plain in chk_items:
+                if cat != cur_cat:
+                    cur_cat = cat
+                    st.markdown(f"##### ▣ [{cat}]")
+                c_q, c_opt, c_memo = st.columns([2.3, 1.3, 1.4])
+                with c_q:
+                    st.write(q_plain)
+                with c_opt:
+                    val = st.radio(f"체크_{idx}", ["YES", "NO", "해당없음"], key=f"chk_{idx}", horizontal=True, label_visibility="collapsed")
+                with c_memo:
+                    memo = st.text_input(f"조치_{idx}", key=f"memo_{idx}", placeholder="'아니오'인 경우 조치내용 입력", label_visibility="collapsed")
+                checklist_data.append({"구분": cat, "번호": idx, "확인사항_html": q_html, "확인사항": q_plain, "해당사항": val, "조치내용": memo})
+
+        # 이미지와 100% 동일한 TBM 실행 체크리스트 인쇄용 HTML 생성
+        chk_rows_html = ""
+        current_cat_html = ""
+        for item in checklist_data:
+            cat_str = item["구분"]
+            if cat_str != current_cat_html:
+                current_cat_html = cat_str
+                cat_num = cat_str.split()[0]
+                cat_title = " ".join(cat_str.split()[1:])
+                chk_rows_html += f"""
+                <tr>
+                    <td style="border:1px solid #000; padding:5px 8px; font-weight:bold; font-size:11px; background:#fff; width:26%;">
+                        <span style="display:inline-block; border:1px solid #666; width:14px; height:14px; line-height:13px; text-align:center; font-size:10px; margin-right:4px;">{cat_num}</span>{cat_title}
+                    </td>
+                    <td colspan="4" style="border:1px solid #000; background:#fff;"></td>
+                </tr>
+                """
+            v_yes = "V" if item["해당사항"] == "YES" else ""
+            v_no = "V" if item["해당사항"] == "NO" else ""
+            v_na = "V" if item["해당사항"] == "해당없음" else ""
+            memo_txt = item["조치내용"] if item["조치내용"] else ""
+            chk_rows_html += f"""
+            <tr>
+                <td colspan="1" style="border:1px solid #000; padding:6px 8px; font-size:10.5px; line-height:1.45; text-align:left;">
+                    {item["확인사항_html"]}
+                </td>
+                <td style="border:1px solid #000; width:8%; text-align:center; font-weight:bold; font-size:12px;">{v_yes}</td>
+                <td style="border:1px solid #000; width:8%; text-align:center; font-weight:bold; font-size:12px;">{v_no}</td>
+                <td style="border:1px solid #000; width:8%; text-align:center; font-weight:bold; font-size:12px;">{v_na}</td>
+                <td style="border:1px solid #000; width:22%; padding:4px 6px; font-size:10px; text-align:left;">{memo_txt}</td>
+            </tr>
+            """
+
+        tbm_checklist_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {{ size: A4 portrait; margin: 12mm; }}
+            body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 10px; color: #000; }}
+            .chk-container {{ max-width: 720px; margin: 0 auto; }}
+            table.chk-table {{ width: 100%; border-collapse: collapse; border: 1.5px solid #000; table-layout: fixed; }}
+            table.chk-table th, table.chk-table td {{ border: 1px solid #000; vertical-align: middle; word-break: keep-all; }}
+            .title-banner {{ background-color: #5B82C4; color: #ffffff; font-size: 16px; font-weight: bold; text-align: center; padding: 9px; letter-spacing: 0.5px; }}
+            .notice-box {{ padding: 10px 14px; font-size: 10.5px; line-height: 1.55; text-align: left; background: #fff; }}
+            .notice-title {{ text-align: center; font-weight: bold; margin-bottom: 4px; font-size: 11px; }}
+            .th-label {{ background-color: #fff; font-weight: bold; text-align: center; font-size: 11px; padding: 5px; }}
+            @media print {{
+                .no-print-btn {{ display: none !important; }}
+                body {{ margin: 0; }}
+            }}
+        </style>
+        </head>
+        <body>
+            <div class="chk-container">
+                <div class="no-print-btn" style="text-align:right; margin-bottom:8px;">
+                    <button onclick="window.print()" style="background:#0284C7; color:white; border:none; padding:6px 14px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px;">
+                        🖨️ 이 체크리스트 바로 인쇄하기
+                    </button>
+                </div>
+                <table class="chk-table">
+                    <colgroup>
+                        <col style="width: 54%;">
+                        <col style="width: 8%;">
+                        <col style="width: 8%;">
+                        <col style="width: 8%;">
+                        <col style="width: 22%;">
+                    </colgroup>
+                    <tr>
+                        <td colspan="5" class="title-banner">TBM[Tool Box Meeting] 실행 체크리스트</td>
+                    </tr>
+                    <tr>
+                        <td colspan="5" class="notice-box">
+                            <div class="notice-title">[유의사항]</div>
+                            ◆ TBM은 작업 전 TBM 리더와 작업자 간 실행하는 안전보건 회의입니다.<br>
+                            ◆ 이 체크리스트는 TBM 리더에게 효과적인 TBM 실행 팁을 제공하기 위해 제작된 것으로 사내 TBM 절차가 있는 경우 이와 함께 보완적으로 사용합니다.<br>
+                            ◆ 작업별 위험요인은 위험성평가 결과 또는 별도의 자료를 활용하시기 바랍니다.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td rowspan="2" class="th-label">확인사항</td>
+                        <td colspan="3" class="th-label">해당사항에<br>체크(V) 하세요</td>
+                        <td class="th-label">‘아니오’인 경우<br>필요한 조치내용</td>
+                    </tr>
+                    <tr>
+                        <td class="th-label" style="font-size:10px;">YES</td>
+                        <td class="th-label" style="font-size:10px;">NO</td>
+                        <td class="th-label" style="font-size:9.5px; line-height:1.15;">해당<br>없음</td>
+                        <td class="th-label"></td>
+                    </tr>
+                    {chk_rows_html}
+                </table>
+            </div>
+        </body>
+        </html>
+        """
+
+        st.divider()
+        st.subheader("📋 TBM 실행 체크리스트 공식 양식 미리보기 (인쇄·다운로드 규격)")
+        st.components.v1.html(tbm_checklist_html, height=780, scrolling=True)
+
+        col_c_btn1, col_c_btn2 = st.columns(2)
+        with col_c_btn1:
+            st.download_button(
+                "📥 TBM 실행 체크리스트 양식 다운로드 (HTML/인쇄용)",
+                data=tbm_checklist_html,
+                file_name=f"TBM실행체크리스트_{chk_date}.html",
+                mime="text/html",
+                type="primary",
+                use_container_width=True
+            )
+        with col_c_btn2:
+            if st.button("💾 TBM 실행 체크리스트 영구 보관함에 저장", type="primary", use_container_width=True):
+                chk_html_path = os.path.join(TBM_RECORD_DIR, sanitize_filename(f"TBM실행체크리스트_{chk_date}_{custom_job[:10]}.html"))
+                with open(chk_html_path, "w", encoding="utf-8") as f:
+                    f.write(tbm_checklist_html)
+                df_chk = pd.DataFrame(checklist_data)
+                chk_csv_path = os.path.join(TBM_RECORD_DIR, sanitize_filename(f"TBM실행체크리스트_{chk_date}.csv"))
+                df_chk.to_csv(chk_csv_path, index=False, encoding='utf-8-sig')
+                st.success(f"✅ TBM 실행 체크리스트가 공식 인쇄 양식({chk_html_path})으로 영구 보관함에 저장되었습니다! 우측 [보관함] 탭에서도 언제든 열람·인쇄하실 수 있습니다.")
 
     with tab_tbm_archive:
         st.subheader("🗂️ 영구 저장된 TBM 회의록 보관함 열람 및 관리")
