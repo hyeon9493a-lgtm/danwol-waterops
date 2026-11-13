@@ -1160,6 +1160,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
                 for f in up_tms:
                     try:
                         df_raw = pd.read_csv(f) if f.name.endswith('.csv') else pd.read_excel(f)
+                        # 컬럼명 매칭 또는 행 탐색
                         for _, row in df_raw.iterrows():
                             row_vals = [str(v) for v in row.values]
                             d_match = None
@@ -1261,7 +1262,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
     with tab_t2:
         df_tms = get_tms_db()
         if df_tms.empty:
-            st.info("💡 현재 저장된 TMS 데이터가 없습니다. (사용자가 입력하지 않은 데이터는 자동 생성하지 않습니다.)\n\n좌측 **[📝 입력]** 탭에서 데이터를 수동 저장하거나 업로드하시면 그 데이터를 기준으로 실시간 관제가 수행되며, 아래에서는 **실시간 AI 예측 시뮬레이터**를 바로 테스트하실 수 있습니다.")
+            st.info("💡 현재 저장된 TMS 데이터가 없습니다. (사용자가 입력하지 않은 데이터는 자동 생성하지 않습니다.) 좌측 [📝 입력] 탭에서 데이터를 수동 저장하거나 업로드하시면 그 데이터를 기준으로 실시간 관제가 수행되며, 아래에서는 실시간 AI 예측 시뮬레이터를 바로 테스트하실 수 있습니다.")
             base_ph, base_bod, base_tn, base_tp, base_ss, base_toc = 7.20, 2.30, 8.45, 0.065, 4.50, 3.10
         else:
             base_ph = float(df_tms['방류pH'].iloc[0]) if '방류pH' in df_tms.columns and pd.notna(df_tms['방류pH'].iloc[0]) else 7.20
@@ -1271,6 +1272,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             base_ss = float(df_tms['방류SS'].iloc[0]) if '방류SS' in df_tms.columns and pd.notna(df_tms['방류SS'].iloc[0]) else 4.50
             base_toc = float(df_tms['방류TOC'].iloc[0]) if '방류TOC' in df_tms.columns and pd.notna(df_tms['방류TOC'].iloc[0]) else 3.10
 
+        # 신호등 판정 함수 (정상 / 주의 / 경고)
         def eval_signal(param, val):
             if param == "pH":
                 if 6.2 <= val <= 8.1: return "🟢 정상 (안전)", "#10B981", "#ECFDF5"
@@ -1316,6 +1318,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             with sc4:
                 sim_temp_chg = st.slider("🌡️ 반응조 수온 조건 (℃)", 8.0, 28.0, 18.0, step=1.0)
 
+        # 운전 변수에 따른 2, 4, 6, 8시간 후 동적 시뮬레이션 연산
         load_factor = 1.0 + (sim_inflow_chg * 0.006)
         air_factor = 1.0 - (sim_air_chg * 0.005)
         chem_factor = 1.0 - (sim_chem_chg * 0.006)
@@ -1344,6 +1347,7 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             })
         df_pred_horizon = pd.DataFrame(sim_rows)
 
+        # 6대 항목 전체 2·4·6·8시간 예측 서브플롯 그래프 (pH, BOD, T-N, T-P, SS, TOC 한눈에 보기)
         fig_6 = make_subplots(
             rows=2, cols=3,
             subplot_titles=(
@@ -1513,7 +1517,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         st.session_state.messages.append({"role": "assistant", "content": ans})
 
 # -------------------------------------------------------------
-# 7. TBM 표준회의록 AI 자동작성/출력 & 실행 체크리스트 (개별 서명 캔버스 포함)
+# 7. TBM 표준회의록 AI 자동작성/출력 & 실행 체크리스트 (신규 추가)
 # -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기 & 실행 체크리스트")
@@ -1686,39 +1690,80 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함":
                 custom_contractor_signs = [cc_t1, cc_t2, cc_t3, cc_t4]
 
             st.markdown("---")
-            st.markdown("##### ✍️ 전자서명 입력 (개별 참석자 캔버스 분리)")
+            st.markdown("##### 🔒 개인정보 수집·이용 및 제3자 제공 동의")
+            with st.expander("📄 개인정보 수집·이용 안내문 열람", expanded=False):
+                st.caption("• 수집 목적: 산업안전보건법에 따른 TBM 실시 기록 보존 및 안전보건 관리 / • 수집 항목: 소속, 직책, 성명, 연락처, 본인 전자서명 / • 보유 기간: 3년")
+            if st.button("✨ [일괄 동의] 리더 및 전 참석자 개인정보 수집·이용 일괄 동의 체크", type="primary", use_container_width=True):
+                st.session_state["agree_leader"] = True
+                for idx_a in range(4):
+                    st.session_state[f"agree_w_{idx_a}"] = True
+                    st.session_state[f"agree_c_{idx_a}"] = True
+                st.toast("전 참석자의 개인정보 수집·이용 동의가 일괄 체크되었습니다!", icon="✅")
+                st.rerun()
+
+            if "agree_leader" not in st.session_state:
+                st.session_state["agree_leader"] = True
+            for idx_a in range(4):
+                if f"agree_w_{idx_a}" not in st.session_state:
+                    st.session_state[f"agree_w_{idx_a}"] = True
+                if f"agree_c_{idx_a}" not in st.session_state:
+                    st.session_state[f"agree_c_{idx_a}"] = True
+
+            st.markdown("##### ✍️ 전자서명 입력 (개별 참석자 이름 연동 캔버스 분리 & 개인정보 동의)")
             tab_sig_leader, tab_sig_worker, tab_sig_contractor = st.tabs(["🛡️ TBM 리더 서명", "👥 자체 참석자 개별 서명 (①~④)", "🏢 외주업체 개별 서명 (①~④)"])
             
             with tab_sig_leader:
-                st.caption(f"TBM 리더({leader_name}) 전용 서명 칸입니다.")
-                canvas_leader = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=70, width=260, key="canvas_leader_sig")
+                leader_disp = leader_name.strip() if leader_name.strip() else "리더 미입력"
+                st.markdown(f"**🛡️ TBM 리더: `{leader_disp}` 님 전용 서명란**")
+                agree_l = st.checkbox(f"[필수] {leader_disp} 본인은 TBM 회의록 작성을 위한 개인정보 수집·이용에 동의합니다.", key="agree_leader")
+                canvas_leader = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=75, width=280, key="canvas_leader_sig")
             
             worker_canvases = []
+            worker_agrees = []
             with tab_sig_worker:
-                st.caption("자체 참석자 이름을 클릭하여 각자 개인의 싸인을 직접 입력해 주세요.")
-                w_tabs = st.tabs([
-                    f"① {w1 if w1.strip() else '참석자1'}",
-                    f"② {w2 if w2.strip() else '참석자2'}",
-                    f"③ {w3 if w3.strip() else '참석자3'}",
-                    f"④ {w4 if w4.strip() else '참석자4'}"
-                ])
+                st.caption("자체 참석자 이름을 클릭하여 개인정보 동의 체크 후 각자 개인의 싸인을 직접 입력해 주세요.")
+                w_labels = [
+                    f"① {w1.strip()}" if w1.strip() else "① (미입력)",
+                    f"② {w2.strip()}" if w2.strip() else "② (미입력)",
+                    f"③ {w3.strip()}" if w3.strip() else "③ (미입력)",
+                    f"④ {w4.strip()}" if w4.strip() else "④ (미입력)"
+                ]
+                w_tabs = st.tabs(w_labels)
                 for i_w, w_tab in enumerate(w_tabs):
                     with w_tab:
-                        c_w = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=70, width=260, key=f"canvas_worker_sig_{i_w}")
+                        cur_w_name = workers[i_w].strip()
+                        if cur_w_name:
+                            st.markdown(f"**✍️ 자체 참석자 {i_w+1}: `{cur_w_name}` 님 서명란**")
+                            ag_w = st.checkbox(f"[필수] {cur_w_name} 본인은 TBM 안전점검 기록을 위한 개인정보 수집·이용에 동의합니다.", key=f"agree_w_{i_w}")
+                        else:
+                            st.info(f"💡 상단 '자체 참석자 명단'의 {i_w+1}번 칸에 이름을 입력하시면 해당 이름으로 서명란이 활성화됩니다.")
+                            ag_w = st.checkbox(f"[필수] 참석자 {i_w+1} 개인정보 수집·이용에 동의합니다.", key=f"agree_w_{i_w}")
+                        worker_agrees.append(ag_w)
+                        c_w = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=75, width=280, key=f"canvas_worker_sig_{i_w}")
                         worker_canvases.append(c_w)
 
             contractor_canvases = []
+            contractor_agrees = []
             with tab_sig_contractor:
-                st.caption("외주업체 참석자 이름을 클릭하여 각자 개인의 싸인을 직접 입력해 주세요.")
-                c_tabs = st.tabs([
-                    f"① {cw1 if cw1.strip() else '업체1'}",
-                    f"② {cw2 if cw2.strip() else '업체2'}",
-                    f"③ {cw3 if cw3.strip() else '업체3'}",
-                    f"④ {cw4 if cw4.strip() else '업체4'}"
-                ])
+                st.caption("외주업체 참석자 이름을 클릭하여 개인정보 동의 체크 후 각자 개인의 싸인을 직접 입력해 주세요.")
+                c_labels = [
+                    f"① {cw1.strip()}" if cw1.strip() else "① (미입력)",
+                    f"② {cw2.strip()}" if cw2.strip() else "② (미입력)",
+                    f"③ {cw3.strip()}" if cw3.strip() else "③ (미입력)",
+                    f"④ {cw4.strip()}" if cw4.strip() else "④ (미입력)"
+                ]
+                c_tabs = st.tabs(c_labels)
                 for i_c, c_tab in enumerate(c_tabs):
                     with c_tab:
-                        c_c = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=70, width=260, key=f"canvas_contractor_sig_{i_c}")
+                        cur_c_name = contractor_workers[i_c].strip()
+                        if cur_c_name:
+                            st.markdown(f"**✍️ 외주업체 참석자 {i_c+1}: `{cur_c_name}` 님 서명란**")
+                            ag_c = st.checkbox(f"[필수] {cur_c_name} 본인은 TBM 안전점검 기록을 위한 개인정보 수집·이용에 동의합니다.", key=f"agree_c_{i_c}")
+                        else:
+                            st.info(f"💡 상단 '외주업체 참석자 명단'의 {i_c+1}번 칸에 이름을 입력하시면 해당 이름으로 서명란이 활성화됩니다.")
+                            ag_c = st.checkbox(f"[필수] 외주 참석자 {i_c+1} 개인정보 수집·이용에 동의합니다.", key=f"agree_c_{i_c}")
+                        contractor_agrees.append(ag_c)
+                        c_c = st_canvas(stroke_width=2, stroke_color="#000000", background_color="#F8F9FA", height=75, width=280, key=f"canvas_contractor_sig_{i_c}")
                         contractor_canvases.append(c_c)
 
         leader_sig_base64 = ""
@@ -1759,23 +1804,27 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함":
 
         def get_worker_sign_cell(idx, w_name):
             if not w_name.strip(): return ""
+            agree_badge = '<span style="font-size:7.5px; color:#0284C7; display:block; line-height:1;">(☑개인정보동의)</span>' if (idx < len(worker_agrees) and worker_agrees[idx]) else '<span style="font-size:7.5px; color:#999; display:block; line-height:1;">(□미동의)</span>'
             if worker_mode == "직접 텍스트(이름) 입력":
-                return custom_worker_signs[idx] if idx < len(custom_worker_signs) and custom_worker_signs[idx].strip() else w_name
+                sig_part = custom_worker_signs[idx] if idx < len(custom_worker_signs) and custom_worker_signs[idx].strip() else w_name
+                return f"{sig_part}{agree_badge}"
             else:
                 if idx < len(worker_sigs_base64) and worker_sigs_base64[idx]:
-                    return f'<img src="data:image/png;base64,{worker_sigs_base64[idx]}" style="max-height:20px; vertical-align:middle;"/>'
+                    return f'<img src="data:image/png;base64,{worker_sigs_base64[idx]}" style="max-height:18px; vertical-align:middle;"/>{agree_badge}'
                 else:
-                    return '(서명)'
+                    return f'(서명){agree_badge}'
 
         def get_contractor_sign_cell(idx, c_name):
             if not c_name.strip(): return ""
+            agree_badge = '<span style="font-size:7.5px; color:#0284C7; display:block; line-height:1;">(☑개인정보동의)</span>' if (idx < len(contractor_agrees) and contractor_agrees[idx]) else '<span style="font-size:7.5px; color:#999; display:block; line-height:1;">(□미동의)</span>'
             if contractor_mode == "직접 텍스트(이름) 입력":
-                return custom_contractor_signs[idx] if idx < len(custom_contractor_signs) and custom_contractor_signs[idx].strip() else c_name
+                sig_part = custom_contractor_signs[idx] if idx < len(custom_contractor_signs) and custom_contractor_signs[idx].strip() else c_name
+                return f"{sig_part}{agree_badge}"
             else:
                 if idx < len(contractor_sigs_base64) and contractor_sigs_base64[idx]:
-                    return f'<img src="data:image/png;base64,{contractor_sigs_base64[idx]}" style="max-height:20px; vertical-align:middle;"/>'
+                    return f'<img src="data:image/png;base64,{contractor_sigs_base64[idx]}" style="max-height:18px; vertical-align:middle;"/>{agree_badge}'
                 else:
-                    return '(서명)'
+                    return f'(서명){agree_badge}'
 
         weekly_worker_rows = ""
         for i, w_name in enumerate(workers):
@@ -2041,6 +2090,7 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함":
                     memo = st.text_input(f"조치_{idx}", key=f"memo_{idx}", placeholder="'아니오'인 경우 조치내용 입력", label_visibility="collapsed")
                 checklist_data.append({"구분": cat, "번호": idx, "확인사항_html": q_html, "확인사항": q_plain, "해당사항": val, "조치내용": memo})
 
+        # 이미지와 100% 동일한 TBM 실행 체크리스트 인쇄용 HTML 생성
         chk_rows_html = ""
         current_cat_html = ""
         for item in checklist_data:
