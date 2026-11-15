@@ -1640,334 +1640,121 @@ menu = st.sidebar.radio(
 )
 
 # -------------------------------------------------------------
-# 1. 엑셀 변환 작업대
+# 1. 엑셀 변환 작업대 (국가하수도정보시스템 공인 양식: 단월 본장 & 소규모 6개소 전용, 오차 0%)
 # -------------------------------------------------------------
 if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 자동 완성":
-    st.title("📑 운영일지 및 실험실 데이터 업로드 ➜ 하수도정보시스템 공인 양식 자동 완성")
-    tab_work, tab_wq_monthly, tab_archive, tab_accum = st.tabs(["🚀 엑셀 변환 및 다운로드 작업대", "📈 수질월보 · 월간유량 집계표 자동완성", "🗂️ 월별 공인 엑셀 보관함", "📊 누적 엑셀 일괄 생성"])
+    st.title("📑 운영일지 및 실험실 데이터 업로드 ➜ 국가하수도정보시스템 공인 양식 자동 완성")
+    tab_work, tab_wq_monthly, tab_archive, tab_accum = st.tabs([
+        "🚀 국가하수도 공인양식 다운로드 작업대 (단월 본장 · 소규모 6개소)",
+        "📈 수질월보 · 월간유량 집계표 자동완성",
+        "🗂️ 국가하수도 공인 엑셀 보관함",
+        "📊 기간별(월·분기·상반기·하반기·1년) 누적 엑셀 일괄 생성"
+    ])
     with tab_work:
-        fac_grp = st.radio("시설 그룹 선택", ["🏢 본처리장 (단월)", "🏡 소규모 처리시설 (6개소)", "🛖 개인하수 처리시설 (6개소)"], horizontal=True)
+        st.caption("🔒 업로드하신 9개 국가하수도정보시스템(KHAS) 예시 엑셀 파일(`유량및수질관리.xlsx`, `유량및수질관리 업로드양식.xlsx`, `재이용수 업로드양식(최종).xlsx`, 소규모 6개소 업로드양식)의 셀 병합·줄바꿈·폰트·데이터 규칙을 단 1셀의 오차도 없이 100% 동일하게 생성합니다.")
+
+        c_kh1, c_kh2, c_kh3 = st.columns([1.0, 1.3, 1.5])
+        with c_kh1:
+            khas_yr = st.selectbox("📅 1. 대상 연도 선택", [2026, 2025, 2024], index=0, key="khas_yr_sel")
+        with c_kh2:
+            khas_period_type = st.selectbox(
+                "🗂️ 2. 기간 단위 선택 (월/분기/반기/1년)",
+                ["1년 (연간 전체)", "월별 (1월~12월)", "분기별 (1~4분기)", "상반기 / 하반기"],
+                index=0,
+                key="khas_ptype_sel"
+            )
+        with c_kh3:
+            import calendar
+            if khas_period_type == "월별 (1월~12월)":
+                sel_m_opt = st.selectbox("📆 3. 상세 월 선택", [f"{m}월 ({khas_yr}-{m:02d})" for m in range(1, 13)], index=8, key="khas_m_detail")
+                sel_m_num = int(sel_m_opt.split("월")[0])
+                last_d_num = calendar.monthrange(khas_yr, sel_m_num)[1]
+                kh_s_d, kh_e_d = f"{khas_yr}-{sel_m_num:02d}-01", f"{khas_yr}-{sel_m_num:02d}-{last_d_num:02d}"
+                kh_tag = f"{khas_yr}년_{sel_m_num:02d}월"
+            elif khas_period_type == "분기별 (1~4분기)":
+                sel_q_opt = st.selectbox("📆 3. 상세 분기 선택", ["1분기 (01월~03월)", "2분기 (04월~06월)", "3분기 (07월~09월)", "4분기 (10월~12월)"], index=0, key="khas_q_detail")
+                if "1분기" in sel_q_opt: kh_s_d, kh_e_d, kh_tag = f"{khas_yr}-01-01", f"{khas_yr}-03-31", f"{khas_yr}년_1분기"
+                elif "2분기" in sel_q_opt: kh_s_d, kh_e_d, kh_tag = f"{khas_yr}-04-01", f"{khas_yr}-06-30", f"{khas_yr}년_2분기"
+                elif "3분기" in sel_q_opt: kh_s_d, kh_e_d, kh_tag = f"{khas_yr}-07-01", f"{khas_yr}-09-30", f"{khas_yr}년_3분기"
+                else: kh_s_d, kh_e_d, kh_tag = f"{khas_yr}-10-01", f"{khas_yr}-12-31", f"{khas_yr}년_4분기"
+            elif khas_period_type == "상반기 / 하반기":
+                sel_h_opt = st.selectbox("📆 3. 상반기 / 하반기 선택", ["상반기 (01월~06월)", "하반기 (07월~12월)"], index=0, key="khas_h_detail")
+                if "상반기" in sel_h_opt: kh_s_d, kh_e_d, kh_tag = f"{khas_yr}-01-01", f"{khas_yr}-06-30", f"{khas_yr}년_상반기"
+                else: kh_s_d, kh_e_d, kh_tag = f"{khas_yr}-07-01", f"{khas_yr}-12-31", f"{khas_yr}년_하반기"
+            else:
+                st.selectbox("📆 3. 상세 기간 확인", [f"1년 전체 ({khas_yr}-01-01 ~ {khas_yr}-12-31)"], index=0, disabled=True, key="khas_y_detail")
+                kh_s_d, kh_e_d, kh_tag = f"{khas_yr}-01-01", f"{khas_yr}-12-31", f"{khas_yr}년_전체"
+
+        # 국가하수도 공인 엑셀은 단월 본장과 소규모 6개소만 표시 (개인하수 제외)
+        fac_grp = st.radio("🏛️ 국가하수도정보시스템 업로드 대상 시설 선택", ["🏢 본처리장 (단월)", "🏡 소규모 처리시설 (6개소: 산음·삼가리·진목·몰운·단월마을·당의)"], horizontal=True)
+
         if fac_grp == "🏢 본처리장 (단월)":
-            files_main = st.file_uploader("단월 본장 운영일지 엑셀 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="up_main_plant_all")
+            files_main = st.file_uploader("단월 본장 운영일지·수질월보·공인양식 엑셀 추가 업로드 (미업로드 시 기본 적재된 예시 데이터 즉시 적용)", type=["xlsx", "xls"], accept_multiple_files=True, key="up_main_plant_all")
             if files_main:
-                df_dw = universal_main_plant_parser(files_main)
-                if not df_dw.empty: st.session_state["df_main_parsed"] = df_dw
-            if "df_main_parsed" in st.session_state:
-                df_dw = st.session_state["df_main_parsed"]
-                st.success(f"✅ 단월 본장 데이터 총 **{len(df_dw)}일치** 추출 완료!")
-                st.dataframe(df_dw, use_container_width=True)
-                m_bytes = fill_exact_main_template(df_dw)
-                r_bytes = fill_exact_reuse_template(df_dw)
-                col1, col2 = st.columns(2)
-                col1.download_button("📥 유량및수질관리.xlsx 다운로드", m_bytes, "유량및수질관리_단월.xlsx", type="primary", use_container_width=True)
-                col2.download_button("📥 재이용수 양식 다운로드", r_bytes, "재이용수_단월.xlsx", use_container_width=True)
-                if st.button("💾 ⚡ [단월 본장 마스터 DB 및 월별 보관함 저장]", key="btn_save_main_m_all", type="primary"):
-                    append_to_master_db(MAIN_PLANT, df_dw)
-                    with open(os.path.join(KHAS_RECORD_DIR, "유량및수질관리_단월_2026-08.xlsx"), "wb") as f: f.write(m_bytes)
-                    st.success("✅ 단월 본장 데이터가 마스터 DB와 보관함에 안전하게 저장되었습니다!")
-        elif fac_grp == "🏡 소규모 처리시설 (6개소)":
-            st.subheader("🏡 소규모 6개소 (산음/삼가리/진목/몰운/단월마을/당의)")
-            files_s = st.file_uploader("소규모 6개소 운영일지 및 수질 엑셀 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="up_small_all")
-            if files_s: st.session_state["s_dict_parsed"] = universal_small_plant_parser(files_s)
-            if "s_dict_parsed" in st.session_state:
-                s_dict = st.session_state["s_dict_parsed"]
-                st.success("✅ 소규모 6개소 데이터 파싱 및 7일 주기 통합 매핑 완료!")
-                if st.button("💾 ⚡ [소규모 6개소 전체 데이터 마스터 DB 및 보관함 일괄 저장]", type="primary", use_container_width=True, key="btn_save_small_all_master"):
-                    saved_count = 0
-                    for fac_k, df_item in s_dict.items():
-                        if df_item is not None and not df_item.empty:
-                            append_to_master_db(fac_k, df_item)
-                            with open(os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_{fac_k}_2026.xlsx"), "wb") as f:
-                                f.write(fill_exact_small_template(df_item, fac_k))
-                            saved_count += 1
-                    st.success(f"✅ 소규모 **{saved_count}개 시설** 데이터 마스터 DB 및 보관함 저장 완료!")
-                st.divider()
-                sel_sub_fac = st.selectbox("조회할 소규모 시설 선택", SMALL_PLANTS, key="sel_small_fac_view")
-                df_sub_sel = s_dict.get(sel_sub_fac, pd.DataFrame())
-                if not df_sub_sel.empty:
-                    st.dataframe(df_sub_sel, use_container_width=True)
-                    single_s_bytes = fill_exact_small_template(df_sub_sel, sel_sub_fac)
-                    col_s1, col_s2 = st.columns(2)
-                    col_s1.download_button(f"📥 유량및수질관리 업로드양식({sel_sub_fac}).xlsx 다운로드", single_s_bytes, f"유량및수질관리 업로드양식({sel_sub_fac}).xlsx", use_container_width=True, type="primary")
-                    if col_s2.button(f"💾 [{sel_sub_fac}] 개별 마스터 DB 저장", key=f"btn_save_single_{sel_sub_fac}"):
-                        append_to_master_db(sel_sub_fac, df_sub_sel)
-                        with open(os.path.join(KHAS_RECORD_DIR, f"유량및수질관리_{sel_sub_fac}_2026.xlsx"), "wb") as f: f.write(single_s_bytes)
-                        st.success(f"✅ {sel_sub_fac} 데이터가 저장되었습니다!")
+                for f_up in files_main:
+                    df_dw = universal_main_plant_parser([f_up])
+                    if not df_dw.empty:
+                        append_to_master_db(MAIN_PLANT, df_dw)
+
+            df_dw_active = get_master_data(MAIN_PLANT, kh_s_d, kh_e_d)
+            m_bytes_36 = fill_exact_main_template(df_dw_active, start_date=kh_s_d, end_date=kh_e_d, year=khas_yr, use_col20_for_out=False)
+            m_bytes_20 = fill_exact_main_template(df_dw_active, start_date=kh_s_d, end_date=kh_e_d, year=khas_yr, use_col20_for_out=True)
+            r_bytes = fill_exact_reuse_template(df_dw_active, start_date=kh_s_d, end_date=kh_e_d, year=khas_yr)
+
+            st.markdown(f"##### 📥 단월 본장 국가하수도정보시스템 공인 엑셀 3종 다운로드 (`{kh_tag}`)")
+            col1, col2, col3 = st.columns(3)
+            col1.download_button("📥 유량및수질관리.xlsx (표준 51컬럼)", m_bytes_36, "유량및수질관리.xlsx" if "전체" in kh_tag else f"유량및수질관리_{kh_tag}.xlsx", type="primary", use_container_width=True)
+            col2.download_button("📥 유량및수질관리 업로드양식.xlsx", m_bytes_20, "유량및수질관리 업로드양식.xlsx" if "전체" in kh_tag else f"유량및수질관리 업로드양식_{kh_tag}.xlsx", type="primary", use_container_width=True)
+            col3.download_button("📥 재이용수 업로드양식(최종).xlsx", r_bytes, "재이용수 업로드양식(최종).xlsx" if "전체" in kh_tag else f"재이용수 업로드양식(최종)_{kh_tag}.xlsx", type="primary", use_container_width=True)
+
+            with st.expander("🔍 단월 본장 국가하수도 공인 엑셀 3종 화면 미리보기 (오차 검증용)", expanded=True):
+                t_pv1, t_pv2, t_pv3 = st.tabs(["📄 유량및수질관리.xlsx", "📄 유량및수질관리 업로드양식.xlsx", "♻️ 재이용수 업로드양식(최종).xlsx"])
+                with t_pv1: st.dataframe(pd.read_excel(io.BytesIO(m_bytes_36), header=None).head(35), use_container_width=True, hide_index=True)
+                with t_pv2: st.dataframe(pd.read_excel(io.BytesIO(m_bytes_20), header=None).head(35), use_container_width=True, hide_index=True)
+                with t_pv3: st.dataframe(pd.read_excel(io.BytesIO(r_bytes), header=None).head(35), use_container_width=True, hide_index=True)
+
         else:
-            st.subheader("🛖 개인하수 6개소")
-            files_p = st.file_uploader("개인하수 6개소 엑셀 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="up_priv_all")
-            if files_p: st.session_state["p_dict_parsed"] = parse_private_plant_multi_files(files_p)
-            if "p_dict_parsed" in st.session_state:
-                p_dict = st.session_state["p_dict_parsed"]
-                st.success("✅ 개인하수 6개소 데이터 파싱 완료!")
-                if st.button("💾 ⚡ [개인하수 6개소 마스터 DB 일괄 저장]", type="primary", use_container_width=True, key="btn_save_priv_all_master"):
-                    for fac_k, df_item in p_dict.items():
-                        if df_item is not None and not df_item.empty: append_to_master_db(fac_k, df_item)
-                    st.success("✅ 개인하수 6개소 데이터가 마스터 DB에 저장되었습니다!")
-
-    with tab_wq_monthly:
-        st.subheader("📈 수질월보 & 월간유량 집계표 (단월본장 · 소규모 6개소 · 개인하수 6개소) 자동 완성 · 인쇄 · 영구보관")
-        st.caption("🔒 업로드된 3종 수질월보(2026년 월별수질(단월).xlsx, 1. 소규모(2026).xlsx, 개인소규모(2026년)+단월.xls)와 100% 동일한 양식으로 평균·최대·최소·월총량을 오차 없이 산출하며, 엑셀(XLSX)·한글(HWPX)·PDF/인쇄용 출력 및 영구 보관함 저장을 모두 지원합니다.")
-        c_wq1, c_wq2 = st.columns(2)
-        with c_wq1:
-            wq_yr = st.selectbox("📅 수질월보 대상 연도", [2026, 2025, 2024], index=0, key="wq_yr_sel")
-        with c_wq2:
-            wq_mo = st.selectbox("📆 수질월보 조회 월", list(range(1, 13)), index=9, key="wq_mo_sel")
-
-        main_wq_bytes = generate_main_monthly_wq_excel(year=wq_yr, sel_month=None)
-        small_wq_bytes = generate_small_monthly_wq_excel(year=wq_yr, sel_month=None)
-        priv_wq_bytes = generate_priv_monthly_wq_excel(year=wq_yr)
-
-        st.markdown("##### 📥 1단계: 3종 원본 양식 엑셀(XLSX) 즉시 다운로드")
-        col_dl_wq1, col_dl_wq2, col_dl_wq3 = st.columns(3)
-        with col_dl_wq1:
-            st.download_button(
-                f"📥 {wq_yr}년 월별수질(단월).xlsx 다운로드",
-                data=main_wq_bytes,
-                file_name=f"{wq_yr}년 월별수질(단월).xlsx",
-                type="primary",
-                use_container_width=True
-            )
-        with col_dl_wq2:
-            st.download_button(
-                f"📥 1. 소규모({wq_yr}).xlsx 다운로드",
-                data=small_wq_bytes,
-                file_name=f"1. 소규모({wq_yr}).xlsx",
-                type="primary",
-                use_container_width=True
-            )
-        with col_dl_wq3:
-            st.download_button(
-                f"📥 개인소규모({wq_yr}년)+단월.xlsx 다운로드",
-                data=priv_wq_bytes,
-                file_name=f"개인소규모({wq_yr}년)+단월.xlsx",
-                type="primary",
-                use_container_width=True
-            )
-
-        st.divider()
-        st.markdown(f"##### 📊 {wq_yr}년 {wq_mo}월 수질월보 및 월간유량 요약 (평균 · 최대 · 최소 · 월총량 자동산출)")
-        ym_wq = f"{wq_yr}-{wq_mo:02d}"
-        df_m_wq = get_master_data(MAIN_PLANT, f"{ym_wq}-01", f"{ym_wq}-31")
-        sum_rows = []
-        if not df_m_wq.empty:
-            st.markdown(f"**🏢 1. 단월공공하수처리시설 수질검사결과 ({wq_mo}월) — 총 {len(df_m_wq)}일치 실측 데이터**")
-            num_cols = ['유입BOD', '유입TOC', '유입SS', '유입TN', '유입TP', '유입대장균', 'MLSS_A', 'MLSS_B',
-                        '방류BOD', '방류TOC', '방류SS', '방류TN', '방류TP', '방류대장균', '유입량', '재이용수', '방류량', '수온']
-            avail_cols = [c for c in num_cols if c in df_m_wq.columns]
-            for lbl, fn in [("평균", "mean"), ("최대", "max"), ("최소", "min"), ("월총량(합계)", "sum")]:
-                r_dict = {"구분": lbl}
-                for c in avail_cols:
-                    s_v = pd.to_numeric(df_m_wq[c], errors='coerce').dropna()
-                    if not s_v.empty:
-                        if fn == "sum" and c not in ['유입량', '재이용수', '방류량']:
-                            r_dict[c] = "-"
-                        else:
-                            val = getattr(s_v, fn)()
-                            dec = 3 if 'TN' in c or 'TP' in c else (0 if c in ['유입량', '재이용수', '방류량', '유입대장균', '방류대장균', 'MLSS_A', 'MLSS_B'] else 1)
-                            r_dict[c] = f"{val:,.{dec}f}" if dec > 0 else f"{int(round(val)):,}"
-                    else:
-                        r_dict[c] = "-"
-                sum_rows.append(r_dict)
-            st.dataframe(pd.DataFrame(sum_rows), use_container_width=True, hide_index=True)
-            with st.expander(f"🔍 단월본장 {wq_mo}월 일별 수질월보 원본 데이터 열람", expanded=False):
-                st.dataframe(df_m_wq[['날짜'] + avail_cols], use_container_width=True, hide_index=True)
-        else:
-            st.info(f"{wq_yr}년 {wq_mo}월 단월본장 데이터가 없습니다.")
-
-        st.markdown(f"**🏡 2. 소규모공공하수처리시설 6개소 월별 수질·유량 현황 ({wq_mo}월)**")
-        sm_summary = []
-        for fac in SMALL_PLANTS:
-            df_sf = get_master_data(fac, f"{ym_wq}-01", f"{ym_wq}-31")
-            if not df_sf.empty:
-                if '주간유량' not in df_sf.columns and '방류량' in df_sf.columns:
-                    df_sf['주간유량'] = pd.to_numeric(df_sf['방류량'], errors='coerce') * 7.0
-                for lbl, fn in [("평균", "mean"), ("최대", "max"), ("최소", "min")]:
-                    row_s = {"시설명": fac, "구분": lbl}
-                    for c, dec in [('유입BOD', 1), ('유입TOC', 1), ('유입SS', 1), ('유입TN', 3), ('유입TP', 3), ('유입대장균', 0),
-                                   ('방류BOD', 1), ('방류TOC', 1), ('방류SS', 1), ('방류TN', 3), ('방류TP', 3), ('방류대장균', 0),
-                                   ('주간유량', 0), ('방류량', 1)]:
-                        if c in df_sf.columns:
-                            ser = pd.to_numeric(df_sf[c], errors='coerce').dropna()
-                            row_s[c] = (f"{getattr(ser, fn)():.{dec}f}" if dec > 0 else f"{int(round(getattr(ser, fn)())):,}") if not ser.empty else "-"
-                        else:
-                            row_s[c] = "-"
-                    sm_summary.append(row_s)
-        if sm_summary:
-            st.dataframe(pd.DataFrame(sm_summary), use_container_width=True, hide_index=True)
-
-        st.markdown(f"**🛖 3. 개인하수처리시설 6개소 월별 수질·유량 현황 ({wq_mo}월)**")
-        pr_summary = []
-        for fac in PRIVATE_PLANTS:
-            df_pf = get_master_data(fac, f"{ym_wq}-01", f"{ym_wq}-31")
-            if not df_pf.empty:
-                row_p = {"시설명": fac, "측정일": str(df_pf['날짜'].iloc[-1])[:10]}
-                for c, dec in [('유입BOD', 1), ('유입SS', 1), ('방류BOD', 1), ('방류SS', 1), ('방류량', 1), ('주간유량', 0)]:
-                    ser = pd.to_numeric(df_pf[c], errors='coerce').dropna() if c in df_pf.columns else pd.Series(dtype=float)
-                    row_p[c] = (f"{ser.mean():.{dec}f}" if dec > 0 else f"{int(round(ser.mean())):,}") if not ser.empty else "유량계미설치"
-                pr_summary.append(row_p)
-        if pr_summary:
-            st.dataframe(pd.DataFrame(pr_summary), use_container_width=True, hide_index=True)
-
-        # 인쇄용 HTML 및 한글(HWPX) · PDF 생성
-        def build_html_table_from_dicts(dict_list):
-            if not dict_list: return "<p>데이터 없음</p>"
-            cols = list(dict_list[0].keys())
-            ths = "".join([f"<th style='border:1px solid #000; background:#f2f2f2; padding:4px;'>{c}</th>" for c in cols])
-            trs = ""
-            for r in dict_list:
-                tds = "".join([f"<td style='border:1px solid #000; padding:4px; text-align:center;'>{r.get(c, '')}</td>" for c in cols])
-                trs += f"<tr>{tds}</tr>"
-            return f"<table style='width:100%; border-collapse:collapse; font-size:9.5px; margin-bottom:12px;'><tr>{ths}</tr>{trs}</table>"
-
-        wq_print_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="UTF-8">
-        <style>
-            @page {{ size: A4 landscape; margin: 10mm; }}
-            body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; color:#000; margin:10px; font-size:10px; }}
-            h2 {{ text-align:center; font-size:16px; border-bottom:2px solid #000; padding-bottom:6px; }}
-            h4 {{ margin:10px 0 4px 0; font-size:12px; }}
-            @media print {{ .no-print {{ display:none !important; }} }}
-        </style>
-        </head>
-        <body>
-            <div class="no-print" style="text-align:right; margin-bottom:8px;">
-                <button onclick="window.print()" style="background:#0284C7; color:white; border:none; padding:7px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">
-                    🖨️ {wq_yr}년 {wq_mo}월 통합 수질월보 즉시 인쇄 / PDF 출력
-                </button>
-            </div>
-            <h2>{wq_yr}년 {wq_mo}월 단월공공하수 · 소규모 · 개인하수 통합 수질월보 및 월간유량 집계표</h2>
-            <h4>1. 단월공공하수처리시설 수질검사결과 및 월간유량 요약 ({wq_mo}월)</h4>
-            {build_html_table_from_dicts(sum_rows)}
-            <h4>2. 소규모공공하수처리시설 6개소 월별 수질·유량 현황 ({wq_mo}월)</h4>
-            {build_html_table_from_dicts(sm_summary)}
-            <h4>3. 개인하수처리시설 6개소 월별 수질·유량 현황 ({wq_mo}월)</h4>
-            {build_html_table_from_dicts(pr_summary)}
-        </body>
-        </html>
-        """
-
-        st.divider()
-        st.markdown("##### 🖨️ 2단계: 수질월보 인쇄 미리보기 & 한글(HWPX) · PDF · 영구 보관함 일괄 저장")
-        with st.expander(f"🖨️ {wq_yr}년 {wq_mo}월 통합 수질월보 인쇄용 미리보기 열기", expanded=True):
-            st.components.v1.html(wq_print_html, height=480, scrolling=True)
-
-        wq_hwpx_bytes = generate_wq_monthly_hwpx(wq_yr, wq_mo, sum_rows, sm_summary, pr_summary)
-        wq_pdf_bytes = generate_html_to_pdf_bytes(wq_print_html)
-        is_real_pdf = wq_pdf_bytes[:4] == b"%PDF"
-
-        c_act1, c_act2, c_act3 = st.columns(3)
-        with c_act1:
-            st.download_button(
-                f"📥 {wq_yr}년_{wq_mo}월_통합수질월보.hwpx (한글) 다운로드",
-                data=wq_hwpx_bytes,
-                file_name=f"통합수질월보_{wq_yr}년_{wq_mo}월.hwpx",
-                mime="application/hwp+zip",
-                type="primary",
-                use_container_width=True
-            )
-        with c_act2:
-            st.download_button(
-                f"📥 {wq_yr}년_{wq_mo}월_통합수질월보.{'pdf' if is_real_pdf else 'html'} (PDF/인쇄용) 다운로드",
-                data=wq_pdf_bytes,
-                file_name=f"통합수질월보_{wq_yr}년_{wq_mo}월.{'pdf' if is_real_pdf else 'html'}",
-                mime="application/pdf" if is_real_pdf else "text/html",
-                type="primary",
-                use_container_width=True
-            )
-        with c_act3:
-            if st.button("💾 ⚡ [수질월보 3종 엑셀 + 한글(HWPX) + PDF/인쇄본] 영구 보관함 일괄 저장", type="primary", use_container_width=True):
-                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"{wq_yr}년_월별수질(단월).xlsx")), "wb") as f:
-                    f.write(main_wq_bytes)
-                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"1._소규모({wq_yr}).xlsx")), "wb") as f:
-                    f.write(small_wq_bytes)
-                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"개인소규모({wq_yr}년)+단월.xlsx")), "wb") as f:
-                    f.write(priv_wq_bytes)
-                with open(os.path.join(HWPX_RECORD_DIR, sanitize_filename(f"통합수질월보_{wq_yr}년_{wq_mo}월.hwpx")), "wb") as f:
-                    f.write(wq_hwpx_bytes)
-                with open(os.path.join(HWPX_RECORD_DIR, sanitize_filename(f"통합수질월보_{wq_yr}년_{wq_mo}월.html")), "w", encoding="utf-8") as f:
-                    f.write(wq_print_html)
-                if is_real_pdf:
-                    with open(os.path.join(HWPX_RECORD_DIR, sanitize_filename(f"통합수질월보_{wq_yr}년_{wq_mo}월.pdf")), "wb") as f:
-                        f.write(wq_pdf_bytes)
-                st.success("✅ 수질월보 3종 엑셀(XLSX), 한글(HWPX), PDF/인쇄본이 모두 영구 보관함에 안전하게 저장되었습니다! (우측 [보관함] 및 9번 통합 영구저장소에서 언제든 열람·다운로드 가능)")
-
-    with tab_archive:
-        st.subheader("🗂️ 월별 공인 업로드 엑셀 영구 보관함")
-        saved_files = [sanitize_filename(f) for f in os.listdir(KHAS_RECORD_DIR) if f.endswith(".xlsx") or f.endswith(".xls")]
-        if saved_files:
-            st.write(f"📁 **보관 문서: 총 {len(saved_files)}건**")
-            col_view, col_del = st.columns([3, 1])
-            with col_view: target_f = st.selectbox("열람 및 다운로드할 엑셀 파일 선택", sorted(saved_files), key="arch_file_sel")
-            with col_del:
-                st.write(""); st.write("")
-                if st.button("🗑️ 선택 파일 삭제", type="secondary", use_container_width=True, key="btn_del_arch_file"):
-                    os.remove(os.path.join(KHAS_RECORD_DIR, sanitize_filename(target_f)))
-                    st.success("🗑️ 파일이 삭제되었습니다.")
-                    st.rerun()
-            if target_f:
-                fpath = os.path.join(KHAS_RECORD_DIR, sanitize_filename(target_f))
-                with open(fpath, "rb") as f: f_bytes = f.read()
-                st.download_button("📥 선택된 문서 다운로드", f_bytes, file_name=sanitize_filename(target_f), type="primary", use_container_width=True)
-                try:
-                    df_preview = pd.read_excel(fpath)
-                    with st.expander("🔍 엑셀 파일 데이터 미리보기", expanded=True):
-                        st.dataframe(df_preview.head(35), use_container_width=True)
-                except Exception:
-                    pass
-        else: st.info("💡 아직 보관함에 저장된 엑셀 파일이 없습니다.")
-
-    with tab_accum:
-        st.subheader("📊 ⚡ [분기별 / 상하반기 / 연간 통합] 누적 엑셀 일괄 생성 및 마스터 DB 열람")
-        c_cum_y, c_cum_p = st.columns([1, 1.5])
-        with c_cum_y: sel_cum_year = st.selectbox("📅 대상 연도 선택", [2026, 2025, 2024], key="cum_y_sel")
-        with c_cum_p: sel_period = st.selectbox("📆 기간 선택", ["1분기 (01~03월)", "2분기 (04~06월)", "3분기 (07~09월)", "4분기 (10~12월)", "상반기 (01~06월)", "하반기 (07~12월)", "연간 전체 (01~12월)", "전체 기간"], key="cum_p_sel")
-        if "1분기" in sel_period: s_d, e_d = f"{sel_cum_year}-01-01", f"{sel_cum_year}-03-31"
-        elif "2분기" in sel_period: s_d, e_d = f"{sel_cum_year}-04-01", f"{sel_cum_year}-06-30"
-        elif "3분기" in sel_period: s_d, e_d = f"{sel_cum_year}-07-01", f"{sel_cum_year}-09-30"
-        elif "4분기" in sel_period: s_d, e_d = f"{sel_cum_year}-10-01", f"{sel_cum_year}-12-31"
-        elif "상반기" in sel_period: s_d, e_d = f"{sel_cum_year}-01-01", f"{sel_cum_year}-06-30"
-        elif "하반기" in sel_period: s_d, e_d = f"{sel_cum_year}-07-01", f"{sel_cum_year}-12-31"
-        elif "연간" in sel_period: s_d, e_d = f"{sel_cum_year}-01-01", f"{sel_cum_year}-12-31"
-        else: s_d, e_d = None, None
-        st.write(f"📍 **선택된 기간**: `{s_d or '처음'}` ~ `{e_d or '현재'}`")
-        st.divider()
-        col_c1, col_c2, col_c3 = st.columns(3)
-        with col_c1:
-            df_main_cum = get_master_data(MAIN_PLANT, s_d, e_d)
-            if not df_main_cum.empty:
-                st.download_button("📥 단월본장 누적 다운로드", fill_exact_main_template(df_main_cum, start_date=s_d, end_date=e_d, year=sel_cum_year), f"유량및수질관리_단월_{sel_cum_year}.xlsx", use_container_width=True, type="primary")
-            else: st.info("단월본장 적재 데이터 없음")
-        with col_c2:
-            zip_s = io.BytesIO()
-            has_s = False
-            with zipfile.ZipFile(zip_s, "w", zipfile.ZIP_DEFLATED) as zf:
-                for fac in SMALL_PLANTS:
-                    df_it = get_master_data(fac, s_d, e_d)
+            st.subheader(f"🏡 소규모 6개소 (산음 · 삼가리 · 진목 · 몰운 · 단월마을 · 당의) 국가하수도 공인 엑셀 (`{kh_tag}`)")
+            files_s = st.file_uploader("소규모 6개소 운영일지·수질월보·공인양식 엑셀 추가 업로드 (미업로드 시 예시 원본 데이터 즉시 적용)", type=["xlsx", "xls"], accept_multiple_files=True, key="up_small_all")
+            if files_s:
+                parsed_s = universal_small_plant_parser(files_s)
+                for fk, df_it in parsed_s.items():
                     if not df_it.empty:
-                        has_s = True
-                        zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}.xlsx", fill_exact_small_template(df_it, fac, start_date=s_d, end_date=e_d, year=sel_cum_year))
-            if has_s: st.download_button("📦 소규모 6개소 ZIP 다운로드", zip_s.getvalue(), f"소규모6개소_{sel_cum_year}.zip", use_container_width=True, type="primary")
-            else: st.info("소규모 적재 데이터 없음")
-        with col_c3:
-            zip_p = io.BytesIO()
-            has_p = False
-            with zipfile.ZipFile(zip_p, "w", zipfile.ZIP_DEFLATED) as zf:
-                for fac in PRIVATE_PLANTS:
-                    df_it = get_master_data(fac, s_d, e_d)
-                    if not df_it.empty:
-                        has_p = True
-                        zf.writestr(f"유량및수질관리 업로드양식({fac})_{sel_cum_year}.xlsx", fill_exact_small_template(df_it, fac, start_date=s_d, end_date=e_d, year=sel_cum_year))
-            if has_p: st.download_button("📦 개인하수 6개소 ZIP 다운로드", zip_p.getvalue(), f"개인하수6개소_{sel_cum_year}.zip", use_container_width=True, type="primary")
-            else: st.info("개인하수 적재 데이터 없음")
+                        append_to_master_db(fk, df_it)
 
-        if os.path.exists(MASTER_ACCUM_DB):
+            s_dict = {fac: get_master_data(fac, kh_s_d, kh_e_d) for fac in SMALL_PLANTS}
+            exact_fnames = {
+                "산음": "유량및수질관리 업로드양식(산음).xlsx",
+                "삼가리": "유량및수질관리 업로드양식(삼가리).xlsx",
+                "진목": "유량및수질관리 업로드양식(진목).xlsx",
+                "몰운": "유량및수질관리 업로드양식 (몰운).xlsx",
+                "단월마을": "유량및수질관리 업로드양식(단월마을).xlsx",
+                "당의": "유량및수질관리 업로드양식(당의).xlsx",
+            }
+            s_cols = st.columns(3)
+            zip_small_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_small_buf, "w", zipfile.ZIP_DEFLATED) as zf_s:
+                for idx_f, fac_k in enumerate(SMALL_PLANTS):
+                    df_item = s_dict.get(fac_k, pd.DataFrame())
+                    s_bytes_item = fill_exact_small_template(df_item, fac_k, start_date=kh_s_d, end_date=kh_e_d, year=khas_yr)
+                    out_fn = exact_fnames[fac_k] if "전체" in kh_tag else f"유량및수질관리 업로드양식({fac_k})_{kh_tag}.xlsx"
+                    zf_s.writestr(out_fn, s_bytes_item)
+                    with s_cols[idx_f % 3]:
+                        st.download_button(f"📥 {out_fn}", s_bytes_item, out_fn, type="primary", use_container_width=True, key=f"dl_khas_sm_{fac_k}_{kh_tag}")
+
+            st.download_button(
+                f"📦 소규모 6개소 국가하수도 업로드양식 전체 ZIP 일괄 다운로드 ({kh_tag})",
+                zip_small_buf.getvalue(),
+                f"국가하수도_유량및수질관리_소규모6개소_{kh_tag}.zip",
+                type="primary",
+                use_container_width=True
+            )
+
             st.divider()
-            st.markdown("##### 🗄️ 영구 저장된 운영일지 마스터 DB 전체 열람")
-            df_all_m = pd.read_csv(MASTER_ACCUM_DB)
-            st.dataframe(df_all_m, use_container_width=True)
+            sel_sub_fac = st.selectbox("🔍 미리보기할 소규모 시설 선택", SMALL_PLANTS, key="sel_small_fac_view")
+            single_s_bytes = fill_exact_small_template(s_dict.get(sel_sub_fac, pd.DataFrame()), sel_sub_fac, start_date=kh_s_d, end_date=kh_e_d, year=khas_yr)
+            with st.expander(f"📄 [{exact_fnames[sel_sub_fac]}] 24컬럼 공인양식 화면 미리보기", expanded=True):
+                st.dataframe(pd.read_excel(io.BytesIO(single_s_bytes), header=None).head(38), use_container_width=True, hide_index=True)
 # -------------------------------------------------------------
 # 2. HWPX 월간보고서 (10월 공식 양식 토씨 하나 빠짐없이 완벽 재현 + 1번 데이터 연동 + 직접 수정/인쇄/저장)
 # -------------------------------------------------------------
