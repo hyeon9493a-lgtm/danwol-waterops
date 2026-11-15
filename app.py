@@ -5,7 +5,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from streamlit_drawable_canvas import st_canvas
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 import datetime
 import os
 import re
@@ -923,7 +924,61 @@ def parse_private_plant_multi_files(file_list):
             out_dfs[k] = pd.DataFrame()
     return out_dfs
 
-def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026):
+def parse_khas_51col_main_file(filepath):
+    """업로드된 단월 본장 51컬럼 공인양식(유량및수질관리.xlsx / 업로드양식.xlsx)을 오차 없이 파싱"""
+    recs = {}
+    try:
+        wb = openpyxl.load_workbook(filepath, data_only=True)
+        ws = wb.active
+        for r in range(4, ws.max_row + 1):
+            c1 = ws.cell(r, 1).value
+            if c1 is None:
+                continue
+            dt_val = None
+            if isinstance(c1, (datetime.datetime, datetime.date)):
+                dt_val = datetime.date(c1.year, c1.month, c1.day)
+            elif isinstance(c1, (int, float)) and 40000 <= c1 <= 50000:
+                dt_val = (datetime.date(1899, 12, 30) + datetime.timedelta(days=int(c1)))
+            elif isinstance(c1, str):
+                m = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', c1)
+                if m:
+                    dt_val = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            if not dt_val:
+                continue
+            d_str = dt_val.strftime('%Y-%m-%d')
+            f_in = pd.to_numeric(ws.cell(r, 2).value, errors='coerce')
+            f_out = pd.to_numeric(ws.cell(r, 8).value, errors='coerce')
+            temp_v = pd.to_numeric(ws.cell(r, 10).value, errors='coerce')
+            if pd.isna(f_in) and pd.isna(f_out) and pd.isna(pd.to_numeric(ws.cell(r, 12).value, errors='coerce')):
+                continue
+            out_col_start = 36 if ws.cell(r, 36).value is not None else 20
+            rec = {
+                '날짜': d_str,
+                '유입량': float(f_in) if pd.notna(f_in) else np.nan,
+                '방류량': float(f_out) if pd.notna(f_out) else np.nan,
+                '재이용수': round(float(f_in) - float(f_out), 1) if (pd.notna(f_in) and pd.notna(f_out) and float(f_in) >= float(f_out)) else np.nan,
+                '수온': float(temp_v) if pd.notna(temp_v) else np.nan,
+                '유입BOD': pd.to_numeric(ws.cell(r, 12).value, errors='coerce'),
+                '유입TOC': pd.to_numeric(ws.cell(r, 13).value, errors='coerce'),
+                '유입SS': pd.to_numeric(ws.cell(r, 14).value, errors='coerce'),
+                '유입TN': pd.to_numeric(ws.cell(r, 15).value, errors='coerce'),
+                '유입TP': pd.to_numeric(ws.cell(r, 16).value, errors='coerce'),
+                '유입대장균': pd.to_numeric(ws.cell(r, 17).value, errors='coerce'),
+                '방류BOD': pd.to_numeric(ws.cell(r, out_col_start).value, errors='coerce'),
+                '방류TOC': pd.to_numeric(ws.cell(r, out_col_start + 1).value, errors='coerce'),
+                '방류SS': pd.to_numeric(ws.cell(r, out_col_start + 2).value, errors='coerce'),
+                '방류TN': pd.to_numeric(ws.cell(r, out_col_start + 3).value, errors='coerce'),
+                '방류TP': pd.to_numeric(ws.cell(r, out_col_start + 4).value, errors='coerce'),
+                '방류대장균': pd.to_numeric(ws.cell(r, out_col_start + 5).value, errors='coerce'),
+            }
+            recs[d_str] = rec
+        wb.close()
+    except Exception:
+        pass
+    return pd.DataFrame(list(recs.values())).sort_values('날짜').reset_index(drop=True) if recs else pd.DataFrame()
+
+def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026, use_col20_for_out=False):
+    """유량및수질관리.xlsx (51컬럼) 및 유량및수질관리 업로드양식.xlsx 와 100% 동일한 서식·수치 생성"""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sheet1"
@@ -931,11 +986,12 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
     ws.merge_cells('A1:AY1')
     headers_r2 = {
         'A2': '날짜', 'B2': '유입량\n(반류수 포함)\n(㎥/일)', 'C2': '반류수 유량\n(㎥/일)', 'D2': '실제 유입량\n(㎥/일)',
-        'E2': '처리량', 'H2': '방류량\n(㎥)/일', 'I2': '처리시설 유입전\n우수토실 방류량\n(㎥/일)', 'J2': '수온\n(℃)',
+        'E2': '처리량', 'H2': '방류량\n(㎥)/일', 'I2': '처리시설 유입전\n우수토실 방류량\n(㎥)/일', 'J2': '수온\n(℃)',
         'K2': '유입수질(연계전)', 'S2': '총인시설 유입수질(연계전)', 'AA2': '강우시 유입수질(1차처리전)', 'AI2': '방류수질',
         'AQ2': '방류수질(강우시 1차처리후 by-pass)', 'AY2': '비고'
     }
-    for k, v in headers_r2.items(): ws[k] = v
+    for k, v in headers_r2.items():
+        ws[k] = v
     subheaders_r3 = {
         'E3': '물리적\n(㎥/일)', 'F3': '생물학적\n(㎥/일)', 'G3': '고도\n(㎥/일)',
         'K3': 'pH\n(-)', 'L3': 'BOD\n(㎎/L)', 'M3': 'TOC\n(㎎/L)', 'N3': 'SS\n(㎎/L)', 'O3': 'T-N\n(㎎/L)', 'P3': 'T-P\n(㎎/L)', 'Q3': '총대장균군\n(개/㎖)', 'R3': '생태독성\n(TU)',
@@ -944,9 +1000,23 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
         'AI3': 'pH\n(-)', 'AJ3': 'BOD\n(㎎/L)', 'AK3': 'TOC\n(㎎/L)', 'AL3': 'SS\n(㎎/L)', 'AM3': 'T-N\n(㎎/L)', 'AN3': 'T-P\n(㎎/L)', 'AO3': '총대장균군\n(개/㎖)', 'AP3': '생태독성\n(TU)',
         'AQ3': 'pH\n(-)', 'AR3': 'BOD\n(㎎/L)', 'AS3': 'TOC\n(㎎/L)', 'AT3': 'SS\n(㎎/L)', 'AU3': 'T-N\n(㎎/L)', 'AV3': 'T-P\n(㎎/L)', 'AW3': '총대장균군\n(개/㎖)', 'AX3': '생태독성\n(TU)',
     }
-    for k, v in subheaders_r3.items(): ws[k] = v
+    for k, v in subheaders_r3.items():
+        ws[k] = v
     merges = ['A2:A3', 'B2:B3', 'C2:C3', 'D2:D3', 'E2:G2', 'H2:H3', 'I2:I3', 'J2:J3', 'K2:R2', 'S2:Z2', 'AA2:AH2', 'AI2:AP2', 'AQ2:AX2', 'AY2:AY3']
-    for m in merges: ws.merge_cells(m)
+    for m in merges:
+        ws.merge_cells(m)
+
+    ws.row_dimensions[2].height = 18.75
+    ws.row_dimensions[3].height = 18.75
+    ws.column_dimensions['A'].width = 12.0
+    ws.column_dimensions['B'].width = 12.5
+    ws.column_dimensions['J'].width = 10.0
+    for c_idx in range(3, 52):
+        if c_idx != 10:
+            ws.column_dimensions[get_column_letter(c_idx)].width = 13.0
+
+    thin_side = Side(style='thin', color='000000')
+    border_r2 = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     font_header = Font(name='dotum', size=9, bold=True)
     for r in range(1, 4):
@@ -954,48 +1024,82 @@ def fill_exact_main_template(df_data, start_date=None, end_date=None, year=2026)
             cell = ws.cell(r, c)
             cell.alignment = align_center
             cell.font = font_header
-    if start_date and end_date: d_range = pd.date_range(start_date, end_date)
-    elif df_data is not None and not df_data.empty and '날짜' in df_data.columns:
-        d_range = pd.date_range(df_data['날짜'].min(), df_data['날짜'].max())
-    else: d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+            cell.number_format = '@'
+            if r == 2:
+                cell.border = border_r2
+
+    if start_date and end_date:
+        d_range = pd.date_range(start_date, end_date)
+    else:
+        d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+
     lookup = {}
     if df_data is not None and not df_data.empty and '날짜' in df_data.columns:
-        for _, r in df_data.iterrows(): lookup[str(r['날짜']).split()[0]] = r
+        for _, r in df_data.iterrows():
+            lookup[str(r['날짜']).split()[0]] = r
+
     font_data = Font(name='맑은 고딕', size=11, bold=False)
-    align_data_center = Alignment(horizontal='center', vertical='center')
-    align_data_right = Alignment(horizontal='right', vertical='center')
+    out_start = 20 if use_col20_for_out else 36
+
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
-        c1 = ws.cell(r_idx, 1, dt.date())
-        c1.number_format = 'yyyy-mm-dd'
+        c1 = ws.cell(r_idx, 1, datetime.datetime(dt.year, dt.month, dt.day, 0, 0))
+        c1.number_format = 'mm-dd-yy'
         c1.font = font_data
-        c1.alignment = align_data_center
         r_match = lookup.get(d_str, None)
         if r_match is not None:
             val_in = r_match.get('유입량', None)
             if pd.notna(val_in) and str(val_in).strip() != '':
-                in_float = float(val_in)
+                in_val = int(round(float(val_in))) if float(val_in).is_integer() else float(val_in)
                 for col_target in [2, 4, 7]:
-                    c = ws.cell(r_idx, col_target, in_float); c.font = font_data; c.alignment = align_data_right
+                    c = ws.cell(r_idx, col_target, in_val)
+                    c.font = font_data
+                    c.number_format = '_-* #,##0_-;\\-* #,##0_-;_-* "-"_-;_-@_-'
             val_out = r_match.get('방류량', None)
             if pd.notna(val_out) and str(val_out).strip() != '':
-                c = ws.cell(r_idx, 8, float(val_out)); c.font = font_data; c.alignment = align_data_right
+                out_val = int(round(float(val_out))) if float(val_out).is_integer() else float(val_out)
+                c = ws.cell(r_idx, 8, out_val)
+                c.font = font_data
+                c.number_format = '_-* #,##0_-;\\-* #,##0_-;_-* "-"_-;_-@_-'
             val_temp = r_match.get('수온', None)
             if pd.notna(val_temp) and str(val_temp).strip() != '':
-                c = ws.cell(r_idx, 10, float(val_temp)); c.font = font_data; c.alignment = align_data_right
-            for col_idx, col_name in [(12, '유입BOD'), (13, '유입TOC'), (14, '유입SS'), (15, '유입TN'), (16, '유입TP'), (17, '유입대장균')]:
+                c = ws.cell(r_idx, 10, float(val_temp))
+                c.font = font_data
+                c.number_format = '0.0_ '
+            for col_idx, col_name, n_fmt in [
+                (12, '유입BOD', '0.0_);[Red]\\(0.0\\)'),
+                (13, '유입TOC', '0.0_);[Red]\\(0.0\\)'),
+                (14, '유입SS', '0.0_);[Red]\\(0.0\\)'),
+                (15, '유입TN', '0.000'),
+                (16, '유입TP', '0.000'),
+                (17, '유입대장균', '#,##0')
+            ]:
                 v = r_match.get(col_name, None)
                 if pd.notna(v) and str(v).strip() != '':
-                    c = ws.cell(r_idx, col_idx, float(v)); c.font = font_data; c.alignment = align_data_right
-            for col_idx, col_name in [(36, '방류BOD'), (37, '방류TOC'), (38, '방류SS'), (39, '방류TN'), (40, '방류TP'), (41, '방류대장균')]:
+                    v_num = int(round(float(v))) if col_idx == 17 else float(v)
+                    c = ws.cell(r_idx, col_idx, v_num)
+                    c.font = font_data
+                    c.number_format = n_fmt
+            for offset_i, (col_name, n_fmt) in enumerate([
+                ('방류BOD', '0.0_);[Red]\\(0.0\\)'),
+                ('방류TOC', '0.0_);[Red]\\(0.0\\)'),
+                ('방류SS', '0.0_);[Red]\\(0.0\\)'),
+                ('방류TN', '0.000'),
+                ('방류TP', '0.000'),
+                ('방류대장균', '#,##0')
+            ]):
                 v = r_match.get(col_name, None)
                 if pd.notna(v) and str(v).strip() != '':
-                    c = ws.cell(r_idx, col_idx, float(v)); c.font = font_data; c.alignment = align_data_right
+                    v_num = int(round(float(v))) if offset_i == 5 else float(v)
+                    c = ws.cell(r_idx, out_start + offset_i, v_num)
+                    c.font = font_data
+                    c.number_format = n_fmt
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026):
+    """재이용수 업로드양식(최종).xlsx 와 100% 동일한 서식·수치 생성"""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sheet1"
@@ -1006,143 +1110,232 @@ def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026
         'C3': '소계', 'D3': '세척수', 'E3': '냉각수', 'F3': '청소수', 'G3': '식수대', 'H3': '희석용수', 'I3': '중수도', 'J3': '기타',
         'K3': '소계', 'L3': '청소화장실용수', 'M3': '세척살수용수', 'N3': '조경용수', 'O3': '친수용수', 'P3': '지하수충전', 'Q3': '농업용수', 'R3': '하천등유지용수', 'S3': '공업용수'
     }
-    for k, v in subheaders.items(): ws[k] = v
-    for m in ['A2:A3', 'B2:B3', 'C2:J2', 'K2:S2', 'T2:T3']: ws.merge_cells(m)
+    for k, v in subheaders.items():
+        ws[k] = v
+    for m in ['A2:A3', 'B2:B3', 'C2:J2', 'K2:S2', 'T2:T3']:
+        ws.merge_cells(m)
+
+    ws.row_dimensions[2].height = 18.75
+    ws.row_dimensions[3].height = 18.75
+    ws.column_dimensions['A'].width = 10.625
+    ws.column_dimensions['B'].width = 12.5
+    for c_idx in range(3, 21):
+        ws.column_dimensions[get_column_letter(c_idx)].width = 13.0
+
+    thin_side = Side(style='thin', color='000000')
+    border_r2 = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     font_header = Font(name='dotum', size=9, bold=True)
     for r in range(1, 4):
         for c in range(1, 21):
-            cell = ws.cell(r, c); cell.alignment = align_center; cell.font = font_header
-    if start_date and end_date: d_range = pd.date_range(start_date, end_date)
-    elif df_data is not None and not df_data.empty and '날짜' in df_data.columns:
-        d_range = pd.date_range(df_data['날짜'].min(), df_data['날짜'].max())
-    else: d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+            cell = ws.cell(r, c)
+            cell.alignment = align_center
+            cell.font = font_header
+            cell.number_format = '@'
+            if r == 2:
+                cell.border = border_r2
+
+    if start_date and end_date:
+        d_range = pd.date_range(start_date, end_date)
+    else:
+        d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+
     lookup = {}
     if df_data is not None and not df_data.empty and '날짜' in df_data.columns:
-        for _, r in df_data.iterrows(): lookup[str(r['날짜']).split()[0]] = r
+        for _, r in df_data.iterrows():
+            lookup[str(r['날짜']).split()[0]] = r
+
     font_data = Font(name='맑은 고딕', size=11, bold=False)
-    align_data_center = Alignment(horizontal='center', vertical='center')
-    align_data_right = Alignment(horizontal='right', vertical='center')
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
-        c1 = ws.cell(r_idx, 1, dt.date()); c1.number_format = 'yyyy-mm-dd'; c1.font = font_data; c1.alignment = align_data_center
         r_match = lookup.get(d_str, None)
         if r_match is not None:
             val_reuse = r_match.get('재이용수', None)
             if pd.notna(val_reuse) and str(val_reuse).strip() != '':
-                reuse_float = float(val_reuse)
+                c1 = ws.cell(r_idx, 1, datetime.datetime(dt.year, dt.month, dt.day, 0, 0))
+                c1.number_format = 'mm-dd-yy'
+                c1.font = font_data
+                reuse_val = int(round(float(val_reuse))) if float(val_reuse).is_integer() else float(val_reuse)
                 for col_target in [2, 3, 4]:
-                    c = ws.cell(r_idx, col_target, reuse_float); c.font = font_data; c.alignment = align_data_right
+                    c = ws.cell(r_idx, col_target, reuse_val)
+                    c.font = font_data
+                    c.number_format = 'General'
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
-    default_flows = {'산음': 33.3, '삼가리': 59.1, '진목': 2.9, '몰운': 20.3, '단월마을': 11.0, '당의': 44.3}
-    default_f = default_flows.get(fac_name, 35.0)
-    default_out_f = default_f if fac_name != '삼가리' else 49.1
+    """소규모 6개소(산음·삼가리·진목·몰운·단월마을·당의) 업로드양식 예시 파일과 100% 동일한 서식·수치 생성"""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sheet1"
     ws['A1'] = "유량및수질관리 업로드양식"
     ws.merge_cells('A1:X1')
     headers_r2 = {'A2': '날짜', 'B2': '유입량\n(㎥/일)', 'C2': '처리량', 'F2': '방류량\n(㎥)/일', 'G2': '수온\n(℃)', 'H2': '유입수질', 'P2': '방류수질', 'X2': '비고'}
-    for k, v in headers_r2.items(): ws[k] = v
+    for k, v in headers_r2.items():
+        ws[k] = v
     subheaders_r3 = {
         'C3': '물리적\n(㎥/일)', 'D3': '생물학적\n(㎥/일)', 'E3': '고도\n(㎥/일)',
         'H3': 'pH\n(-)', 'I3': 'BOD\n(㎎/L)', 'J3': 'TOC\n(㎎/L)', 'K3': 'SS\n(㎎/L)', 'L3': 'T-N\n(㎎/L)', 'M3': 'T-P\n(㎎/L)', 'N3': '총대장균군\n(개/㎖)', 'O3': '생태독성\n(TU)',
         'P3': 'pH\n(-)', 'Q3': 'BOD\n(㎎/L)', 'R3': 'TOC\n(㎎/L)', 'S3': 'SS\n(㎎/L)', 'T3': 'T-N\n(㎎/L)', 'U3': 'T-P\n(㎎/L)', 'V3': '총대장균군\n(개/㎖)', 'W3': '생태독성\n(TU)'
     }
-    for k, v in subheaders_r3.items(): ws[k] = v
-    for m in ['A2:A3', 'B2:B3', 'C2:E2', 'F2:F3', 'G2:G3', 'H2:O2', 'P2:W2', 'X2:X3']: ws.merge_cells(m)
+    for k, v in subheaders_r3.items():
+        ws[k] = v
+    for m in ['A2:A3', 'B2:B3', 'C2:E2', 'F2:F3', 'G2:G3', 'H2:O2', 'P2:W2', 'X2:X3']:
+        ws.merge_cells(m)
+
+    r3_heights = {'산음': 28.5, '삼가리': 29.25, '진목': 32.25, '몰운': 18.75, '단월마을': 30.75, '당의': 27.75}
+    ws.row_dimensions[2].height = 18.75
+    ws.row_dimensions[3].height = r3_heights.get(fac_name, 28.5)
+    ws.column_dimensions['A'].width = 12.0
+    ws.column_dimensions['B'].width = 12.5
+    ws.column_dimensions['G'].width = 10.0
+    for c_idx in range(3, 25):
+        if c_idx != 7:
+            ws.column_dimensions[get_column_letter(c_idx)].width = 13.0
+
+    thin_side = Side(style='thin', color='000000')
+    border_r2 = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     font_header = Font(name='dotum', size=9, bold=True)
     for r in range(1, 4):
         for c in range(1, 25):
-            cell = ws.cell(r, c); cell.alignment = align_center; cell.font = font_header
-    if start_date and end_date: d_range = pd.date_range(start_date, end_date)
-    elif df_data is not None and not df_data.empty and '날짜' in df_data.columns:
-        d_range = pd.date_range(df_data['날짜'].min(), df_data['날짜'].max())
-    else: d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+            cell = ws.cell(r, c)
+            cell.alignment = align_center
+            cell.font = font_header
+            cell.number_format = '@'
+            if r == 2:
+                cell.border = border_r2
+
+    if start_date and end_date:
+        d_range = pd.date_range(start_date, end_date)
+    else:
+        d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+
     lookup = {}
     measured_dates = []
     if df_data is not None and not df_data.empty and '날짜' in df_data.columns:
         for _, r in df_data.sort_values(by='날짜').iterrows():
             d_key = str(r['날짜']).split()[0]
             lookup[d_key] = r
-            if pd.notna(r.get('유입량')) or pd.notna(r.get('유입BOD')): measured_dates.append(pd.to_datetime(d_key))
-    daily_flow_in_map = {}; daily_flow_out_map = {}; prev_dt = None
-    for m_dt in measured_dates:
-        d_str = m_dt.strftime('%Y-%m-%d')
-        r_item = lookup[d_str]
-        f_in = r_item.get('유입량', np.nan)
-        f_out = r_item.get('방류량', np.nan)
-        val_in = float(f_in) if (pd.notna(f_in) and 0.001 <= float(f_in) <= 2000) else default_f
-        val_out = float(f_out) if (pd.notna(f_out) and 0.001 <= float(f_out) <= 2000) else (val_in if fac_name != '삼가리' else default_out_f)
-        if prev_dt is None:
-            daily_flow_in_map[d_str] = val_in; daily_flow_out_map[d_str] = val_out
-        else:
-            for w_dt in pd.date_range(prev_dt + pd.Timedelta(days=1), m_dt):
+            if pd.notna(r.get('유입BOD')) or pd.notna(r.get('방류BOD')):
+                measured_dates.append(pd.to_datetime(d_key))
+
+    daily_flow_in_map = {}
+    daily_flow_out_map = {}
+    for d_key, r_item in lookup.items():
+        if pd.notna(r_item.get('유입량')):
+            daily_flow_in_map[d_key] = float(r_item.get('유입량'))
+        if pd.notna(r_item.get('방류량')):
+            daily_flow_out_map[d_key] = float(r_item.get('방류량'))
+
+    if len(daily_flow_in_map) < 60 and measured_dates:
+        prev_dt = None
+        for m_dt in measured_dates:
+            d_str = m_dt.strftime('%Y-%m-%d')
+            r_item = lookup[d_str]
+            val_in = float(r_item.get('유입량', 0.0)) if pd.notna(r_item.get('유입량')) else 0.0
+            val_out = float(r_item.get('방류량', val_in)) if pd.notna(r_item.get('방류량')) else val_in
+            start_fill = pd.to_datetime(f"{m_dt.year}-01-01") if prev_dt is None else (prev_dt + pd.Timedelta(days=1))
+            for w_dt in pd.date_range(start_fill, m_dt):
                 w_str = w_dt.strftime('%Y-%m-%d')
-                daily_flow_in_map[w_str] = val_in; daily_flow_out_map[w_str] = val_out
-        prev_dt = m_dt
-    last_f_in = default_f; last_f_out = default_out_f
+                daily_flow_in_map[w_str] = val_in
+                daily_flow_out_map[w_str] = val_out
+            prev_dt = m_dt
+
     font_data = Font(name='맑은 고딕', size=11, bold=False)
-    align_data_center = Alignment(horizontal='center', vertical='center')
-    align_data_right = Alignment(horizontal='right', vertical='center')
+    date_fmt = 'mm-dd-yy' if fac_name in ['몰운', '당의'] else 'yyyy\\-mm\\-dd'
+
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
-        c1 = ws.cell(r_idx, 1, dt.date()); c1.number_format = 'yyyy-mm-dd'; c1.font = font_data; c1.alignment = align_data_center
-        if d_str in daily_flow_in_map:
-            last_f_in = daily_flow_in_map[d_str]; last_f_out = daily_flow_out_map[d_str]
-        elif d_str in lookup and pd.notna(lookup[d_str].get('유입량')):
-            last_f_in = float(lookup[d_str].get('유입량'))
-            last_f_out = float(lookup[d_str].get('방류량', last_f_in if fac_name != '삼가리' else default_out_f))
-        ws.cell(r_idx, 2, last_f_in).font = font_data; ws.cell(r_idx, 2).alignment = align_data_right
-        ws.cell(r_idx, 5, last_f_in).font = font_data; ws.cell(r_idx, 5).alignment = align_data_right
-        ws.cell(r_idx, 6, last_f_out).font = font_data; ws.cell(r_idx, 6).alignment = align_data_right
+        c1 = ws.cell(r_idx, 1, datetime.datetime(dt.year, dt.month, dt.day, 0, 0))
+        c1.number_format = date_fmt
+        c1.font = font_data
+
+        if d_str in daily_flow_in_map or d_str in daily_flow_out_map:
+            f_in_v = daily_flow_in_map.get(d_str, None)
+            f_out_v = daily_flow_out_map.get(d_str, f_in_v)
+            if f_in_v is not None and pd.notna(f_in_v):
+                c_b = ws.cell(r_idx, 2, f_in_v); c_b.font = font_data; c_b.number_format = '0.0'
+                c_e = ws.cell(r_idx, 5, f_in_v); c_e.font = font_data; c_e.number_format = '0.0'
+            if f_out_v is not None and pd.notna(f_out_v):
+                c_f = ws.cell(r_idx, 6, f_out_v); c_f.font = font_data; c_f.number_format = '0.0'
+
         r_match = lookup.get(d_str, None)
         if r_match is not None:
-            for col_idx, col_name in [(9, '유입BOD'), (10, '유입TOC'), (11, '유입SS'), (12, '유입TN'), (13, '유입TP'), (14, '유입대장균')]:
+            for col_idx, col_name, n_fmt in [
+                (9, '유입BOD', '0.0'), (10, '유입TOC', '0.0'), (11, '유입SS', '0.0'),
+                (12, '유입TN', '0.000'), (13, '유입TP', '0.000'), (14, '유입대장균', '#,##0_);[Red]\\(#,##0\\)')
+            ]:
                 v = r_match.get(col_name, None)
                 if pd.notna(v) and str(v).strip() != '':
-                    ws.cell(r_idx, col_idx, float(v)).font = font_data; ws.cell(r_idx, col_idx).alignment = align_data_right
-            for col_idx, col_name in [(17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'), (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')]:
+                    v_num = int(round(float(v))) if col_idx == 14 else float(v)
+                    c = ws.cell(r_idx, col_idx, v_num); c.font = font_data; c.number_format = n_fmt
+            for col_idx, col_name, n_fmt in [
+                (17, '방류BOD', '0.0'), (18, '방류TOC', '0.0'), (19, '방류SS', '0.0'),
+                (20, '방류TN', '0.000'), (21, '방류TP', '0.000'), (22, '방류대장균', '#,##0_);[Red]\\(#,##0\\)')
+            ]:
                 v = r_match.get(col_name, None)
                 if pd.notna(v) and str(v).strip() != '':
-                    ws.cell(r_idx, col_idx, float(v)).font = font_data; ws.cell(r_idx, col_idx).alignment = align_data_right
+                    v_num = int(round(float(v))) if col_idx == 22 else float(v)
+                    c = ws.cell(r_idx, col_idx, v_num); c.font = font_data; c.number_format = n_fmt
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 def auto_seed_master_db_from_local_files():
+    """업로드된 국가하수도 공인 엑셀 예시 파일 9종을 최우선으로 읽어 오차 없이 마스터 DB를 초기화"""
     if os.path.exists(MASTER_ACCUM_DB):
         try:
             df_chk = pd.read_csv(MASTER_ACCUM_DB)
-            if len(df_chk) > 50:
+            has_priv = all(pf in df_chk['시설명'].unique() for pf in PRIVATE_PLANTS) if '시설명' in df_chk.columns else False
+            if len(df_chk) > 1500 and has_priv:
                 return
         except Exception:
             pass
+    df_main_list = []
     for m_cand in ["2026년 월별수질(단월).xlsx", "2026년 월별수질(단월)_2.xlsx"]:
         if os.path.exists(m_cand):
             df_m = universal_main_plant_parser([m_cand])
             if not df_m.empty:
-                append_to_master_db(MAIN_PLANT, df_m)
+                df_main_list.append(df_m)
             break
-    for s_cand in ["1. 소규모(2026).xlsx", "1. 소규모(2026)_2.xlsx"]:
-        if os.path.exists(s_cand):
-            s_dict = universal_small_plant_parser([s_cand])
-            for fk, df_s in s_dict.items():
-                if not df_s.empty:
-                    append_to_master_db(fk, df_s)
-            break
-    for p_cand in ["개인소규모(2026년)+단월.xls", "개인소규모(2026년)+단월_2.xls"]:
+    if os.path.exists("유량및수질관리.xlsx"):
+        df_kh_m = parse_khas_51col_main_file("유량및수질관리.xlsx")
+        if not df_kh_m.empty:
+            df_main_list.append(df_kh_m)
+    if df_main_list:
+        df_main_merged = pd.concat(df_main_list, ignore_index=True).drop_duplicates(subset=['날짜'], keep='last').sort_values('날짜')
+        append_to_master_db(MAIN_PLANT, df_main_merged)
+
+    small_khas_files = [f for f in [
+        "유량및수질관리 업로드양식(산음).xlsx",
+        "유량및수질관리 업로드양식(삼가리).xlsx",
+        "유량및수질관리 업로드양식(진목).xlsx",
+        "유량및수질관리 업로드양식 (몰운).xlsx",
+        "유량및수질관리 업로드양식(단월마을).xlsx",
+        "유량및수질관리 업로드양식(당의).xlsx"
+    ] if os.path.exists(f)]
+    if small_khas_files:
+        s_dict = universal_small_plant_parser(small_khas_files)
+        for fk, df_s in s_dict.items():
+            if not df_s.empty:
+                append_to_master_db(fk, df_s)
+    else:
+        for s_cand in ["1. 소규모(2026).xlsx", "1. 소규모(2026)_2.xlsx"]:
+            if os.path.exists(s_cand):
+                s_dict = universal_small_plant_parser([s_cand])
+                for fk, df_s in s_dict.items():
+                    if not df_s.empty:
+                        append_to_master_db(fk, df_s)
+                break
+
+    for p_cand in ["개인소규모(2026년).xlsx", "개인소규모(2026년)_2.xlsx", "개인소규모(2026년)+단월.xls", "개인소규모(2026년)+단월_2.xls"]:
         if os.path.exists(p_cand):
             p_dict = parse_private_plant_multi_files([p_cand])
             for fk, df_p in p_dict.items():
                 if not df_p.empty:
                     append_to_master_db(fk, df_p)
-            break
 
 auto_seed_master_db_from_local_files()
 
@@ -1302,86 +1495,177 @@ def generate_small_monthly_wq_excel(year=2026, sel_month=None):
     return buf.getvalue()
 
 def generate_priv_monthly_wq_excel(year=2026):
+    """개인소규모(2026년).xlsx 중 단월 관할 6개소(석산리·음지·양지·복지회관·인이피·돌고개)만 정확히 추출·생성"""
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     align_c = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    font_title = Font(name='맑은 고딕', size=13, bold=True)
-    font_hdr = Font(name='맑은 고딕', size=9, bold=True)
-    font_body = Font(name='맑은 고딕', size=9, bold=False)
+    font_title = Font(name='돋움체', size=20, bold=True)
+    font_cap = Font(name='돋움체', size=9, bold=True)
+    font_hdr = Font(name='돋움체', size=11, bold=True)
+    font_dt = Font(name='돋움체', size=10, bold=True)
+    font_body = Font(name='돋움체', size=10, bold=False)
+    font_stat = Font(name='돋움체', size=10, bold=True)
+    font_bot_lbl = Font(name='돋움체', size=11, bold=True)
+    font_bot_val = Font(name='돋움체', size=11, bold=False)
+
+    med_s = Side(style='medium', color='000000')
+    dbl_s = Side(style='double', color='000000')
+    hair_s = Side(style='hair', color='000000')
+    thin_s = Side(style='thin', color='000000')
 
     priv_specs = [
-        ("명달1반", "11.명달1반", "(45톤/일)", False),
-        ("석산리", "13.석산리", "(30톤/일)", True),
-        ("음지", "18.물레울(음지)", "(15톤/일)", False),
-        ("양지", "19.물레울(양지)", "(15톤/일)", False),
-        ("복지회관", "20.물레울(복지회관)", "(10톤/일)", False),
-        ("인이피", "21.인이피", "(10톤/일)", False),
-        ("돌고개", "22.돌고개", "(15톤/일)", False),
+        ("석산리", "13.석산리", f"{year}년 석산리 오수처리시설", "(30톤/일)", True),
+        ("음지", "18.물레울(음지)", f"{year}년 물레울(음지) 오수처리시설 ", "(15톤/일)", False),
+        ("양지", "19.물레울(양지)", f"{year}년 물레울(양지) 오수처리시설", "(15톤/일)", False),
+        ("복지회관", "20.물레울(복지회관)", f"{year}년 물레울(복지회관) 오수처리시설", "(10톤/일)", False),
+        ("인이피", "21.인이피", f"{year}년 인이피 오수처리시설", "(10톤/일)", False),
+        ("돌고개", "22.돌고개", f"{year}년 돌고개 오수처리시설", "(15톤/일)", False),
     ]
     import calendar
-    for fac_key, s_title, cap_str, has_flow in priv_specs:
+    for fac_key, s_title, header_title, cap_str, has_flow in priv_specs:
         ws = wb.create_sheet(title=s_title)
-        ws['A1'] = f"{year}년 {fac_key} 오수처리시설"
+        ws['A1'] = header_title
         ws['A1'].font = font_title
-        ws['F2'] = cap_str; ws['F2'].font = font_hdr; ws['F2'].alignment = align_c
+        ws['A1'].alignment = align_c
+        ws.merge_cells('A1:G1')
+
+        ws['F2'] = cap_str
+        ws['F2'].font = font_cap
+        ws['F2'].alignment = align_c
+        ws.merge_cells('F2:G2')
+
         ws['A3'] = "날 짜"; ws['B3'] = "유    입    수"; ws['D3'] = "방    류    수"
         ws['F3'] = "유  량\n(㎥/day)"; ws['G3'] = "월유입총량\n(㎥)"
         ws.merge_cells('A3:A4'); ws.merge_cells('B3:C3'); ws.merge_cells('D3:E3'); ws.merge_cells('F3:F4'); ws.merge_cells('G3:G4')
         ws['B4'] = "BOD"; ws['C4'] = "SS"; ws['D4'] = "BOD"; ws['E4'] = "SS"
+
+        ws.row_dimensions[1].height = 25.5
+        ws.row_dimensions[2].height = 12.0
+        ws.row_dimensions[3].height = 14.25
+        ws.row_dimensions[4].height = 14.25
+        for col_l, w_v in [('A', 11.6), ('B', 10.5), ('C', 11.5), ('D', 11.5), ('E', 11.5), ('F', 11.0), ('G', 12.0)]:
+            ws.column_dimensions[col_l].width = w_v
+
         for r_i in range(3, 5):
             for c_i in range(1, 8):
-                ws.cell(r_i, c_i).alignment = align_c; ws.cell(r_i, c_i).font = font_hdr
+                cell = ws.cell(r_i, c_i)
+                cell.alignment = align_c
+                cell.font = font_hdr
+                cell.border = Border(
+                    top=med_s if r_i == 3 else hair_s,
+                    bottom=dbl_s if (r_i == 4 or c_i in [1, 6, 7]) else hair_s,
+                    left=thin_s, right=thin_s
+                )
 
         cur_r = 5
-        df_all_p = get_master_data(fac_key, f"{year}-01-01", f"{year}-12-31") if fac_key != "명달1반" else pd.DataFrame()
+        df_all_p = get_master_data(fac_key, f"{year}-01-01", f"{year}-12-31")
+        all_in_b, all_in_s, all_out_b, all_out_s, all_fl, all_mtot = [], [], [], [], [], []
+
         for m in range(1, 13):
             ym_str = f"{year}-{m:02d}"
             df_m = df_all_p[df_all_p['날짜'].astype(str).str.startswith(ym_str)] if not df_all_p.empty else pd.DataFrame()
+            days_in_m = calendar.monthrange(year, m)[1]
+            ws.row_dimensions[cur_r].height = 15.0
+            ws.row_dimensions[cur_r + 3].height = 14.25
+
             if not df_m.empty:
                 r0 = df_m.iloc[-1]
-                d_txt = str(r0['날짜'])[:10]
+                dt_obj = pd.to_datetime(r0['날짜']).to_pydatetime()
                 in_b = pd.to_numeric(r0.get('유입BOD', np.nan), errors='coerce')
                 in_s = pd.to_numeric(r0.get('유입SS', np.nan), errors='coerce')
                 out_b = pd.to_numeric(r0.get('방류BOD', np.nan), errors='coerce')
                 out_s = pd.to_numeric(r0.get('방류SS', np.nan), errors='coerce')
-                fl_d = pd.to_numeric(r0.get('방류량', np.nan), errors='coerce')
-                fl_w = pd.to_numeric(r0.get('주간유량', np.nan), errors='coerce')
-                days_in_m = calendar.monthrange(year, m)[1]
-                m_tot = round(float(fl_d) * days_in_m, 1) if pd.notna(fl_d) else np.nan
+                fl_d = pd.to_numeric(r0.get('방류량', r0.get('유입량', np.nan)), errors='coerce')
+                m_tot = round(float(fl_d) * days_in_m, 1) if (has_flow and pd.notna(fl_d)) else np.nan
 
-                ws.cell(cur_r, 1, d_txt).alignment = align_c; ws.cell(cur_r, 1).font = font_body
+                if pd.notna(in_b): all_in_b.append(float(in_b))
+                if pd.notna(in_s): all_in_s.append(float(in_s))
+                if pd.notna(out_b): all_out_b.append(float(out_b))
+                if pd.notna(out_s): all_out_s.append(float(out_s))
+                if has_flow and pd.notna(fl_d): all_fl.append(float(fl_d))
+                if has_flow and pd.notna(m_tot): all_mtot.append(float(m_tot))
+
+                c_dt = ws.cell(cur_r, 1, datetime.datetime(dt_obj.year, dt_obj.month, dt_obj.day, 0, 0))
+                c_dt.number_format = 'm"월"\\ d"일"'
+                c_dt.alignment = align_c; c_dt.font = font_dt
+
                 for c_idx, v_num in [(2, in_b), (3, in_s), (4, out_b), (5, out_s)]:
                     if pd.notna(v_num):
-                        ws.cell(cur_r, c_idx, round(float(v_num), 1)).alignment = align_c; ws.cell(cur_r, c_idx).font = font_body
-                if has_flow and pd.notna(fl_d):
-                    ws.cell(cur_r, 6, round(float(fl_d), 1)).alignment = align_c; ws.cell(cur_r, 6).font = font_body
-                    if pd.notna(fl_w):
-                        ws.cell(cur_r, 9, round(float(fl_w), 1)).alignment = align_c; ws.cell(cur_r, 9).font = font_body
+                        c = ws.cell(cur_r, c_idx, float(v_num))
+                        c.number_format = '0.0_ '; c.alignment = align_c; c.font = font_body
+                if has_flow:
+                    if pd.notna(fl_d):
+                        c_f = ws.cell(cur_r, 6, float(fl_d))
+                        c_f.number_format = '#,##0.0_ '; c_f.alignment = align_c; c_f.font = font_body
                 else:
-                    ws.cell(cur_r, 6, "유량계미설치").alignment = align_c; ws.cell(cur_r, 6).font = font_body
+                    c_f = ws.cell(cur_r, 6, "유량계미설치")
+                    c_f.alignment = align_c; c_f.font = font_body
 
                 for s_off, s_lbl in enumerate(["최    대", "최    소", "평    균"], start=1):
                     sr = cur_r + s_off
-                    ws.cell(sr, 1, s_lbl).alignment = align_c; ws.cell(sr, 1).font = font_hdr
+                    ws.cell(sr, 1, s_lbl).alignment = align_c; ws.cell(sr, 1).font = font_stat
                     for c_idx, v_num in [(2, in_b), (3, in_s), (4, out_b), (5, out_s)]:
                         if pd.notna(v_num):
-                            ws.cell(sr, c_idx, round(float(v_num), 1)).alignment = align_c; ws.cell(sr, c_idx).font = font_hdr
-                    if has_flow and pd.notna(fl_d):
-                        ws.cell(sr, 6, round(float(fl_d), 1)).alignment = align_c; ws.cell(sr, 6).font = font_hdr
-                        if s_lbl == "평    균" and pd.notna(m_tot):
-                            ws.cell(sr, 7, m_tot).alignment = align_c; ws.cell(sr, 7).font = font_hdr
-                cur_r += 4
+                            c = ws.cell(sr, c_idx, float(v_num))
+                            c.number_format = '0.0_ '; c.alignment = align_c; c.font = font_stat
+                    if has_flow:
+                        if pd.notna(fl_d):
+                            c_sf = ws.cell(sr, 6, float(fl_d))
+                            c_sf.number_format = '0.0_);[Red]\\(0.0\\)'; c_sf.alignment = align_c; c_sf.font = font_stat
+                            if s_lbl == "평    균" and pd.notna(m_tot):
+                                c_mt = ws.cell(sr, 7, float(m_tot))
+                                c_mt.number_format = '_-* #,##0.0_-;\\-* #,##0.0_-;_-* "-"_-;_-@_-'
+                                c_mt.alignment = align_c; c_mt.font = font_stat
+                        elif s_lbl in ["최    대", "최    소"]:
+                            ws.cell(sr, 6, 0).alignment = align_c; ws.cell(sr, 6).font = font_stat
             else:
-                ws.cell(cur_r, 1, "").alignment = align_c
-                if not has_flow and fac_key != "명달1반":
+                if not has_flow:
                     ws.cell(cur_r, 6, "유량계미설치").alignment = align_c; ws.cell(cur_r, 6).font = font_body
                 for s_off, s_lbl in enumerate(["최    대", "최    소", "평    균"], start=1):
                     sr = cur_r + s_off
-                    ws.cell(sr, 1, s_lbl).alignment = align_c; ws.cell(sr, 1).font = font_hdr
+                    ws.cell(sr, 1, s_lbl).alignment = align_c; ws.cell(sr, 1).font = font_stat
                     if s_lbl in ["최    대", "최    소"]:
                         for c_idx in range(2, 6):
-                            ws.cell(sr, c_idx, 0).alignment = align_c; ws.cell(sr, c_idx).font = font_body
-                cur_r += 4
+                            ws.cell(sr, c_idx, 0).alignment = align_c; ws.cell(sr, c_idx).font = font_stat
+                        if has_flow:
+                            ws.cell(sr, 6, 0).alignment = align_c; ws.cell(sr, 6).font = font_stat
+
+            for off_r in range(4):
+                r_curr = cur_r + off_r
+                for c_i in range(1, 8):
+                    ws.cell(r_curr, c_i).border = Border(
+                        top=dbl_s if off_r == 0 else hair_s,
+                        bottom=dbl_s if off_r == 3 else hair_s,
+                        left=thin_s, right=thin_s
+                    )
+            cur_r += 4
+
+        # 53~56행: 연간 계 / 최대 / 최소 / 평균 요약 행
+        if has_flow:
+            ws.cell(53, 1, "계").alignment = align_c; ws.cell(53, 1).font = Font(name='돋움체', size=14, bold=True)
+            if all_mtot:
+                c_tot = ws.cell(53, 7, round(sum(all_mtot), 1))
+                c_tot.number_format = '_-* #,##0.0_-;\\-* #,##0.0_-;_-* "-"_-;_-@_-'
+                c_tot.alignment = align_c; c_tot.font = Font(name='돋움체', size=12, bold=True)
+
+        for r_idx, (b_lbl, fn_stat) in enumerate([(54, ("최    대", max)), (55, ("최    소", min)), (56, ("평    균", lambda x: round(sum(x)/len(x), 1)))], start=54):
+            lbl_txt, fn_op = b_lbl
+            c_l = ws.cell(r_idx, 1, lbl_txt); c_l.alignment = align_c; c_l.font = font_bot_lbl
+            for c_i, arr_v in [(2, all_in_b), (3, all_in_s), (4, all_out_b), (5, all_out_s)]:
+                if arr_v:
+                    c_v = ws.cell(r_idx, c_i, float(fn_op(arr_v)))
+                    c_v.number_format = '_-* #,##0.0_-;\\-* #,##0.0_-;_-* "-"_-;_-@_-'
+                    c_v.alignment = align_c; c_v.font = font_bot_val
+            if has_flow and all_fl:
+                c_fv = ws.cell(r_idx, 6, float(fn_op(all_fl)))
+                c_fv.number_format = '_-* #,##0.0_-;\\-* #,##0.0_-;_-* "-"_-;_-@_-'
+                c_fv.alignment = align_c; c_fv.font = font_bot_val
+            for c_i in range(1, 8):
+                ws.cell(r_idx, c_i).border = Border(
+                    top=med_s if r_idx == 54 else hair_s,
+                    bottom=med_s if r_idx == 56 else hair_s,
+                    left=thin_s, right=thin_s
+                )
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -1685,7 +1969,8 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                 st.selectbox("📆 3. 상세 기간 확인", [f"1년 전체 ({khas_yr}-01-01 ~ {khas_yr}-12-31)"], index=0, disabled=True, key="khas_y_detail")
                 kh_s_d, kh_e_d, kh_tag = f"{khas_yr}-01-01", f"{khas_yr}-12-31", f"{khas_yr}년_전체"
 
-        # 국가하수도 공인 엑셀은 단월 본장과 소규모 6개소만 표시 (개인하수 제외)
+        st.info(f"📌 **현재 선택된 국가하수도 엑셀 생성 구간**: **`{kh_tag}`** (`{kh_s_d}` ~ `{kh_e_d}`)")
+
         fac_grp = st.radio("🏛️ 국가하수도정보시스템 업로드 대상 시설 선택", ["🏢 본처리장 (단월)", "🏡 소규모 처리시설 (6개소: 산음·삼가리·진목·몰운·단월마을·당의)"], horizontal=True)
 
         if fac_grp == "🏢 본처리장 (단월)":
@@ -1706,6 +1991,15 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
             col1.download_button("📥 유량및수질관리.xlsx (표준 51컬럼)", m_bytes_36, "유량및수질관리.xlsx" if "전체" in kh_tag else f"유량및수질관리_{kh_tag}.xlsx", type="primary", use_container_width=True)
             col2.download_button("📥 유량및수질관리 업로드양식.xlsx", m_bytes_20, "유량및수질관리 업로드양식.xlsx" if "전체" in kh_tag else f"유량및수질관리 업로드양식_{kh_tag}.xlsx", type="primary", use_container_width=True)
             col3.download_button("📥 재이용수 업로드양식(최종).xlsx", r_bytes, "재이용수 업로드양식(최종).xlsx" if "전체" in kh_tag else f"재이용수 업로드양식(최종)_{kh_tag}.xlsx", type="primary", use_container_width=True)
+
+            if st.button(f"💾 ⚡ [단월 본장 ({kh_tag}) 공인 엑셀 3종 보관함 영구 저장]", key="btn_save_main_m_all", type="primary", use_container_width=True):
+                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"유량및수질관리_{kh_tag}.xlsx")), "wb") as f:
+                    f.write(m_bytes_36)
+                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"유량및수질관리 업로드양식_{kh_tag}.xlsx")), "wb") as f:
+                    f.write(m_bytes_20)
+                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"재이용수 업로드양식(최종)_{kh_tag}.xlsx")), "wb") as f:
+                    f.write(r_bytes)
+                st.success(f"✅ 단월 본장 국가하수도 공인 엑셀 3종(`{kh_tag}`)이 보관함에 안전하게 저장되었습니다!")
 
             with st.expander("🔍 단월 본장 국가하수도 공인 엑셀 3종 화면 미리보기 (오차 검증용)", expanded=True):
                 t_pv1, t_pv2, t_pv3 = st.tabs(["📄 유량및수질관리.xlsx", "📄 유량및수질관리 업로드양식.xlsx", "♻️ 재이용수 업로드양식(최종).xlsx"])
@@ -1742,13 +2036,23 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
                     with s_cols[idx_f % 3]:
                         st.download_button(f"📥 {out_fn}", s_bytes_item, out_fn, type="primary", use_container_width=True, key=f"dl_khas_sm_{fac_k}_{kh_tag}")
 
-            st.download_button(
-                f"📦 소규모 6개소 국가하수도 업로드양식 전체 ZIP 일괄 다운로드 ({kh_tag})",
-                zip_small_buf.getvalue(),
-                f"국가하수도_유량및수질관리_소규모6개소_{kh_tag}.zip",
-                type="primary",
-                use_container_width=True
-            )
+            c_sm_b1, c_sm_b2 = st.columns(2)
+            with c_sm_b1:
+                st.download_button(
+                    f"📦 소규모 6개소 국가하수도 업로드양식 전체 ZIP 일괄 다운로드 ({kh_tag})",
+                    zip_small_buf.getvalue(),
+                    f"국가하수도_유량및수질관리_소규모6개소_{kh_tag}.zip",
+                    type="primary",
+                    use_container_width=True
+                )
+            with c_sm_b2:
+                if st.button(f"💾 ⚡ [소규모 6개소 ({kh_tag}) 국가하수도 엑셀 보관함 일괄 저장]", type="primary", use_container_width=True, key="btn_save_small_all_master"):
+                    for fac_k in SMALL_PLANTS:
+                        df_item = s_dict.get(fac_k, pd.DataFrame())
+                        out_fn = exact_fnames[fac_k] if "전체" in kh_tag else f"유량및수질관리 업로드양식({fac_k})_{kh_tag}.xlsx"
+                        with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(out_fn)), "wb") as f:
+                            f.write(fill_exact_small_template(df_item, fac_k, start_date=kh_s_d, end_date=kh_e_d, year=khas_yr))
+                    st.success(f"✅ 소규모 6개 시설 국가하수도 공인 엑셀(`{kh_tag}`)이 보관함에 저장되었습니다!")
 
             st.divider()
             sel_sub_fac = st.selectbox("🔍 미리보기할 소규모 시설 선택", SMALL_PLANTS, key="sel_small_fac_view")
@@ -1756,6 +2060,436 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
             with st.expander(f"📄 [{exact_fnames[sel_sub_fac]}] 24컬럼 공인양식 화면 미리보기", expanded=True):
                 st.dataframe(pd.read_excel(io.BytesIO(single_s_bytes), header=None).head(38), use_container_width=True, hide_index=True)
 
+    with tab_wq_monthly:
+        st.subheader("📈 수질월보 & 월간유량 집계표 (단월본장 · 소규모 6개소 · 개인하수 6개소) 자동 완성 · 인쇄 · 영구보관")
+        st.caption("🔒 개인하수(석산리·음지·양지·복지회관·인이피·돌고개)는 국가하수도정보시스템(KHAS) 공인 양식에는 들어가지 않지만, **수질월보 및 월간유량 집계표**에는 필수 포함됩니다. 아래에서 본장·소규모·개인하수 엑셀을 업로드하거나 수동 입력하면 수질월보 집계표에 즉시 반영됩니다.")
+
+        with st.expander("📂 0단계: 수질월보용 엑셀 파일 업로드 & 개인하수 6개소 수질·유량 직접 입력/수정 (클릭하여 열기/닫기)", expanded=True):
+            up_c1, up_c2, up_c3 = st.columns(3)
+            with up_c1:
+                wq_up_main = st.file_uploader("🏢 1. 단월 본장 수질월보/일지 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="wq_up_main_f")
+                if wq_up_main:
+                    df_m_p = universal_main_plant_parser(wq_up_main)
+                    if not df_m_p.empty:
+                        append_to_master_db(MAIN_PLANT, df_m_p)
+                        st.success(f"✅ 단월 본장 {len(df_m_p)}건 수질월보 DB 반영 완료!")
+            with up_c2:
+                wq_up_small = st.file_uploader("🏡 2. 소규모 6개소 수질월보/일지 업로드", type=["xlsx", "xls"], accept_multiple_files=True, key="wq_up_small_f")
+                if wq_up_small:
+                    s_dict_p = universal_small_plant_parser(wq_up_small)
+                    cnt_s = 0
+                    for fk, df_s in s_dict_p.items():
+                        if not df_s.empty:
+                            append_to_master_db(fk, df_s)
+                            cnt_s += 1
+                    if cnt_s > 0:
+                        st.success(f"✅ 소규모 {cnt_s}개 시설 수질월보 DB 반영 완료!")
+            with up_c3:
+                wq_up_priv = st.file_uploader("🛖 3. 개인하수 6개소 엑셀 업로드 (개인소규모+단월.xls 등)", type=["xlsx", "xls"], accept_multiple_files=True, key="wq_up_priv_f")
+                if wq_up_priv:
+                    p_dict_p = parse_private_plant_multi_files(wq_up_priv)
+                    cnt_p = 0
+                    for fk, df_p in p_dict_p.items():
+                        if not df_p.empty:
+                            append_to_master_db(fk, df_p)
+                            cnt_p += 1
+                    if cnt_p > 0:
+                        st.success(f"✅ 개인하수 {cnt_p}개 시설 수질월보 DB 반영 완료!")
+
+            st.markdown("---")
+            st.markdown("###### ✍️ 개인하수 6개소 (석산리·음지·양지·복지회관·인이피·돌고개) 당월 측정 수질·유량 빠른 수동 등록")
+            with st.form("priv_wq_manual_form"):
+                pm1, pm2, pm3, pm4, pm5, pm6, pm7 = st.columns(7)
+                with pm1: p_sel_fac = st.selectbox("개인하수 시설", PRIVATE_PLANTS, key="pm_fac")
+                with pm2: p_sel_dt = st.date_input("측정일자", datetime.date(2026, 10, 15), key="pm_dt")
+                with pm3: p_in_bod = st.number_input("유입 BOD (mg/L)", value=45.4, step=1.0, format="%.1f", key="pm_ibod")
+                with pm4: p_in_ss = st.number_input("유입 SS (mg/L)", value=41.7, step=1.0, format="%.1f", key="pm_iss")
+                with pm5: p_out_bod = st.number_input("방류 BOD (mg/L)", value=9.8, step=0.5, format="%.1f", key="pm_obod")
+                with pm6: p_out_ss = st.number_input("방류 SS (mg/L)", value=9.5, step=0.5, format="%.1f", key="pm_oss")
+                with pm7: p_flow_d = st.number_input("일일유량 (㎥/일, 미설치시 0)", value=25.0 if p_sel_fac == "석산리" else 0.0, step=1.0, format="%.1f", key="pm_fl")
+                if st.form_submit_button("💾 개인하수 측정 데이터 수질월보 마스터 DB에 즉시 반영", type="primary", use_container_width=True):
+                    fl_val = float(p_flow_d) if p_flow_d > 0 else np.nan
+                    wk_val = round(fl_val * 7.0, 1) if pd.notna(fl_val) else np.nan
+                    df_new_p = pd.DataFrame([{
+                        "날짜": p_sel_dt.strftime('%Y-%m-%d'),
+                        "유입BOD": float(p_in_bod),
+                        "유입SS": float(p_in_ss),
+                        "방류BOD": float(p_out_bod),
+                        "방류SS": float(p_out_ss),
+                        "유입량": fl_val,
+                        "방류량": fl_val,
+                        "주간유량": wk_val
+                    }])
+                    append_to_master_db(p_sel_fac, df_new_p)
+                    st.success(f"✅ 개인하수 [{p_sel_fac}] ({p_sel_dt}) 측정 수질·유량이 수질월보 및 월간유량 집계표에 반영되었습니다!")
+                    st.rerun()
+
+        c_wq1, c_wq2 = st.columns(2)
+        with c_wq1:
+            wq_yr = st.selectbox("📅 수질월보 대상 연도", [2026, 2025, 2024], index=0, key="wq_yr_sel")
+        with c_wq2:
+            wq_mo = st.selectbox("📆 수질월보 조회 월", list(range(1, 13)), index=9, key="wq_mo_sel")
+
+        main_wq_bytes = generate_main_monthly_wq_excel(year=wq_yr, sel_month=None)
+        small_wq_bytes = generate_small_monthly_wq_excel(year=wq_yr, sel_month=None)
+        priv_wq_bytes = generate_priv_monthly_wq_excel(year=wq_yr)
+
+        st.markdown("##### 📥 1단계: 3종 원본 양식 엑셀(XLSX) 즉시 다운로드 (단월본장 · 소규모 6개소 · 개인하수 6개소)")
+        col_dl_wq1, col_dl_wq2, col_dl_wq3 = st.columns(3)
+        with col_dl_wq1:
+            st.download_button(
+                f"📥 {wq_yr}년 월별수질(단월).xlsx 다운로드",
+                data=main_wq_bytes,
+                file_name=f"{wq_yr}년 월별수질(단월).xlsx",
+                type="primary",
+                use_container_width=True
+            )
+        with col_dl_wq2:
+            st.download_button(
+                f"📥 1. 소규모({wq_yr}).xlsx 다운로드",
+                data=small_wq_bytes,
+                file_name=f"1. 소규모({wq_yr}).xlsx",
+                type="primary",
+                use_container_width=True
+            )
+        with col_dl_wq3:
+            st.download_button(
+                f"📥 개인소규모({wq_yr}년)_단월6개소.xlsx 다운로드",
+                data=priv_wq_bytes,
+                file_name=f"개인소규모({wq_yr}년)_단월6개소.xlsx",
+                type="primary",
+                use_container_width=True
+            )
+
+        st.divider()
+        st.markdown(f"##### 📊 {wq_yr}년 {wq_mo}월 수질월보 및 월간유량 집계표 (평균 · 최대 · 최소 · 월유입총량 자동산출)")
+        ym_wq = f"{wq_yr}-{wq_mo:02d}"
+        df_m_wq = get_master_data(MAIN_PLANT, f"{ym_wq}-01", f"{ym_wq}-31")
+        sum_rows = []
+        if not df_m_wq.empty:
+            st.markdown(f"**🏢 1. 단월공공하수처리시설 수질검사결과 ({wq_mo}월) — 총 {len(df_m_wq)}일치 실측 데이터**")
+            num_cols = ['유입BOD', '유입TOC', '유입SS', '유입TN', '유입TP', '유입대장균', 'MLSS_A', 'MLSS_B',
+                        '방류BOD', '방류TOC', '방류SS', '방류TN', '방류TP', '방류대장균', '유입량', '재이용수', '방류량', '수온']
+            avail_cols = [c for c in num_cols if c in df_m_wq.columns]
+            for lbl, fn in [("평균", "mean"), ("최대", "max"), ("최소", "min"), ("월총량(합계)", "sum")]:
+                r_dict = {"구분": lbl}
+                for c in avail_cols:
+                    s_v = pd.to_numeric(df_m_wq[c], errors='coerce').dropna()
+                    if not s_v.empty:
+                        if fn == "sum" and c not in ['유입량', '재이용수', '방류량']:
+                            r_dict[c] = "-"
+                        else:
+                            val = getattr(s_v, fn)()
+                            dec = 3 if 'TN' in c or 'TP' in c else (0 if c in ['유입량', '재이용수', '방류량', '유입대장균', '방류대장균', 'MLSS_A', 'MLSS_B'] else 1)
+                            r_dict[c] = f"{val:,.{dec}f}" if dec > 0 else f"{int(round(val)):,}"
+                    else:
+                        r_dict[c] = "-"
+                sum_rows.append(r_dict)
+            st.dataframe(pd.DataFrame(sum_rows), use_container_width=True, hide_index=True)
+            with st.expander(f"🔍 단월본장 {wq_mo}월 일별 수질월보 원본 데이터 열람", expanded=False):
+                st.dataframe(df_m_wq[['날짜'] + avail_cols], use_container_width=True, hide_index=True)
+        else:
+            st.info(f"{wq_yr}년 {wq_mo}월 단월본장 데이터가 없습니다.")
+
+        st.markdown(f"**🏡 2. 소규모공공하수처리시설 6개소 월별 수질·유량 현황 ({wq_mo}월)**")
+        sm_summary = []
+        for fac in SMALL_PLANTS:
+            df_sf = get_master_data(fac, f"{ym_wq}-01", f"{ym_wq}-31")
+            if not df_sf.empty:
+                if '주간유량' not in df_sf.columns and '방류량' in df_sf.columns:
+                    df_sf['주간유량'] = pd.to_numeric(df_sf['방류량'], errors='coerce') * 7.0
+                for lbl, fn in [("평균", "mean"), ("최대", "max"), ("최소", "min")]:
+                    row_s = {"시설명": fac, "구분": lbl}
+                    for c, dec in [('유입BOD', 1), ('유입TOC', 1), ('유입SS', 1), ('유입TN', 3), ('유입TP', 3), ('유입대장균', 0),
+                                   ('방류BOD', 1), ('방류TOC', 1), ('방류SS', 1), ('방류TN', 3), ('방류TP', 3), ('방류대장균', 0),
+                                   ('주간유량', 0), ('방류량', 1)]:
+                        if c in df_sf.columns:
+                            ser = pd.to_numeric(df_sf[c], errors='coerce').dropna()
+                            row_s[c] = (f"{getattr(ser, fn)():.{dec}f}" if dec > 0 else f"{int(round(getattr(ser, fn)())):,}") if not ser.empty else "-"
+                        else:
+                            row_s[c] = "-"
+                    sm_summary.append(row_s)
+        if sm_summary:
+            st.dataframe(pd.DataFrame(sm_summary), use_container_width=True, hide_index=True)
+
+        st.markdown(f"**🛖 3. 개인하수처리시설 6개소 월별 수질·월간유량 집계표 ({wq_mo}월 — 평균·최대·최소·월유입총량 포함)**")
+        import calendar
+        days_in_wq_m = calendar.monthrange(wq_yr, wq_mo)[1]
+        pr_summary = []
+        priv_cap_map = {"석산리": "30톤/일", "음지": "15톤/일", "양지": "15톤/일", "복지회관": "10톤/일", "인이피": "10톤/일", "돌고개": "15톤/일"}
+        for fac in PRIVATE_PLANTS:
+            df_pf = get_master_data(fac, f"{ym_wq}-01", f"{ym_wq}-31")
+            if df_pf.empty:
+                # 해당 월 데이터가 없을 경우 가장 최근 측정 데이터를 참조하여 표시
+                df_pf_all = get_master_data(fac)
+                if not df_pf_all.empty:
+                    df_pf = df_pf_all.tail(1)
+            if not df_pf.empty:
+                last_dt_str = str(df_pf['날짜'].iloc[-1])[:10]
+                in_b_ser = pd.to_numeric(df_pf.get('유입BOD', pd.Series(dtype=float)), errors='coerce').dropna()
+                in_s_ser = pd.to_numeric(df_pf.get('유입SS', pd.Series(dtype=float)), errors='coerce').dropna()
+                out_b_ser = pd.to_numeric(df_pf.get('방류BOD', pd.Series(dtype=float)), errors='coerce').dropna()
+                out_s_ser = pd.to_numeric(df_pf.get('방류SS', pd.Series(dtype=float)), errors='coerce').dropna()
+                fl_d_ser = pd.to_numeric(df_pf.get('방류량', pd.Series(dtype=float)), errors='coerce').dropna()
+                fl_w_ser = pd.to_numeric(df_pf.get('주간유량', pd.Series(dtype=float)), errors='coerce').dropna()
+
+                fl_d_str = f"{fl_d_ser.mean():.1f}" if (fac == "석산리" and not fl_d_ser.empty) else ("유량계미설치" if fac != "석산리" else "-")
+                fl_w_str = f"{int(round(fl_w_ser.mean())):,}" if (fac == "석산리" and not fl_w_ser.empty) else ("유량계미설치" if fac != "석산리" else "-")
+                m_tot_str = f"{fl_d_ser.mean() * days_in_wq_m:,.1f}" if (fac == "석산리" and not fl_d_ser.empty) else ("유량계미설치" if fac != "석산리" else "-")
+
+                pr_summary.append({
+                    "시설명": f"{fac} ({priv_cap_map.get(fac, '')})",
+                    "측정일": last_dt_str,
+                    "구분": "평균 (당월)",
+                    "유입BOD": f"{in_b_ser.mean():.1f}" if not in_b_ser.empty else "-",
+                    "유입SS": f"{in_s_ser.mean():.1f}" if not in_s_ser.empty else "-",
+                    "방류BOD": f"{out_b_ser.mean():.1f}" if not out_b_ser.empty else "-",
+                    "방류SS": f"{out_s_ser.mean():.1f}" if not out_s_ser.empty else "-",
+                    "방류량(㎥/일)": fl_d_str,
+                    "주간유량(㎥/주)": fl_w_str,
+                    "월유입총량(㎥/월)": m_tot_str
+                })
+        if pr_summary:
+            st.dataframe(pd.DataFrame(pr_summary), use_container_width=True, hide_index=True)
+            with st.expander("🔍 개인하수 6개소 마스터 DB 전체 측정 기록 열람 및 직접 편집", expanded=False):
+                df_priv_all_db = pd.concat([get_master_data(f_k) for f_k in PRIVATE_PLANTS], ignore_index=True)
+                if not df_priv_all_db.empty:
+                    st.dataframe(df_priv_all_db[['시설명', '날짜', '유입BOD', '유입SS', '방류BOD', '방류SS', '유입량', '방류량', '주간유량']], use_container_width=True, hide_index=True)
+
+        def build_html_table_from_dicts(dict_list):
+            if not dict_list: return "<p>데이터 없음</p>"
+            cols = list(dict_list[0].keys())
+            ths = "".join([f"<th style='border:1px solid #000; background:#f2f2f2; padding:4px;'>{c}</th>" for c in cols])
+            trs = ""
+            for r in dict_list:
+                tds = "".join([f"<td style='border:1px solid #000; padding:4px; text-align:center;'>{r.get(c, '')}</td>" for c in cols])
+                trs += f"<tr>{tds}</tr>"
+            return f"<table style='width:100%; border-collapse:collapse; font-size:9.5px; margin-bottom:12px;'><tr>{ths}</tr>{trs}</table>"
+
+        wq_print_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8">
+        <style>
+            @page {{ size: A4 landscape; margin: 10mm; }}
+            body {{ font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; color:#000; margin:10px; font-size:10px; }}
+            h2 {{ text-align:center; font-size:16px; border-bottom:2px solid #000; padding-bottom:6px; }}
+            h4 {{ margin:10px 0 4px 0; font-size:12px; }}
+            @media print {{ .no-print {{ display:none !important; }} }}
+        </style>
+        </head>
+        <body>
+            <div class="no-print" style="text-align:right; margin-bottom:8px;">
+                <button onclick="window.print()" style="background:#0284C7; color:white; border:none; padding:7px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">
+                    🖨️ {wq_yr}년 {wq_mo}월 통합 수질월보 즉시 인쇄 / PDF 출력
+                </button>
+            </div>
+            <h2>{wq_yr}년 {wq_mo}월 단월공공하수 · 소규모 · 개인하수 통합 수질월보 및 월간유량 집계표</h2>
+            <h4>1. 단월공공하수처리시설 수질검사결과 및 월간유량 요약 ({wq_mo}월)</h4>
+            {build_html_table_from_dicts(sum_rows)}
+            <h4>2. 소규모공공하수처리시설 6개소 월별 수질·유량 현황 ({wq_mo}월)</h4>
+            {build_html_table_from_dicts(sm_summary)}
+            <h4>3. 개인하수처리시설 6개소 월별 수질·월간유량 집계표 ({wq_mo}월)</h4>
+            {build_html_table_from_dicts(pr_summary)}
+        </body>
+        </html>
+        """
+
+        st.divider()
+        st.markdown("##### 🖨️ 2단계: 수질월보 인쇄 미리보기 & 한글(HWPX) · PDF · 영구 보관함 일괄 저장")
+        with st.expander(f"🖨️ {wq_yr}년 {wq_mo}월 통합 수질월보 인쇄용 미리보기 열기", expanded=True):
+            st.components.v1.html(wq_print_html, height=480, scrolling=True)
+
+        wq_hwpx_bytes = generate_wq_monthly_hwpx(wq_yr, wq_mo, sum_rows, sm_summary, pr_summary)
+        wq_pdf_bytes = generate_html_to_pdf_bytes(wq_print_html)
+        is_real_pdf = wq_pdf_bytes[:4] == b"%PDF"
+
+        c_act1, c_act2, c_act3 = st.columns(3)
+        with c_act1:
+            st.download_button(
+                f"📥 {wq_yr}년_{wq_mo}월_통합수질월보.hwpx (한글) 다운로드",
+                data=wq_hwpx_bytes,
+                file_name=f"통합수질월보_{wq_yr}년_{wq_mo}월.hwpx",
+                mime="application/hwp+zip",
+                type="primary",
+                use_container_width=True
+            )
+        with c_act2:
+            st.download_button(
+                f"📥 {wq_yr}년_{wq_mo}월_통합수질월보.{'pdf' if is_real_pdf else 'html'} (PDF/인쇄용) 다운로드",
+                data=wq_pdf_bytes,
+                file_name=f"통합수질월보_{wq_yr}년_{wq_mo}월.{'pdf' if is_real_pdf else 'html'}",
+                mime="application/pdf" if is_real_pdf else "text/html",
+                type="primary",
+                use_container_width=True
+            )
+        with c_act3:
+            if st.button("💾 ⚡ [수질월보 3종 엑셀 + 한글(HWPX) + PDF/인쇄본] 영구 보관함 일괄 저장", type="primary", use_container_width=True):
+                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"{wq_yr}년_월별수질(단월).xlsx")), "wb") as f:
+                    f.write(main_wq_bytes)
+                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"1._소규모({wq_yr}).xlsx")), "wb") as f:
+                    f.write(small_wq_bytes)
+                with open(os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"개인소규모({wq_yr}년)+단월.xlsx")), "wb") as f:
+                    f.write(priv_wq_bytes)
+                with open(os.path.join(HWPX_RECORD_DIR, sanitize_filename(f"통합수질월보_{wq_yr}년_{wq_mo}월.hwpx")), "wb") as f:
+                    f.write(wq_hwpx_bytes)
+                with open(os.path.join(HWPX_RECORD_DIR, sanitize_filename(f"통합수질월보_{wq_yr}년_{wq_mo}월.html")), "w", encoding="utf-8") as f:
+                    f.write(wq_print_html)
+                if is_real_pdf:
+                    with open(os.path.join(HWPX_RECORD_DIR, sanitize_filename(f"통합수질월보_{wq_yr}년_{wq_mo}월.pdf")), "wb") as f:
+                        f.write(wq_pdf_bytes)
+                st.success("✅ 수질월보 3종 엑셀(XLSX), 한글(HWPX), PDF/인쇄본이 모두 영구 보관함에 안전하게 저장되었습니다!")
+
+    with tab_archive:
+        st.subheader("🗂️ 국가하수도정보시스템 공인 엑셀 영구 보관함 (단월 본장 · 소규모 6개소)")
+        if st.button("⚡ 마스터 DB 기준으로 국가하수도 공인 엑셀 9종(단월본장 3종 + 소규모 6개소) 보관함에 즉시 일괄 생성", type="primary", use_container_width=True):
+            df_m_all = get_master_data(MAIN_PLANT)
+            with open(os.path.join(KHAS_RECORD_DIR, "유량및수질관리.xlsx"), "wb") as f:
+                f.write(fill_exact_main_template(df_m_all, year=2026, use_col20_for_out=False))
+            with open(os.path.join(KHAS_RECORD_DIR, "유량및수질관리 업로드양식.xlsx"), "wb") as f:
+                f.write(fill_exact_main_template(df_m_all, year=2026, use_col20_for_out=True))
+            with open(os.path.join(KHAS_RECORD_DIR, "재이용수 업로드양식(최종).xlsx"), "wb") as f:
+                f.write(fill_exact_reuse_template(df_m_all, year=2026))
+            exact_fnames_arch = {
+                "산음": "유량및수질관리 업로드양식(산음).xlsx",
+                "삼가리": "유량및수질관리 업로드양식(삼가리).xlsx",
+                "진목": "유량및수질관리 업로드양식(진목).xlsx",
+                "몰운": "유량및수질관리 업로드양식 (몰운).xlsx",
+                "단월마을": "유량및수질관리 업로드양식(단월마을).xlsx",
+                "당의": "유량및수질관리 업로드양식(당의).xlsx",
+            }
+            for fk in SMALL_PLANTS:
+                df_s_all = get_master_data(fk)
+                with open(os.path.join(KHAS_RECORD_DIR, exact_fnames_arch[fk]), "wb") as f:
+                    f.write(fill_exact_small_template(df_s_all, fk, year=2026))
+            st.success("✅ 국가하수도정보시스템 업로드 공인 엑셀 9종(본장 3종 + 소규모 6종)이 보관함에 일괄 생성되었습니다!")
+            st.rerun()
+
+        saved_files = [sanitize_filename(f) for f in os.listdir(KHAS_RECORD_DIR) if f.endswith(".xlsx") or f.endswith(".xls")]
+        if saved_files:
+            st.write(f"📁 **보관 문서: 총 {len(saved_files)}건**")
+            col_view, col_del = st.columns([3, 1])
+            with col_view: target_f = st.selectbox("열람 및 다운로드할 엑셀 파일 선택", sorted(saved_files), key="arch_file_sel")
+            with col_del:
+                st.write(""); st.write("")
+                if st.button("🗑️ 선택 파일 삭제", type="secondary", use_container_width=True, key="btn_del_arch_file"):
+                    os.remove(os.path.join(KHAS_RECORD_DIR, sanitize_filename(target_f)))
+                    st.success("🗑️ 파일이 삭제되었습니다.")
+                    st.rerun()
+            if target_f:
+                fpath = os.path.join(KHAS_RECORD_DIR, sanitize_filename(target_f))
+                with open(fpath, "rb") as f: f_bytes = f.read()
+                st.download_button("📥 선택된 문서 다운로드", f_bytes, file_name=sanitize_filename(target_f), type="primary", use_container_width=True)
+                try:
+                    df_preview = pd.read_excel(fpath, header=None)
+                    with st.expander("🔍 엑셀 파일 데이터 미리보기 (공인 3단 헤더 포함)", expanded=True):
+                        st.dataframe(df_preview.head(38), use_container_width=True, hide_index=True)
+                except Exception:
+                    pass
+        else:
+            st.info("💡 상단 [⚡ 마스터 DB 기준으로 국가하수도 공인 엑셀 9종 보관함에 즉시 일괄 생성] 버튼을 누르시면 전 시설 공인 양식이 즉시 생성됩니다.")
+
+    with tab_accum:
+        st.subheader("📊 ⚡ [월별 / 분기별 / 상반기 / 하반기 / 1년 전체] 국가하수도 공인 누적 엑셀 일괄 생성 센터 (단월 본장 & 소규모 6개소)")
+        c_cum_y, c_cum_t, c_cum_p = st.columns([1.0, 1.2, 1.5])
+        with c_cum_y:
+            sel_cum_year = st.selectbox("📅 1. 대상 연도 선택", [2026, 2025, 2024], key="cum_y_sel")
+        with c_cum_t:
+            sel_cum_type = st.selectbox("🗂️ 2. 기간 구분 선택", ["1년 (연간 전체)", "월별 (1월~12월)", "분기별 (1~4분기)", "상반기 / 하반기"], index=0, key="cum_t_sel")
+        with c_cum_p:
+            import calendar
+            if sel_cum_type == "월별 (1월~12월)":
+                sel_period = st.selectbox("📆 3. 상세 월 선택", [f"{m}월 ({sel_cum_year}-{m:02d})" for m in range(1, 13)], index=8, key="cum_m_sel")
+                m_num_c = int(sel_period.split("월")[0])
+                last_d_c = calendar.monthrange(sel_cum_year, m_num_c)[1]
+                s_d, e_d = f"{sel_cum_year}-{m_num_c:02d}-01", f"{sel_cum_year}-{m_num_c:02d}-{last_d_c:02d}"
+                cum_tag = f"{sel_cum_year}년_{m_num_c:02d}월"
+            elif sel_cum_type == "분기별 (1~4분기)":
+                sel_period = st.selectbox("📆 3. 상세 분기 선택", ["1분기 (01~03월)", "2분기 (04~06월)", "3분기 (07~09월)", "4분기 (10~12월)"], index=0, key="cum_q_sel")
+                if "1분기" in sel_period: s_d, e_d, cum_tag = f"{sel_cum_year}-01-01", f"{sel_cum_year}-03-31", f"{sel_cum_year}년_1분기"
+                elif "2분기" in sel_period: s_d, e_d, cum_tag = f"{sel_cum_year}-04-01", f"{sel_cum_year}-06-30", f"{sel_cum_year}년_2분기"
+                elif "3분기" in sel_period: s_d, e_d, cum_tag = f"{sel_cum_year}-07-01", f"{sel_cum_year}-09-30", f"{sel_cum_year}년_3분기"
+                else: s_d, e_d, cum_tag = f"{sel_cum_year}-10-01", f"{sel_cum_year}-12-31", f"{sel_cum_year}년_4분기"
+            elif sel_cum_type == "상반기 / 하반기":
+                sel_period = st.selectbox("📆 3. 상반기 / 하반기 선택", ["상반기 (01~06월)", "하반기 (07~12월)"], index=0, key="cum_h_sel")
+                if "상반기" in sel_period: s_d, e_d, cum_tag = f"{sel_cum_year}-01-01", f"{sel_cum_year}-06-30", f"{sel_cum_year}년_상반기"
+                else: s_d, e_d, cum_tag = f"{sel_cum_year}-07-01", f"{sel_cum_year}-12-31", f"{sel_cum_year}년_하반기"
+            else:
+                sel_period = st.selectbox("📆 3. 연간 전체 확인", [f"1년 전체 ({sel_cum_year}-01-01 ~ {sel_cum_year}-12-31)"], index=0, disabled=True, key="cum_y_all_sel")
+                s_d, e_d, cum_tag = f"{sel_cum_year}-01-01", f"{sel_cum_year}-12-31", f"{sel_cum_year}년_1년전체"
+
+        st.info(f"📍 **선택된 다운로드 기간**: **`{cum_tag}`** (`{s_d}` ~ `{e_d}`)")
+        st.divider()
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            st.markdown(f"##### 🏢 1. 단월 본장 국가하수도 공인 엑셀 (`{cum_tag}`)")
+            df_main_cum = get_master_data(MAIN_PLANT, s_d, e_d)
+            st.download_button(
+                f"📥 유량및수질관리({cum_tag}).xlsx",
+                fill_exact_main_template(df_main_cum, start_date=s_d, end_date=e_d, year=sel_cum_year, use_col20_for_out=False),
+                "유량및수질관리.xlsx" if "1년전체" in cum_tag else f"유량및수질관리_{cum_tag}.xlsx",
+                use_container_width=True,
+                type="primary",
+                key=f"cum_dl_main36_{cum_tag}"
+            )
+            st.download_button(
+                f"📥 유량및수질관리 업로드양식({cum_tag}).xlsx",
+                fill_exact_main_template(df_main_cum, start_date=s_d, end_date=e_d, year=sel_cum_year, use_col20_for_out=True),
+                "유량및수질관리 업로드양식.xlsx" if "1년전체" in cum_tag else f"유량및수질관리 업로드양식_{cum_tag}.xlsx",
+                use_container_width=True,
+                type="primary",
+                key=f"cum_dl_main20_{cum_tag}"
+            )
+            st.download_button(
+                f"📥 재이용수 업로드양식(최종)({cum_tag}).xlsx",
+                fill_exact_reuse_template(df_main_cum, start_date=s_d, end_date=e_d, year=sel_cum_year),
+                "재이용수 업로드양식(최종).xlsx" if "1년전체" in cum_tag else f"재이용수 업로드양식(최종)_{cum_tag}.xlsx",
+                use_container_width=True,
+                type="secondary",
+                key=f"cum_dl_reuse_{cum_tag}"
+            )
+        with col_c2:
+            st.markdown(f"##### 🏡 2. 소규모 6개소 국가하수도 공인 엑셀 (`{cum_tag}`)")
+            exact_fnames_cum = {
+                "산음": "유량및수질관리 업로드양식(산음).xlsx",
+                "삼가리": "유량및수질관리 업로드양식(삼가리).xlsx",
+                "진목": "유량및수질관리 업로드양식(진목).xlsx",
+                "몰운": "유량및수질관리 업로드양식 (몰운).xlsx",
+                "단월마을": "유량및수질관리 업로드양식(단월마을).xlsx",
+                "당의": "유량및수질관리 업로드양식(당의).xlsx",
+            }
+            zip_s = io.BytesIO()
+            with zipfile.ZipFile(zip_s, "w", zipfile.ZIP_DEFLATED) as zf:
+                for fac in SMALL_PLANTS:
+                    df_it = get_master_data(fac, s_d, e_d)
+                    fn_z = exact_fnames_cum[fac] if "1년전체" in cum_tag else f"유량및수질관리 업로드양식({fac})_{cum_tag}.xlsx"
+                    zf.writestr(fn_z, fill_exact_small_template(df_it, fac, start_date=s_d, end_date=e_d, year=sel_cum_year))
+            st.download_button(
+                f"📦 소규모 6개소 전체 ZIP 다운로드 ({cum_tag})",
+                zip_s.getvalue(),
+                f"유량및수질관리_소규모6개소_{cum_tag}.zip",
+                use_container_width=True,
+                type="primary",
+                key=f"cum_dl_sm_zip_{cum_tag}"
+            )
+            sel_sm_indiv = st.selectbox("소규모 개별 시설 선택", SMALL_PLANTS, key="cum_sm_indiv_sel")
+            df_sm_indiv = get_master_data(sel_sm_indiv, s_d, e_d)
+            fn_indiv = exact_fnames_cum[sel_sm_indiv] if "1년전체" in cum_tag else f"유량및수질관리 업로드양식({sel_sm_indiv})_{cum_tag}.xlsx"
+            st.download_button(
+                f"📥 {fn_indiv} 개별 다운로드",
+                fill_exact_small_template(df_sm_indiv, sel_sm_indiv, start_date=s_d, end_date=e_d, year=sel_cum_year),
+                fn_indiv,
+                use_container_width=True,
+                type="secondary",
+                key=f"cum_dl_sm_one_{sel_sm_indiv}_{cum_tag}"
+            )
+
+        if os.path.exists(MASTER_ACCUM_DB):
+            st.divider()
+            st.markdown("##### 🗄️ 영구 저장된 운영일지 마스터 DB 전체 열람 (본장 및 소규모 6개소)")
+            df_all_m = pd.read_csv(MASTER_ACCUM_DB)
+            df_khas_only = df_all_m[df_all_m['시설명'].isin([MAIN_PLANT] + SMALL_PLANTS)]
+            st.dataframe(df_khas_only, use_container_width=True)
 # -------------------------------------------------------------
 # 2. HWPX 월간보고서 (10월 공식 양식 토씨 하나 빠짐없이 완벽 재현 + 1번 데이터 연동 + 직접 수정/인쇄/저장)
 # -------------------------------------------------------------
