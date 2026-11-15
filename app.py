@@ -1783,8 +1783,7 @@ def generate_priv_monthly_wq_excel(year=2026):
                 c_tot.number_format = '_-* #,##0.0_-;\\-* #,##0.0_-;_-* "-"_-;_-@_-'
                 c_tot.alignment = align_c; c_tot.font = Font(name='돋움체', size=12, bold=True)
 
-        for r_idx, (b_lbl, fn_stat) in enumerate([(54, ("최    대", max)), (55, ("최    소", min)), (56, ("평    균", lambda x: round(sum(x)/len(x), 1)))], start=54):
-            lbl_txt, fn_op = b_lbl
+        for r_idx, (lbl_txt, fn_op) in [(54, ("최    대", max)), (55, ("최    소", min)), (56, ("평    균", lambda x: round(sum(x)/len(x), 1)))]:
             c_l = ws.cell(r_idx, 1, lbl_txt); c_l.alignment = align_c; c_l.font = font_bot_lbl
             for c_i, arr_v in [(2, all_in_b), (3, all_in_s), (4, all_out_b), (5, all_out_s)]:
                 if arr_v:
