@@ -1755,6 +1755,7 @@ if menu == "📑 1. 운영일지·실험실 엑셀 업로드 ➜ 원본양식 �
             single_s_bytes = fill_exact_small_template(s_dict.get(sel_sub_fac, pd.DataFrame()), sel_sub_fac, start_date=kh_s_d, end_date=kh_e_d, year=khas_yr)
             with st.expander(f"📄 [{exact_fnames[sel_sub_fac]}] 24컬럼 공인양식 화면 미리보기", expanded=True):
                 st.dataframe(pd.read_excel(io.BytesIO(single_s_bytes), header=None).head(38), use_container_width=True, hide_index=True)
+
 # -------------------------------------------------------------
 # 2. HWPX 월간보고서 (10월 공식 양식 토씨 하나 빠짐없이 완벽 재현 + 1번 데이터 연동 + 직접 수정/인쇄/저장)
 # -------------------------------------------------------------
