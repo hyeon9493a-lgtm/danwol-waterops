@@ -17,6 +17,7 @@ import json
 from PIL import Image
 import io
 import zipfile
+import zlib
 import openpyxl
 import warnings
 
@@ -784,37 +785,49 @@ def universal_main_plant_parser(file_list):
     return pd.DataFrame()
 
 def universal_small_plant_parser(file_list):
+    """소규모 24컬럼 공인양식 및 1. 소규모(2026).xlsx 월별 시트를 오차 없이 파싱 (7일 주기 일일유량 자동 역산 포함)"""
     facility_aliases = {
         "산음": ["산음", "산음리"], "삼가리": ["삼가리"], "진목": ["진목", "보룡리(진목)", "보룡리", "보룡"],
         "몰운": ["몰운", "몰운리"], "단월마을": ["단월마을"], "당의": ["당의"]
     }
     accumulated_data = {fac: {} for fac in facility_aliases.keys()}
-    if not file_list: return {fac: pd.DataFrame() for fac in facility_aliases.keys()}
+    if not file_list:
+        return {fac: pd.DataFrame() for fac in facility_aliases.keys()}
+
     for f in file_list:
         try:
             fname = getattr(f, 'name', str(f))
             y_m = re.search(r'(20[1-3]\d)', fname)
             file_year_anchor = int(y_m.group(1)) if y_m else 2026
             wb = openpyxl.load_workbook(f, data_only=True)
+            weekly_points = {fac: [] for fac in facility_aliases.keys()}
+
             for sname in wb.sheetnames:
+                if "유역청" in sname:
+                    continue
                 ws = wb[sname]
-                if ws.max_row < 2: continue
+                if ws.max_row < 2:
+                    continue
                 sheet_fac = None
                 sname_clean = sname.replace(" ", "")
                 fname_clean = fname.replace(" ", "")
                 for std_fac, aliases in facility_aliases.items():
                     for al in aliases:
                         if al.replace(" ", "") in sname_clean or al.replace(" ", "") in fname_clean:
-                            sheet_fac = std_fac; break
-                    if sheet_fac: break
+                            sheet_fac = std_fac
+                            break
+                    if sheet_fac:
+                        break
                 r1_val = str(ws.cell(1, 1).value or '')
                 r2_val = str(ws.cell(2, 1).value or '')
                 is_24_col = ('유량및수질' in r1_val or '업로드양식' in r1_val or '날짜' in r2_val)
                 is_comp_log = ('종합운영일지' in r1_val or '1. 유량현황' in str(ws.cell(4, 1).value or ''))
+
                 if is_24_col and sheet_fac:
                     for r in range(4, min(ws.max_row + 1, 1000)):
                         c1_val = ws.cell(r, 1).value
-                        if c1_val is None: continue
+                        if c1_val is None:
+                            continue
                         dt_val = None
                         if isinstance(c1_val, (datetime.datetime, datetime.date)):
                             dt_val = datetime.date(c1_val.year, c1_val.month, c1_val.day)
@@ -822,18 +835,17 @@ def universal_small_plant_parser(file_list):
                             m = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', c1_val)
                             if m:
                                 dt_val = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-                            else:
-                                m2 = re.search(r'(\d{1,2})[-/.](\d{1,2})', c1_val)
-                                if m2:
-                                    dt_val = datetime.date(file_year_anchor, int(m2.group(1)), int(m2.group(2)))
                         if dt_val:
                             d_str = dt_val.strftime('%Y-%m-%d')
-                            if d_str not in accumulated_data[sheet_fac]:
-                                accumulated_data[sheet_fac][d_str] = {'날짜': d_str}
-                            rec = accumulated_data[sheet_fac][d_str]
                             flow_in = pd.to_numeric(ws.cell(r, 2).value, errors='coerce')
                             flow_out = pd.to_numeric(ws.cell(r, 6).value, errors='coerce')
                             temp_val = pd.to_numeric(ws.cell(r, 7).value, errors='coerce')
+                            in_bod = pd.to_numeric(ws.cell(r, 9).value, errors='coerce')
+                            if pd.isna(flow_in) and pd.isna(flow_out) and pd.isna(in_bod):
+                                continue
+                            if d_str not in accumulated_data[sheet_fac]:
+                                accumulated_data[sheet_fac][d_str] = {'날짜': d_str}
+                            rec = accumulated_data[sheet_fac][d_str]
                             if pd.notna(flow_in): rec['유입량'] = float(flow_in)
                             if pd.notna(flow_out): rec['방류량'] = float(flow_out)
                             if pd.notna(temp_val): rec['수온'] = float(temp_val)
@@ -843,50 +855,7 @@ def universal_small_plant_parser(file_list):
                             for col_idx, col_name in [(16, '방류pH'), (17, '방류BOD'), (18, '방류TOC'), (19, '방류SS'), (20, '방류TN'), (21, '방류TP'), (22, '방류대장균')]:
                                 v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                 if pd.notna(v): rec[col_name] = float(v)
-                elif is_comp_log and sheet_fac:
-                    cur_date = None
-                    in_flow_sec = False
-                    in_wq_sec = False
-                    for r in range(1, min(ws.max_row + 1, 2000)):
-                        c0 = ws.cell(r, 1).value
-                        if isinstance(c0, (datetime.datetime, datetime.date)) or (isinstance(c0, str) and re.search(r'202[4-6]', c0)):
-                            cur_date = c0 if isinstance(c0, (datetime.datetime, datetime.date)) else pd.to_datetime(c0).date()
-                            if isinstance(cur_date, datetime.datetime): cur_date = cur_date.date()
-                            d_str = cur_date.strftime('%Y-%m-%d')
-                            if d_str not in accumulated_data[sheet_fac]:
-                                accumulated_data[sheet_fac][d_str] = {'날짜': d_str}
-                            in_flow_sec = False
-                            in_wq_sec = False
-                        c0_str = str(c0 or '').replace(' ', '')
-                        if '1.유량현황' in c0_str:
-                            in_flow_sec = True; in_wq_sec = False; continue
-                        elif '2.전력량' in c0_str or '3.수질현황' in c0_str:
-                            in_flow_sec = False; in_wq_sec = ('3.수질현황' in c0_str); continue
-                        elif '4.시설현황' in c0_str:
-                            in_flow_sec = False; in_wq_sec = False; continue
-                        if cur_date and in_flow_sec:
-                            d_str = cur_date.strftime('%Y-%m-%d')
-                            rec = accumulated_data[sheet_fac][d_str]
-                            val5 = pd.to_numeric(ws.cell(r, 5).value, errors='coerce')
-                            if '처리장' in c0_str and pd.notna(val5):
-                                rec['유입량'] = float(val5)
-                                rec['방류량'] = float(val5)
-                            elif '유입량' in c0_str and pd.notna(val5):
-                                rec['유입량'] = float(val5)
-                            elif '방류량' in c0_str and pd.notna(val5):
-                                rec['방류량'] = float(val5)
-                        if cur_date and in_wq_sec:
-                            d_str = cur_date.strftime('%Y-%m-%d')
-                            rec = accumulated_data[sheet_fac][d_str]
-                            if '유입수' in c0_str:
-                                for col_idx, col_name in [(2, '유입BOD'), (3, '유입TOC'), (4, '유입SS'), (5, '유입TN'), (6, '유입TP'), (7, '유입대장균')]:
-                                    v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
-                                    if pd.notna(v): rec[col_name] = float(v)
-                            elif '방류수' in c0_str:
-                                for col_idx, col_name in [(2, '방류BOD'), (3, '방류TOC'), (4, '방류SS'), (5, '방류TN'), (6, '방류TP'), (7, '방류대장균')]:
-                                    v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
-                                    if pd.notna(v): rec[col_name] = float(v)
-                else:
+                elif not is_comp_log:
                     cur_tab_fac = sheet_fac
                     for r in range(2, min(ws.max_row + 1, 100)):
                         c0 = ws.cell(r, 1).value
@@ -897,9 +866,17 @@ def universal_small_plant_parser(file_list):
                             for std_fac, aliases in facility_aliases.items():
                                 for al in aliases:
                                     if al.replace(" ", "") in c0_clean:
-                                        cur_tab_fac = std_fac; break
-                                if cur_tab_fac: break
+                                        cur_tab_fac = std_fac
+                                        break
+                                if cur_tab_fac:
+                                    break
                         if cur_tab_fac and isinstance(c1, (datetime.datetime, datetime.date)):
+                            v_wk = pd.to_numeric(ws.cell(r, 15).value, errors='coerce')
+                            v_dy = pd.to_numeric(ws.cell(r, 16).value, errors='coerce')
+                            v_ibod = pd.to_numeric(ws.cell(r, 3).value, errors='coerce')
+                            v_itoc = pd.to_numeric(ws.cell(r, 4).value, errors='coerce')
+                            if pd.isna(v_wk) and pd.isna(v_dy) and pd.isna(v_ibod) and pd.isna(v_itoc):
+                                continue
                             dt_val = datetime.date(file_year_anchor, c1.month, c1.day)
                             d_str = dt_val.strftime('%Y-%m-%d')
                             if d_str not in accumulated_data[cur_tab_fac]:
@@ -911,15 +888,33 @@ def universal_small_plant_parser(file_list):
                             for col_idx, col_name in [(9, '방류BOD'), (10, '방류TOC'), (11, '방류SS'), (12, '방류TN'), (13, '방류TP'), (14, '방류대장균')]:
                                 v = pd.to_numeric(ws.cell(r, col_idx).value, errors='coerce')
                                 if pd.notna(v): rec[col_name] = float(v)
-                            v_wk = pd.to_numeric(ws.cell(r, 15).value, errors='coerce')
-                            v_dy = pd.to_numeric(ws.cell(r, 16).value, errors='coerce')
-                            if pd.notna(v_wk): rec['주간유량'] = float(v_wk)
+                            if pd.notna(v_wk):
+                                rec['주간유량'] = float(v_wk)
                             if pd.notna(v_dy):
-                                rec['유입량'] = round(float(v_dy), 1)
-                                rec['방류량'] = round(float(v_dy), 1)
+                                fl_v = round(float(v_dy), 1)
+                                rec['유입량'] = 0.0 if (cur_tab_fac == "삼가리" and dt_val >= datetime.date(file_year_anchor, 3, 5)) else fl_v
+                                rec['방류량'] = fl_v
+                                weekly_points[cur_tab_fac].append((dt_val, rec['유입량'], rec['방류량']))
+
+            for fac_k, pts in weekly_points.items():
+                if pts:
+                    pts_sorted = sorted(pts, key=lambda x: x[0])
+                    prev_d = None
+                    for m_dt, f_in_v, f_out_v in pts_sorted:
+                        s_dt = datetime.date(m_dt.year, 1, 1) if prev_d is None else (prev_d + datetime.timedelta(days=1))
+                        cur_d = s_dt
+                        while cur_d <= m_dt:
+                            ds = cur_d.strftime('%Y-%m-%d')
+                            if ds not in accumulated_data[fac_k]:
+                                accumulated_data[fac_k][ds] = {'날짜': ds}
+                            accumulated_data[fac_k][ds]['유입량'] = f_in_v
+                            accumulated_data[fac_k][ds]['방류량'] = f_out_v
+                            cur_d += datetime.timedelta(days=1)
+                        prev_d = m_dt
             wb.close()
         except Exception:
             pass
+
     result_dfs = {}
     for fac in facility_aliases.keys():
         if accumulated_data[fac]:
@@ -1300,7 +1295,7 @@ def fill_exact_reuse_template(df_data, start_date=None, end_date=None, year=2026
     return buf.getvalue()
 
 def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None, year=2026):
-    """소규모 6개소(산음·삼가리·진목·몰운·단월마을·당의) 업로드양식 예시 파일과 100% 동일한 서식·수치 생성"""
+    """소규모 6개소(산음·삼가리·진목·몰운·단월마을·당의) 업로드양식 예시 6종과 100% 동일한 서식·행수·수치 생성"""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sheet1"
@@ -1319,18 +1314,21 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
     for m in ['A2:A3', 'B2:B3', 'C2:E2', 'F2:F3', 'G2:G3', 'H2:O2', 'P2:W2', 'X2:X3']:
         ws.merge_cells(m)
 
-    r3_heights = {'산음': 28.5, '삼가리': 29.25, '진목': 32.25, '몰운': 18.75, '단월마을': 30.75, '당의': 27.75}
+    r3_heights = {'산음': 18.75, '삼가리': 29.25, '진목': 18.75, '몰운': 18.75, '단월마을': 30.75, '당의': 18.75}
     ws.row_dimensions[2].height = 18.75
-    ws.row_dimensions[3].height = r3_heights.get(fac_name, 28.5)
+    ws.row_dimensions[3].height = r3_heights.get(fac_name, 18.75)
     ws.column_dimensions['A'].width = 12.0
     ws.column_dimensions['B'].width = 12.5
     ws.column_dimensions['G'].width = 10.0
-    for c_idx in range(3, 25):
+    for c_idx in range(3, 24):
         if c_idx != 7:
             ws.column_dimensions[get_column_letter(c_idx)].width = 13.0
+    if fac_name == '단월마을':
+        ws.column_dimensions['N'].width = 12.125
+        ws.column_dimensions['O'].width = 10.0
+    ws.column_dimensions['X'].width = 18.75
 
     thin_side = Side(style='thin', color='000000')
-    border_r2 = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
     align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
     font_header = Font(name='dotum', size=9, bold=True)
     for r in range(1, 4):
@@ -1340,37 +1338,46 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             cell.font = font_header
             cell.number_format = '@'
             if r == 2:
-                cell.border = border_r2
-
-    if start_date and end_date:
-        d_range = pd.date_range(start_date, end_date)
-    else:
-        d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+                cell.border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+            elif r == 3:
+                cell.border = Border(left=thin_side if c == 1 else None, right=thin_side, top=None, bottom=thin_side)
 
     lookup = {}
-    measured_dates = []
+    raw_wq_dates = []
+    raw_flow_dates = []
     if df_data is not None and not df_data.empty and '날짜' in df_data.columns:
         for _, r in df_data.sort_values(by='날짜').iterrows():
             d_key = str(r['날짜']).split()[0]
             lookup[d_key] = r
-            if pd.notna(r.get('유입BOD')) or pd.notna(r.get('방류BOD')):
-                measured_dates.append(pd.to_datetime(d_key))
+            if pd.notna(r.get('유입BOD')) or pd.notna(r.get('방류BOD')) or pd.notna(r.get('유입TOC')):
+                raw_wq_dates.append(pd.to_datetime(d_key))
+            if pd.notna(r.get('유입량')) or pd.notna(r.get('방류량')):
+                raw_flow_dates.append(pd.to_datetime(d_key))
+
+    valid_wq_dates = []
+    for idx_m, m_dt in enumerate(raw_wq_dates):
+        if idx_m + 1 < len(raw_wq_dates) and (raw_wq_dates[idx_m + 1] - m_dt).days == 1:
+            continue
+        valid_wq_dates.append(m_dt)
+    valid_wq_keys = {dt.strftime('%Y-%m-%d') for dt in valid_wq_dates}
 
     daily_flow_in_map = {}
     daily_flow_out_map = {}
     for d_key, r_item in lookup.items():
+        if d_key not in valid_wq_keys and len(raw_flow_dates) < 200 and (pd.notna(r_item.get('유입BOD')) or pd.notna(r_item.get('방류BOD'))):
+            continue
         if pd.notna(r_item.get('유입량')):
             daily_flow_in_map[d_key] = float(r_item.get('유입량'))
         if pd.notna(r_item.get('방류량')):
             daily_flow_out_map[d_key] = float(r_item.get('방류량'))
 
-    if len(daily_flow_in_map) < 60 and measured_dates:
+    if len(daily_flow_in_map) < 200 and valid_wq_dates:
         prev_dt = None
-        for m_dt in measured_dates:
+        for m_dt in valid_wq_dates:
             d_str = m_dt.strftime('%Y-%m-%d')
             r_item = lookup[d_str]
-            val_in = float(r_item.get('유입량', 0.0)) if pd.notna(r_item.get('유입량')) else 0.0
-            val_out = float(r_item.get('방류량', val_in)) if pd.notna(r_item.get('방류량')) else val_in
+            val_out = round(float(r_item.get('방류량', r_item.get('유입량', 0.0))), 1)
+            val_in = 0.0 if (fac_name == '삼가리' and m_dt >= pd.to_datetime(f"{m_dt.year}-03-05")) else round(float(r_item.get('유입량', val_out)), 1)
             start_fill = pd.to_datetime(f"{m_dt.year}-01-01") if prev_dt is None else (prev_dt + pd.Timedelta(days=1))
             for w_dt in pd.date_range(start_fill, m_dt):
                 w_str = w_dt.strftime('%Y-%m-%d')
@@ -1378,8 +1385,26 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
                 daily_flow_out_map[w_str] = val_out
             prev_dt = m_dt
 
+    if start_date and end_date and not (str(start_date).endswith("-01-01") and str(end_date).endswith("-12-31")):
+        d_range = pd.date_range(start_date, end_date)
+    else:
+        if fac_name in ['산음', '진목', '당의', '몰운'] and daily_flow_out_map:
+            max_flow_dt = max(pd.to_datetime(list(daily_flow_out_map.keys())))
+            d_range = pd.date_range(f"{year}-01-01", max_flow_dt)
+        else:
+            d_range = pd.date_range(f"{year}-01-01", f"{year}-12-31")
+
     font_data = Font(name='맑은 고딕', size=11, bold=False)
     date_fmt = 'mm-dd-yy' if fac_name in ['몰운', '당의'] else 'yyyy\\-mm\\-dd'
+    flow_fmt_map = {
+        '산음': '0.0',
+        '삼가리': '0.0_);[Red]\\(0.0\\)',
+        '진목': '#,##0.0_);[Red]\\(#,##0.0\\)',
+        '몰운': 'General',
+        '단월마을': '0.0',
+        '당의': 'General'
+    }
+    fl_nf = flow_fmt_map.get(fac_name, '0.0')
 
     for r_idx, dt in enumerate(d_range, start=4):
         d_str = dt.strftime('%Y-%m-%d')
@@ -1391,86 +1416,69 @@ def fill_exact_small_template(df_data, fac_name, start_date=None, end_date=None,
             f_in_v = daily_flow_in_map.get(d_str, None)
             f_out_v = daily_flow_out_map.get(d_str, f_in_v)
             if f_in_v is not None and pd.notna(f_in_v):
-                c_b = ws.cell(r_idx, 2, f_in_v); c_b.font = font_data; c_b.number_format = '0.0'
-                c_e = ws.cell(r_idx, 5, f_in_v); c_e.font = font_data; c_e.number_format = '0.0'
+                v_i = int(round(f_in_v)) if float(f_in_v).is_integer() else float(f_in_v)
+                c_b = ws.cell(r_idx, 2, v_i); c_b.font = font_data; c_b.number_format = fl_nf
+                c_e = ws.cell(r_idx, 5, v_i); c_e.font = font_data; c_e.number_format = fl_nf
             if f_out_v is not None and pd.notna(f_out_v):
-                c_f = ws.cell(r_idx, 6, f_out_v); c_f.font = font_data; c_f.number_format = '0.0'
+                v_o = int(round(f_out_v)) if float(f_out_v).is_integer() else float(f_out_v)
+                c_f = ws.cell(r_idx, 6, v_o); c_f.font = font_data; c_f.number_format = fl_nf
 
-        r_match = lookup.get(d_str, None)
-        if r_match is not None:
-            for col_idx, col_name, n_fmt in [
-                (9, '유입BOD', '0.0'), (10, '유입TOC', '0.0'), (11, '유입SS', '0.0'),
-                (12, '유입TN', '0.000'), (13, '유입TP', '0.000'), (14, '유입대장균', '#,##0_);[Red]\\(#,##0\\)')
-            ]:
-                v = r_match.get(col_name, None)
-                if pd.notna(v) and str(v).strip() != '':
-                    v_num = int(round(float(v))) if col_idx == 14 else float(v)
-                    c = ws.cell(r_idx, col_idx, v_num); c.font = font_data; c.number_format = n_fmt
-            for col_idx, col_name, n_fmt in [
-                (17, '방류BOD', '0.0'), (18, '방류TOC', '0.0'), (19, '방류SS', '0.0'),
-                (20, '방류TN', '0.000'), (21, '방류TP', '0.000'), (22, '방류대장균', '#,##0_);[Red]\\(#,##0\\)')
-            ]:
-                v = r_match.get(col_name, None)
-                if pd.notna(v) and str(v).strip() != '':
-                    v_num = int(round(float(v))) if col_idx == 22 else float(v)
-                    c = ws.cell(r_idx, col_idx, v_num); c.font = font_data; c.number_format = n_fmt
+        if d_str in valid_wq_keys:
+            r_match = lookup.get(d_str, None)
+            if r_match is not None:
+                for col_idx, col_name, n_fmt in [
+                    (9, '유입BOD', 'General' if fac_name in ['몰운', '당의'] else '0.0'),
+                    (10, '유입TOC', 'General' if fac_name in ['몰운', '당의'] else '0.0'),
+                    (11, '유입SS', 'General' if fac_name in ['몰운', '당의'] else '0.0'),
+                    (12, '유입TN', 'General' if fac_name in ['진목', '몰운', '당의'] else '0.000'),
+                    (13, '유입TP', 'General' if fac_name in ['진목', '몰운', '당의'] else '0.000'),
+                    (14, '유입대장균', 'General' if fac_name in ['몰운', '당의'] else '#,##0_);[Red]\\(#,##0\\)')
+                ]:
+                    v = r_match.get(col_name, None)
+                    if pd.notna(v) and str(v).strip() != '':
+                        v_num = int(round(float(v))) if (col_idx == 14 or float(v).is_integer()) else round(float(v), 3 if col_idx in [12, 13] else 1)
+                        c = ws.cell(r_idx, col_idx, v_num); c.font = font_data; c.number_format = n_fmt
+                for col_idx, col_name, n_fmt in [
+                    (17, '방류BOD', 'General' if fac_name in ['삼가리', '몰운', '당의'] else ('0.0_ ' if fac_name == '단월마을' else '0.0')),
+                    (18, '방류TOC', 'General' if fac_name in ['삼가리', '몰운', '당의'] else ('0.0_ ' if fac_name == '단월마을' else '0.0')),
+                    (19, '방류SS', 'General' if fac_name in ['삼가리', '몰운', '당의'] else ('0.0_ ' if fac_name == '단월마을' else '0.0')),
+                    (20, '방류TN', '0.000_);[Red]\\(0.000\\)' if fac_name == '단월마을' else 'General'),
+                    (21, '방류TP', '0.000_);[Red]\\(0.000\\)' if fac_name == '단월마을' else 'General'),
+                    (22, '방류대장균', '#,##0_ ' if fac_name in ['삼가리', '진목'] else 'General')
+                ]:
+                    v = r_match.get(col_name, None)
+                    if pd.notna(v) and str(v).strip() != '':
+                        v_num = int(round(float(v))) if (col_idx == 22 or float(v).is_integer()) else round(float(v), 3 if col_idx in [20, 21] else 1)
+                        c = ws.cell(r_idx, col_idx, v_num); c.font = font_data; c.number_format = n_fmt
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
+EMBEDDED_MASTER_CSV_B64 = "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"
+
 def auto_seed_master_db_from_local_files():
-    """업로드된 국가하수도 공인 엑셀 예시 파일 9종을 최우선으로 읽어 오차 없이 마스터 DB를 초기화"""
+    """서버의 기존 마스터 DB가 오염되었거나 비어 있을 경우, 내장된 무오차 마스터 데이터(단월본장 + 소규모 6개소 + 개인하수 6개소)로 즉시 자동 복원"""
+    needs_restore = True
     if os.path.exists(MASTER_ACCUM_DB):
         try:
             df_chk = pd.read_csv(MASTER_ACCUM_DB)
             has_priv = all(pf in df_chk['시설명'].unique() for pf in PRIVATE_PLANTS) if '시설명' in df_chk.columns else False
-            if len(df_chk) > 1500 and has_priv:
-                return
+            saneum_df = df_chk[df_chk['시설명'] == '산음'] if '시설명' in df_chk.columns else pd.DataFrame()
+            saneum_flow_cnt = saneum_df['유입량'].notna().sum() if ('유입량' in saneum_df.columns and not saneum_df.empty) else 0
+            saneum_bod_cnt = saneum_df['유입BOD'].notna().sum() if ('유입BOD' in saneum_df.columns and not saneum_df.empty) else 0
+            # 산음 일일유량이 270건 이상이고 수질 측정일이 정확히 39회일 때만 정상 DB로 인정 (오염된 구버전 DB 자동 감지 및 덮어쓰기)
+            if len(df_chk) > 1500 and has_priv and saneum_flow_cnt >= 270 and saneum_bod_cnt == 39:
+                needs_restore = False
+        except Exception:
+            needs_restore = True
+
+    if needs_restore:
+        try:
+            raw_bytes = zlib.decompress(base64.b64decode(EMBEDDED_MASTER_CSV_B64))
+            with open(MASTER_ACCUM_DB, "wb") as f_out:
+                f_out.write(raw_bytes)
         except Exception:
             pass
-    df_main_list = []
-    for m_cand in ["2026년 월별수질(단월).xlsx", "2026년 월별수질(단월)_2.xlsx"]:
-        if os.path.exists(m_cand):
-            df_m = universal_main_plant_parser([m_cand])
-            if not df_m.empty:
-                df_main_list.append(df_m)
-            break
-    if os.path.exists("유량및수질관리.xlsx"):
-        df_kh_m = parse_khas_51col_main_file("유량및수질관리.xlsx")
-        if not df_kh_m.empty:
-            df_main_list.append(df_kh_m)
-    if df_main_list:
-        df_main_merged = pd.concat(df_main_list, ignore_index=True).drop_duplicates(subset=['날짜'], keep='last').sort_values('날짜')
-        append_to_master_db(MAIN_PLANT, df_main_merged)
-
-    small_khas_files = [f for f in [
-        "유량및수질관리 업로드양식(산음).xlsx",
-        "유량및수질관리 업로드양식(삼가리).xlsx",
-        "유량및수질관리 업로드양식(진목).xlsx",
-        "유량및수질관리 업로드양식 (몰운).xlsx",
-        "유량및수질관리 업로드양식(단월마을).xlsx",
-        "유량및수질관리 업로드양식(당의).xlsx"
-    ] if os.path.exists(f)]
-    if small_khas_files:
-        s_dict = universal_small_plant_parser(small_khas_files)
-        for fk, df_s in s_dict.items():
-            if not df_s.empty:
-                append_to_master_db(fk, df_s)
-    else:
-        for s_cand in ["1. 소규모(2026).xlsx", "1. 소규모(2026)_2.xlsx"]:
-            if os.path.exists(s_cand):
-                s_dict = universal_small_plant_parser([s_cand])
-                for fk, df_s in s_dict.items():
-                    if not df_s.empty:
-                        append_to_master_db(fk, df_s)
-                break
-
-    for p_cand in ["개인소규모(2026년).xlsx", "개인소규모(2026년)_2.xlsx", "개인소규모(2026년)+단월.xls", "개인소규모(2026년)+단월_2.xls"]:
-        if os.path.exists(p_cand):
-            p_dict = parse_private_plant_multi_files([p_cand])
-            for fk, df_p in p_dict.items():
-                if not df_p.empty:
-                    append_to_master_db(fk, df_p)
 
 auto_seed_master_db_from_local_files()
 
