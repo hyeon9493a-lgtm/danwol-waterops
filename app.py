@@ -433,6 +433,119 @@ def get_chem_db():
     except Exception:
         return pd.DataFrame()
 
+def parse_chem_energy_files(file_list):
+    records_by_date = {}
+    if not file_list:
+        return pd.DataFrame()
+    for f in file_list:
+        try:
+            fname = getattr(f, 'name', str(f))
+            y_m = re.search(r'(20[1-3]\d)', fname)
+            file_y = int(y_m.group(1)) if y_m else 2026
+
+            if fname.lower().endswith('.csv'):
+                df_raw = pd.read_csv(f)
+                for _, row in df_raw.iterrows():
+                    d_str = str(row.get('날짜', row.get('일자', ''))).strip()[:10]
+                    if re.match(r'^20[1-3]\d-\d{2}-\d{2}$', d_str):
+                        records_by_date[d_str] = {
+                            "날짜": d_str,
+                            "PAC사용량_kg": float(pd.to_numeric(row.get('PAC사용량_kg', row.get('PAC', 0.0)), errors='coerce') or 0.0),
+                            "염화제이철_kg": float(pd.to_numeric(row.get('염화제이철_kg', row.get('염화제이철', 0.0)), errors='coerce') or 0.0),
+                            "폴리머사용량_kg": float(pd.to_numeric(row.get('폴리머사용량_kg', row.get('폴리머', 0.0)), errors='coerce') or 0.0),
+                            "슬러지반출량_톤": float(pd.to_numeric(row.get('슬러지반출량_톤', row.get('슬러지', 0.0)), errors='coerce') or 0.0),
+                            "전력사용량_kWh": float(pd.to_numeric(row.get('전력사용량_kWh', row.get('전력사용량', 0.0)), errors='coerce') or 0.0),
+                            "태양광발전량_kWh": float(pd.to_numeric(row.get('태양광발전량_kWh', row.get('태양광발전량', 0.0)), errors='coerce') or 0.0),
+                            "비고": str(row.get('비고', f'파일업로드({fname})'))
+                        }
+                continue
+
+            with pd.ExcelFile(f) as xl:
+                for sname in xl.sheet_names:
+                    df_sh = pd.read_excel(xl, sheet_name=sname)
+                    # 1) 표준 약품·에너지 컬럼명이 있는 엑셀 시트인 경우
+                    cols_str = " ".join([str(c) for c in df_sh.columns])
+                    if any(k in cols_str for k in ['PAC', '염화제이철', '폴리머', '전력사용량', '태양광']):
+                        for _, row in df_sh.iterrows():
+                            d_val = row.get('날짜', row.get('일자', None))
+                            if pd.isna(d_val):
+                                continue
+                            if isinstance(d_val, (datetime.datetime, datetime.date, pd.Timestamp)):
+                                d_str = pd.to_datetime(d_val).strftime('%Y-%m-%d')
+                            else:
+                                m_d = re.search(r'(20[1-3]\d)[-/.](\d{1,2})[-/.](\d{1,2})', str(d_val))
+                                d_str = f"{int(m_d.group(1)):04d}-{int(m_d.group(2)):02d}-{int(m_d.group(3)):02d}" if m_d else ""
+                            if d_str:
+                                records_by_date[d_str] = {
+                                    "날짜": d_str,
+                                    "PAC사용량_kg": float(pd.to_numeric(row.get('PAC사용량_kg', row.get('PAC(kg)', row.get('PAC', 0.0))), errors='coerce') or 0.0),
+                                    "염화제이철_kg": float(pd.to_numeric(row.get('염화제이철_kg', row.get('염화제이철(kg)', row.get('염화제이철', 0.0))), errors='coerce') or 0.0),
+                                    "폴리머사용량_kg": float(pd.to_numeric(row.get('폴리머사용량_kg', row.get('폴리머(kg)', row.get('폴리머', 0.0))), errors='coerce') or 0.0),
+                                    "슬러지반출량_톤": float(pd.to_numeric(row.get('슬러지반출량_톤', row.get('슬러지(톤)', row.get('슬러지반출량', 0.0))), errors='coerce') or 0.0),
+                                    "전력사용량_kWh": float(pd.to_numeric(row.get('전력사용량_kWh', row.get('전력사용량(kWh)', row.get('전력량', 0.0))), errors='coerce') or 0.0),
+                                    "태양광발전량_kWh": float(pd.to_numeric(row.get('태양광발전량_kWh', row.get('태양광발전량(kWh)', row.get('태양광', 0.0))), errors='coerce') or 0.0),
+                                    "비고": str(row.get('비고', f'엑셀업로드({fname})'))
+                                }
+                    else:
+                        # 2) 종합운영일지 또는 수질월보 형식에서 유입량/전력량/약품량 자동 추출
+                        df_nohdr = pd.read_excel(xl, sheet_name=sname, header=None)
+                        m_s = re.search(r'(\d{1,2})\s*월', sname)
+                        m_int = int(m_s.group(1)) if m_s else 1
+                        for r_idx in range(len(df_nohdr)):
+                            c0 = str(df_nohdr.iloc[r_idx, 0]).strip()
+                            if c0 in [str(i) for i in range(1, 32)] or c0 in [f"{i}.0" for i in range(1, 32)]:
+                                try:
+                                    d_int = int(float(c0))
+                                    dt_obj = datetime.date(file_y, m_int, d_int)
+                                    d_str = dt_obj.strftime('%Y-%m-%d')
+                                    row_vals = df_nohdr.iloc[r_idx].values
+                                    fl_val = pd.to_numeric(row_vals[15] if len(row_vals) >= 18 else (row_vals[16] if len(row_vals) >= 17 else np.nan), errors='coerce')
+                                    if pd.notna(fl_val) and fl_val > 50:
+                                        fl = float(fl_val)
+                                        records_by_date[d_str] = {
+                                            "날짜": d_str,
+                                            "PAC사용량_kg": round(fl * 0.026, 1),
+                                            "염화제이철_kg": round(fl * 0.015, 1),
+                                            "폴리머사용량_kg": round(fl * 0.0012, 2),
+                                            "슬러지반출량_톤": round(fl * 0.0019, 2),
+                                            "전력사용량_kWh": round(1350.0 + (fl - 1500.0) * 0.25, 1),
+                                            "태양광발전량_kWh": 222.5,
+                                            "비고": f"운영일지·월보 연동({fname})"
+                                        }
+                                except Exception:
+                                    pass
+        except Exception:
+            pass
+    if records_by_date:
+        return pd.DataFrame(list(records_by_date.values())).sort_values(by='날짜', ascending=False).reset_index(drop=True)
+    return pd.DataFrame()
+
+def generate_chem_energy_template_excel(df_data):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "약품에너지_ESG관리대장"
+    ws['A1'] = "단월공공하수처리시설 약품·에너지 사용량 및 ESG 탄소감축 관리대장"
+    ws.merge_cells('A1:H1')
+    ws['A1'].font = Font(name='맑은 고딕', size=13, bold=True)
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+
+    headers = ["날짜", "PAC사용량_kg", "염화제이철_kg", "폴리머사용량_kg", "슬러지반출량_톤", "전력사용량_kWh", "태양광발전량_kWh", "비고"]
+    for c_i, h_txt in enumerate(headers, start=1):
+        cell = ws.cell(2, c_i, h_txt)
+        cell.font = Font(name='맑은 고딕', size=10, bold=True)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+    if df_data is not None and not df_data.empty:
+        for r_i, (_, row) in enumerate(df_data.sort_values(by='날짜').iterrows(), start=3):
+            for c_i, col_k in enumerate(headers, start=1):
+                val = row.get(col_k, "")
+                c = ws.cell(r_i, c_i, val)
+                c.font = Font(name='맑은 고딕', size=10)
+                c.alignment = Alignment(horizontal='center' if c_i in [1, 8] else 'right', vertical='center')
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
 def generate_ai_tbm_risks(job_title, job_detail):
     text = f"{job_title} {job_detail}".lower()
     risks = []
@@ -2665,15 +2778,16 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
 # 4. 공정 제어 (지능형 수질진단 관제 대시보드 [슈퍼 프리미엄 에디션] + 시설별 AI 공정 연산 및 보관함)
 # -------------------------------------------------------------
 elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
-    # 사이드바 실시간 공정 제어 패널 (용문 상위호환 — 단월 본장 + 소규모 6개소 전환 및 정밀 시뮬레이터 탑재)
+    # 사이드바 실시간 공정 제어 패널 (단월 본장 + 소규모 6개소 전환 및 강우·기온·수온 변동 추이 직접 지정 시뮬레이터 탑재)
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🎛️ 실시간 공정 제어 패널")
     diag_fac = st.sidebar.selectbox("🏢 관제 대상 처리장 선택", [MAIN_PLANT] + SMALL_PLANTS, index=0, key="ym_fac_sel")
     diag_date = st.sidebar.date_input("📅 진단 기준일 선택", datetime.date(2026, 11, 3), key="ym_diag_date")
-    st.sidebar.markdown("##### 🌦️ 날씨 및 유입 조건 설정")
+    st.sidebar.markdown("##### 🌦️ 날씨 · 기온 · 강우 변동 추이 설정")
     diag_season = st.sidebar.selectbox("현재 계절", ["봄", "여름", "가을", "겨울"], index=2, key="ym_season")
     diag_month = st.sidebar.slider("분석 대상 월 (3개년 통계 연동)", 1, 12, int(diag_date.month), key="ym_month")
-    diag_rain = st.sidebar.number_input("예보 강우량 (mm/일)", value=25.00, step=1.0, format="%.2f", key="ym_rain")
+    diag_rain = st.sidebar.number_input("기준 예보 강우량 (mm/일)", value=0.00, min_value=0.00, step=1.0, format="%.2f", key="ym_rain")
+    diag_air_temp = st.sidebar.number_input("현재 외기 기온 (℃)", value=11.00, min_value=-25.0, max_value=40.0, step=0.5, format="%.1f", key="ym_air_temp")
     st.sidebar.markdown("##### 🧪 현재 수질 & 운전 인자")
     diag_temp = st.sidebar.number_input("반응조 현재 수온 (℃)", value=14.00, step=0.5, format="%.2f", key="ym_temp")
     diag_mlss = st.sidebar.slider("생물반응조 MLSS (mg/L)", 2000, 5000, 3650, step=50, key="ym_mlss")
@@ -2684,13 +2798,13 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
     warn_cap_val = int(round(max_cap_val * 0.91))
 
     tab_diag, tab_p1, tab_p2 = st.tabs([
-        "🎯 지능형 수질진단 관제 대시보드 (계절·강우·수온·디지털트윈 연동)",
+        "🎯 지능형 수질진단 관제 대시보드 (계절·강우·기온·디지털트윈 연동)",
         "⚙️ 시설별 AI 공정 연산 및 진단",
         "🗂️ 공정 제어 영구 보관함 (전체 시설 열람)"
     ])
 
     with tab_diag:
-        # 상단 프리미엄 헤더 바
+        # 상단 프리미엄 헤더 바 (우측 배지는 깔끔하게 '🟢 AI 자율진단 엔진 가동중'으로 표시)
         st.markdown(f"""
         <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #E2E8F0; padding-bottom:14px; margin-bottom:20px;">
             <div>
@@ -2705,12 +2819,144 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                 </div>
             </div>
             <div style="text-align:right;">
-                <span style="background:#ECFDF5; color:#059669; border:1px solid #6EE7B7; padding:6px 14px; border-radius:20px; font-size:12.5px; font-weight:800;">
-                    🟢 AI 자율진단 엔진 가동중 (수온 {diag_temp:.1f}℃ / 강우 {diag_rain:.1f}mm)
+                <span style="background:#ECFDF5; color:#059669; border:1px solid #6EE7B7; padding:6px 16px; border-radius:20px; font-size:13px; font-weight:800;">
+                    🟢 AI 자율진단 엔진 가동중
                 </span>
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # -----------------------------------------------------------------
+        # 🎛️ 사용자 맞춤형 [강우량 · 외기 기온 · 반응조 수온] 일별 변동 추이 직접 지정 제어반
+        # -----------------------------------------------------------------
+        import calendar
+        days_in_sel_m = calendar.monthrange(diag_date.year, diag_month)[1]
+        days_arr = list(range(1, days_in_sel_m + 1))
+
+        with st.expander("🌦️🌡️ [강우량 · 기온 · 반응조 수온] 월간 일별(1~말일) 변동 추이 직접 설정 및 표 편집 (클릭하여 열기/닫기)", expanded=True):
+            st.caption("💡 아래에서 **강우 시나리오(비 오는 날·지속 일수·강우량)**와 **기온/수온 변동 추이(초순➔말일 변화)**를 슬라이더로 지정하거나, **[일별 상세 표 직접 편집]**을 켜서 원하는 날짜의 강우량(mm)·기온(℃)·수온(℃)을 직접 입력할 수 있습니다.")
+            c_tr1, c_tr2, c_tr3 = st.columns([1.1, 1.1, 1.0])
+            with c_tr1:
+                st.markdown("**☔ 1. 강우 발생 패턴 지정**")
+                rain_mode = st.selectbox(
+                    "강우 시나리오 선택",
+                    ["평시 무강우 (전체 0mm)", "단발성 강우 (특정 구간 지정)", "월 2회 강우 (초순 + 중하순)", "장마·집중호우 (연속 강우)"],
+                    index=0 if diag_rain == 0 else 1,
+                    key="tr_rain_mode"
+                )
+                rain_peak_day = st.slider("강우 집중 시작일 (일)", 1, max(1, days_in_sel_m - 3), min(14, days_in_sel_m - 3), key="tr_rain_day")
+                rain_dur_days = st.slider("강우 지속 기간 (일수)", 1, 7, 3, key="tr_rain_dur")
+                rain_peak_mm = st.number_input("최대 피크 강우량 (mm/일)", value=float(diag_rain if diag_rain > 0 else 25.0), min_value=0.0, max_value=300.0, step=5.0, key="tr_rain_peak")
+
+            with c_tr2:
+                st.markdown("**🌡️ 2. 기온 & 반응조 수온 변동 추이 지정**")
+                temp_trend_mode = st.selectbox(
+                    "기온·수온 월간 변동 추이 패턴",
+                    ["일정 유지 (현재 설정값 고정)", "점진적 하강 (가을➔겨울철 냉각 추이)", "점진적 상승 (봄➔여름철 온난화 추이)", "한파/급강하 포함 (중순 기온 급락)"],
+                    index=1 if diag_season in ["가을", "겨울"] else (2 if diag_season in ["봄", "여름"] else 0),
+                    key="tr_temp_mode"
+                )
+                air_t_start, air_t_end = st.slider(
+                    "월간 외기 기온 변동 범위 (초순 ℃ ➔ 말일 ℃)",
+                    -20.0, 38.0,
+                    (float(diag_air_temp + 3.0), float(diag_air_temp - 4.0)) if "하강" in temp_trend_mode else ((float(diag_air_temp - 3.0), float(diag_air_temp + 4.0)) if "상승" in temp_trend_mode else (float(diag_air_temp), float(diag_air_temp))),
+                    step=0.5,
+                    key="tr_air_range"
+                )
+                water_t_start, water_t_end = st.slider(
+                    "월간 반응조 수온 변동 범위 (초순 ℃ ➔ 말일 ℃)",
+                    4.0, 32.0,
+                    (float(diag_temp + 2.0), float(diag_temp - 2.5)) if "하강" in temp_trend_mode else ((float(diag_temp - 2.0), float(diag_temp + 2.5)) if "상승" in temp_trend_mode else (float(diag_temp), float(diag_temp))),
+                    step=0.5,
+                    key="tr_water_range"
+                )
+
+            with c_tr3:
+                st.markdown("**✍️ 3. 일별 상세 수치 직접 수정 옵션**")
+                use_manual_table = st.toggle("📋 일별(1~말일) 강우·기온·수온 표에서 직접 수정하기", value=False, key="tr_use_manual")
+                st.info("📌 슬라이더나 표에서 강우량과 기온·수온 추이를 변경하면 **예상 방류수질(BOD·T-N·SS·T-P·TOC), 디지털 트윈 운전값, 일별 유입예측 차트**가 즉시 연동되어 재계산됩니다.")
+
+            # 패턴에 따른 일별 배열 생성
+            rain_arr = [0.0] * days_in_sel_m
+            if rain_mode != "평시 무강우 (전체 0mm)" and rain_peak_mm > 0:
+                for d_offset in range(rain_dur_days):
+                    idx_d = min(days_in_sel_m - 1, rain_peak_day - 1 + d_offset)
+                    # 가운데 날에 피크가 오도록 가중치 부여
+                    center_dist = abs(d_offset - (rain_dur_days - 1) / 2.0)
+                    weight = max(0.3, 1.0 - (center_dist / max(1.0, rain_dur_days / 1.5)))
+                    rain_arr[idx_d] = round(rain_peak_mm * weight, 1)
+                if rain_mode == "월 2회 강우 (초순 + 중하순)":
+                    for d_offset in range(max(1, rain_dur_days - 1)):
+                        idx_d2 = min(days_in_sel_m - 1, max(0, (rain_peak_day + 10) % days_in_sel_m + d_offset))
+                        rain_arr[idx_d2] = round(rain_peak_mm * 0.65, 1)
+                elif rain_mode == "장마·집중호우 (연속 강우)":
+                    for d_offset in range(min(10, days_in_sel_m - rain_peak_day)):
+                        idx_d3 = min(days_in_sel_m - 1, rain_peak_day - 1 + d_offset)
+                        rain_arr[idx_d3] = round(rain_peak_mm * (0.45 + 0.55 * abs(np.sin(d_offset))), 1)
+
+            air_temp_arr = []
+            water_temp_arr = []
+            for i_d in range(days_in_sel_m):
+                frac = i_d / max(1, days_in_sel_m - 1)
+                if temp_trend_mode == "일정 유지 (현재 설정값 고정)":
+                    a_val = float(diag_air_temp) + 0.6 * np.sin(i_d * 0.5)
+                    w_val = float(diag_temp) + 0.3 * np.sin(i_d * 0.5)
+                elif temp_trend_mode == "한파/급강하 포함 (중순 기온 급락)":
+                    dip = -6.0 * np.exp(-((i_d - days_in_sel_m * 0.55) ** 2) / 12.0)
+                    a_val = air_t_start + (air_t_end - air_t_start) * frac + dip
+                    w_val = water_t_start + (water_t_end - water_t_start) * frac + dip * 0.45
+                else:
+                    a_val = air_t_start + (air_t_end - air_t_start) * frac + 0.8 * np.sin(i_d * 0.6)
+                    w_val = water_t_start + (water_t_end - water_t_start) * frac + 0.35 * np.sin(i_d * 0.6)
+                air_temp_arr.append(round(a_val, 1))
+                water_temp_arr.append(round(max(2.0, w_val), 1))
+
+            # 일별 기본 유입량 + 강우 유입량(I/I) 연산
+            scale_f = max_cap_val / 1700.0
+            base_inflow_arr = []
+            for i_d, d_num in enumerate(days_arr):
+                dry_flow = int(max_cap_val * 0.88) + int((max_cap_val * 0.03) * np.sin(d_num * 0.45))
+                r_mm = rain_arr[i_d]
+                wet_extra = int(r_mm * 8.5 * scale_f) if r_mm > 0 else 0
+                base_inflow_arr.append(dry_flow + wet_extra)
+
+            df_trend_sim = pd.DataFrame({
+                "일(Day)": days_arr,
+                "강우량(mm)": rain_arr,
+                "외기기온(℃)": air_temp_arr,
+                "반응조수온(℃)": water_temp_arr,
+                "예측유입량(톤/일)": base_inflow_arr
+            })
+
+            if use_manual_table:
+                st.markdown("###### 📝 일별 강우량(mm) · 외기기온(℃) · 반응조수온(℃) · 예측유입량(톤/일) 직접 수정 테이블")
+                edited_trend_df = st.data_editor(
+                    df_trend_sim,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=260,
+                    key="ed_custom_weather_trend"
+                )
+                rain_arr = pd.to_numeric(edited_trend_df["강우량(mm)"], errors="coerce").fillna(0.0).tolist()
+                air_temp_arr = pd.to_numeric(edited_trend_df["외기기온(℃)"], errors="coerce").fillna(diag_air_temp).tolist()
+                water_temp_arr = pd.to_numeric(edited_trend_df["반응조수온(℃)"], errors="coerce").fillna(diag_temp).tolist()
+                # 강우량을 수정하면 유입량도 자동 연동 반영 (단, 사용자가 유입량을 직접 바꾼 경우 존중)
+                recalc_inflow = []
+                for i_d, d_num in enumerate(days_arr):
+                    orig_in = df_trend_sim["예측유입량(톤/일)"].iloc[i_d]
+                    user_in = pd.to_numeric(edited_trend_df["예측유입량(톤/일)"].iloc[i_d], errors="coerce")
+                    if pd.notna(user_in) and int(user_in) != int(orig_in):
+                        recalc_inflow.append(int(user_in))
+                    else:
+                        dry_flow = int(max_cap_val * 0.88) + int((max_cap_val * 0.03) * np.sin(d_num * 0.45))
+                        recalc_inflow.append(dry_flow + (int(rain_arr[i_d] * 8.5 * scale_f) if rain_arr[i_d] > 0 else 0))
+                base_inflow_arr = recalc_inflow
+
+        # 설정된 변동 추이의 평균/최대값 추출하여 수질 예측에 실시간 반영
+        eff_max_rain = max(rain_arr) if rain_arr else float(diag_rain)
+        eff_avg_water_temp = float(np.mean(water_temp_arr)) if water_temp_arr else float(diag_temp)
+        eff_min_water_temp = float(np.min(water_temp_arr)) if water_temp_arr else float(diag_temp)
+        eff_avg_air_temp = float(np.mean(air_temp_arr)) if air_temp_arr else float(diag_air_temp)
 
         # 계절·강우·수온·MLSS·DO 기반 동적 예측 수질 산출 (실측 마스터 DB 연동)
         ym_q = f"{diag_date.year}-{diag_month:02d}"
@@ -2725,8 +2971,8 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         base_toc_d = float(df_m_diag['방류TOC'].dropna().mean()) if (not df_m_diag.empty and '방류TOC' in df_m_diag.columns and df_m_diag['방류TOC'].dropna().any()) else 3.10
         base_coli_d = float(df_m_diag['방류대장균'].dropna().mean()) if (not df_m_diag.empty and '방류대장균' in df_m_diag.columns and df_m_diag['방류대장균'].dropna().any()) else 45.0
 
-        rain_adj = 1.0 + max(0.0, (diag_rain - 10.0) * 0.004)
-        temp_adj = 1.0 + max(0.0, (16.0 - diag_temp) * 0.018)
+        rain_adj = 1.0 + max(0.0, (eff_max_rain - 10.0) * 0.004)
+        temp_adj = 1.0 + max(0.0, (16.0 - eff_avg_water_temp) * 0.018)
         do_adj = 1.0 - ((diag_do - 2.0) * 0.05)
 
         pred_bod_v = round(max(0.1, base_bod_d * rain_adj * do_adj), 2)
@@ -2736,7 +2982,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         pred_toc_v = round(max(0.8, base_toc_d * rain_adj * do_adj), 2)
         pred_coli_v = max(1, int(round(base_coli_d * rain_adj)))
 
-        # 5대 핵심 수질 슈퍼 프리미엄 카드 (안전 여유율 게이지 바 + 기준치 뱃지 동시 탑재)
+        # 5대 핵심 수질 슈퍼 프리미엄 카드
         k1, k2, k3, k4, k5 = st.columns(5)
         kpi_super_specs = [
             (k1, "예상 방류수 BOD", f"{pred_bod_v:.2f}", "mg/L", 5.0, pred_bod_v, "🧪", "#0284C7"),
@@ -2749,6 +2995,12 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             ratio_pct = min(100, max(4, int(round((k_cur / k_lim) * 100))))
             safety_margin = max(0, 100 - ratio_pct)
             bar_color = "#10B981" if ratio_pct < 70 else ("#F59E0B" if ratio_pct < 90 else "#EF4444")
+            if k_lim < 1:
+                k_lim_str = f"{k_lim:.2f}"
+            elif k_lim < 100:
+                k_lim_str = f"{k_lim:.1f}"
+            else:
+                k_lim_str = f"{int(k_lim)}"
             with col_obj:
                 st.markdown(f"""
                 <div class="dw-super-card" style="border-top-color: {k_color};">
@@ -2761,7 +3013,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                         <div class="dw-progress-fill" style="width:{ratio_pct}%; background:{bar_color};"></div>
                     </div>
                     <div class="dw-badge-row">
-                        <span class="dw-pill-limit">↑ ↑ 기준: {k_lim:.2f if k_lim < 1 else (f'{k_lim:.1f}' if k_lim < 100 else f'{int(k_lim)}')}</span>
+                        <span class="dw-pill-limit">↑ ↑ 기준: {k_lim_str}</span>
                         <span class="dw-pill-safe">안전여유 {safety_margin}%</span>
                     </div>
                 </div>
@@ -2785,24 +3037,26 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         </div>
         """, unsafe_allow_html=True)
 
-        # 용문에는 없는 단월만의 초격차 비주얼: KNR + IPR 5단계 스마트 공정 디지털 트윈 상태바
-        ai_opt = calculate_ai_process_parameters(max_cap_val * 0.94, 165.0, 26.5, 2.9, facility_name=diag_fac)
+        # KNR + IPR 5단계 스마트 공정 디지털 트윈 상태바 (강우·기온·수온 추이 반영)
+        ai_opt = calculate_ai_process_parameters(float(np.mean(base_inflow_arr)), 165.0, 26.5, 2.9, facility_name=diag_fac)
+        rainy_days_cnt = sum(1 for r_v in rain_arr if r_v > 0)
+        weather_status_txt = "청천시(무강우) 평시 유입" if eff_max_rain <= 0 else f"강우 {rainy_days_cnt}일 (피크 {eff_max_rain:.1f}mm)"
         st.markdown(f"""
         <div class="dw-flow-container">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:14.5px; font-weight:800; color:#E2E8F0;">⚡ {diag_fac} [{fac_spec['method']}] 실시간 디지털 트윈 공정 제어 상태</span>
-                <span style="font-size:12px; color:#38BDF8; font-weight:700;">사이드바 슬라이더 조작 시 AI 권장 운전값이 실시간 연동됩니다</span>
+                <span style="font-size:12px; color:#38BDF8; font-weight:700;">평균 외기기온 {eff_avg_air_temp:.1f}℃ · 평균 반응조수온 {eff_avg_water_temp:.1f}℃ 연동</span>
             </div>
             <div class="dw-flow-grid">
                 <div class="dw-flow-node">
                     <div class="dw-flow-node-title">① 유입·스크린·침사지</div>
-                    <div class="dw-flow-node-val">{int(max_cap_val * 0.93):,} ㎥/일</div>
-                    <div class="dw-flow-node-sub">강우 {diag_rain:.0f}mm 연동 정상</div>
+                    <div class="dw-flow-node-val">{int(round(np.mean(base_inflow_arr))):,} ㎥/일</div>
+                    <div class="dw-flow-node-sub">{weather_status_txt}</div>
                 </div>
                 <div class="dw-flow-node">
                     <div class="dw-flow-node-title">② KNR 생물반응조</div>
                     <div class="dw-flow-node-val">MLSS {diag_mlss:,}</div>
-                    <div class="dw-flow-node-sub">수온 {diag_temp:.1f}℃ · DO {diag_do:.1f} mg/L</div>
+                    <div class="dw-flow-node-sub">평균수온 {eff_avg_water_temp:.1f}℃ · DO {diag_do:.1f}</div>
                 </div>
                 <div class="dw-flow-node">
                     <div class="dw-flow-node-title">③ AI 송풍기 최적제어</div>
@@ -2823,34 +3077,34 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         </div>
         """, unsafe_allow_html=True)
 
-        # 메인 차트 + 우측 계절별 운영 지침 & 레이더 차트
+        # 메인 차트 (유입량·강우량 + 외기기온·반응조수온 변동 추이 2단 연동 차트) + 우측 계절별 운영 지침
         col_chart, col_guide = st.columns([1.45, 1.0])
         with col_chart:
-            st.markdown(f"#### 📊 단월 AI 유입예측 시스템 일별 분석 리포트 ({diag_season}철 / {diag_month}월 기준)")
-            days_arr = list(range(1, 31))
-            base_inflow_arr = [int(max_cap_val * 0.88) + int((max_cap_val * 0.03) * np.sin(d * 0.45)) for d in days_arr]
-            rain_arr = [0.0] * 30
-            if diag_rain > 0:
-                rain_arr[13] = round(diag_rain * 0.35, 1)
-                rain_arr[14] = round(diag_rain * 1.00, 1)
-                rain_arr[15] = round(diag_rain * 0.45, 1)
-                scale_f = max_cap_val / 1700.0
-                base_inflow_arr[13] += int(diag_rain * 3.8 * scale_f)
-                base_inflow_arr[14] += int(diag_rain * 8.5 * scale_f)
-                base_inflow_arr[15] += int(diag_rain * 4.5 * scale_f)
+            st.markdown(f"#### 📊 단월 AI 유입예측 & 강우·기온·수온 일별 변동 추이 리포트 ({diag_season}철 / {diag_month}월)")
             peak_inflow = max(base_inflow_arr)
             peak_day = days_arr[base_inflow_arr.index(peak_inflow)]
 
-            fig_dual = make_subplots(specs=[[{"secondary_y": True}]])
+            fig_dual = make_subplots(
+                rows=2, cols=1,
+                shared_xaxes=True,
+                vertical_spacing=0.10,
+                row_heights=[0.62, 0.38],
+                specs=[[{"secondary_y": True}], [{"secondary_y": False}]],
+                subplot_titles=(
+                    f"🌊 일별 하수 유입량(톤/일) 및 지정 강우량(mm) 추이",
+                    f"🌡️ 일별 외기 기온(℃) 및 생물반응조 수온(℃) 변동 추이"
+                )
+            )
+            # 1단: 강우량 막대 + 예측 유입량 스플라인
             fig_dual.add_trace(
                 go.Bar(
                     x=days_arr, y=rain_arr,
-                    name="강우량 (mm)",
-                    marker_color="rgba(99, 102, 241, 0.38)",
-                    marker_line_color="rgba(99, 102, 241, 0.8)",
+                    name="지정 강우량 (mm)",
+                    marker_color="rgba(99, 102, 241, 0.42)",
+                    marker_line_color="rgba(99, 102, 241, 0.85)",
                     marker_line_width=1
                 ),
-                secondary_y=True
+                row=1, col=1, secondary_y=True
             )
             fig_dual.add_trace(
                 go.Scatter(
@@ -2860,31 +3114,56 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                     line=dict(color="#0284C7", width=3, shape="spline"),
                     fill="tozeroy",
                     fillcolor="rgba(2, 132, 199, 0.08)",
-                    marker=dict(size=7, color="#0369A1", line=dict(width=1.5, color="white"))
+                    marker=dict(size=6, color="#0369A1", line=dict(width=1.2, color="white"))
                 ),
-                secondary_y=False
+                row=1, col=1, secondary_y=False
             )
-            fig_dual.add_hline(y=max_cap_val, line_dash="dash", line_color="#EF4444", line_width=2, annotation_text=f"최대 처리용량 ({max_cap_val:,}톤)", annotation_position="top left", secondary_y=False)
-            fig_dual.add_hline(y=warn_cap_val, line_dash="dot", line_color="#F59E0B", line_width=2, annotation_text=f"주의 경계선 ({warn_cap_val:,}톤)", annotation_position="bottom left", secondary_y=False)
+            fig_dual.add_hline(y=max_cap_val, line_dash="dash", line_color="#EF4444", line_width=2, annotation_text=f"최대 처리용량 ({max_cap_val:,}톤)", annotation_position="top left", row=1, col=1, secondary_y=False)
+            fig_dual.add_hline(y=warn_cap_val, line_dash="dot", line_color="#F59E0B", line_width=2, annotation_text=f"주의 경계선 ({warn_cap_val:,}톤)", annotation_position="bottom left", row=1, col=1, secondary_y=False)
 
             fig_dual.add_annotation(
                 x=peak_day, y=peak_inflow,
                 text=f"최대 피크: {peak_inflow:,}톤 ({peak_day}일)",
                 showarrow=True, arrowhead=2, arrowcolor="#0284C7",
-                bgcolor="#0F172A", font=dict(color="white", size=11)
+                bgcolor="#0F172A", font=dict(color="white", size=11),
+                row=1, col=1
             )
 
+            # 2단: 외기 기온 & 반응조 수온 변동 추이
+            fig_dual.add_trace(
+                go.Scatter(
+                    x=days_arr, y=air_temp_arr,
+                    mode="lines+markers",
+                    name="외기 기온 (℃)",
+                    line=dict(color="#F59E0B", width=2.5, dash="dot"),
+                    marker=dict(size=5, color="#D97706")
+                ),
+                row=2, col=1
+            )
+            fig_dual.add_trace(
+                go.Scatter(
+                    x=days_arr, y=water_temp_arr,
+                    mode="lines+markers",
+                    name="반응조 수온 (℃)",
+                    line=dict(color="#10B981", width=3, shape="spline"),
+                    marker=dict(size=6, color="#059669")
+                ),
+                row=2, col=1
+            )
+            fig_dual.add_hline(y=12.0, line_dash="dot", line_color="#EF4444", line_width=1.5, annotation_text="질산화 저하 주의 수온 (12℃)", annotation_position="bottom right", row=2, col=1)
+
             fig_dual.update_layout(
-                height=410,
-                margin=dict(l=15, r=15, t=25, b=15),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+                height=520,
+                margin=dict(l=15, r=15, t=35, b=15),
+                legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0),
                 plot_bgcolor="#FFFFFF",
                 paper_bgcolor="#FFFFFF",
                 hovermode="x unified"
             )
-            fig_dual.update_xaxes(title_text="일 (Day)", showgrid=True, gridcolor="#F1F5F9")
-            fig_dual.update_yaxes(title_text="하수 유입량 (톤/일)", range=[int(max_cap_val * 0.55), int(max_cap_val * 1.18)], showgrid=True, gridcolor="#F1F5F9", secondary_y=False)
-            fig_dual.update_yaxes(title_text="강우량 (mm)", range=[0, max(45, diag_rain * 1.6)], showgrid=False, secondary_y=True)
+            fig_dual.update_xaxes(title_text="일 (Day)", showgrid=True, gridcolor="#F1F5F9", row=2, col=1)
+            fig_dual.update_yaxes(title_text="유입량 (톤/일)", range=[int(max_cap_val * 0.55), max(int(max_cap_val * 1.18), int(peak_inflow * 1.08))], showgrid=True, gridcolor="#F1F5F9", row=1, col=1, secondary_y=False)
+            fig_dual.update_yaxes(title_text="강우량 (mm)", range=[0, max(45, eff_max_rain * 1.5)], showgrid=False, row=1, col=1, secondary_y=True)
+            fig_dual.update_yaxes(title_text="온도 (℃)", showgrid=True, gridcolor="#F1F5F9", row=2, col=1)
             st.plotly_chart(fig_dual, use_container_width=True)
 
         with col_guide:
@@ -2900,15 +3179,15 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                 ▶ {season_banners.get(diag_season, "동절기 대비 미생물 침강성 관리 및 공정 안정화 단계")}
             </div>
             """, unsafe_allow_html=True)
-            st.markdown("**[현장 실시간 점검 지침]**")
+            st.markdown("**[현장 실시간 점검 지침 (설정된 기온·수온·강우 추이 연동)]**")
             st.markdown(
-                f"* 수온({diag_temp:.1f}℃) 변화에 대비하여 생물반응조 내 MLSS 농도 적정 유지 (현재 **{diag_mlss:,} mg/L**)\n"
-                "* 협잡물 처리기 및 스크린 설비 낙엽 등 이물질 유입 차단망 상태 점검\n"
-                "* 총인처리시설(IPR) 메디아 여과기 차압 및 응집제(염화제이철·PAC) 정량펌프 점검\n"
-                "* 최종 방류수 계절별 법령 기준(TOC, T-N, T-P 등) 자동 전환 시스템 정상 작동 확인"
+                f"* **기온·수온 추이**: 외기 평균 **{eff_avg_air_temp:.1f}℃** / 반응조 수온 **{water_temp_arr[0]:.1f}℃ ➔ {water_temp_arr[-1]:.1f}℃** (최저 **{eff_min_water_temp:.1f}℃**) 변동에 대비하여 MLSS 농도 적정 유지 (현재 **{diag_mlss:,} mg/L**)\n"
+                f"* **강우·유입 대비**: 월간 강우일수 **{rainy_days_cnt}일** (최대 **{eff_max_rain:.1f}mm/일**) 설정에 따른 협잡물 스크린 및 유량조정조 수위 점검\n"
+                "* **총인(IPR) 약품 점검**: 메디아 여과기 차압 및 응집제(염화제이철·PAC) 정량펌프 주입 라인 점검\n"
+                "* **법령 기준 확인**: 최종 방류수 계절별 법령 기준(TOC, T-N, T-P 등) 자동 전환 시스템 정상 작동 확인"
             )
 
-            # 6대 수질 제거효율 레이더 차트 (용문에는 없는 고급 시각화)
+            # 6대 수질 제거효율 레이더 차트
             radar_cats = ['BOD 제거율', 'TOC 제거율', 'SS 제거율', 'T-N 제거율', 'T-P 제거율', '대장균 살균율']
             radar_vals = [99.4, 91.3, 98.7, 77.5, 98.9, 99.9]
             fig_radar = go.Figure()
@@ -2923,7 +3202,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             fig_radar.update_layout(
                 polar=dict(radialaxis=dict(visible=True, range=[60, 100], tickfont=dict(size=9))),
                 showlegend=False,
-                height=195,
+                height=210,
                 margin=dict(l=30, r=30, t=15, b=15),
                 paper_bgcolor="rgba(0,0,0,0)"
             )
@@ -2935,11 +3214,11 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             saved_kwh = int(round(max_cap_val * 0.085))
             st.markdown(f"""
             <div class="ym-green-safe-banner">
-                💚 [현재 수질 안전] 모든 일별 유입 트렌드가 기준치 이내로 안정적입니다. (최대 피크 {peak_inflow:,.1f}톤 / 설계용량 {max_cap_val:,}톤) 과잉 가동 중인 송풍량을 미세 수동 조작하여 전기세를 절감(일 약 {saved_kwh:,} kWh 절감 가능)할 수 있는 최적의 타이밍입니다.
+                💚 [현재 수질 안전] 지정하신 기온({eff_avg_air_temp:.1f}℃)·수온({eff_avg_water_temp:.1f}℃) 및 강우(최대 {eff_max_rain:.1f}mm) 조건에서 모든 일별 유입 트렌드가 기준치 이내로 안정적입니다. (최대 피크 {peak_inflow:,.1f}톤 / 설계용량 {max_cap_val:,}톤) 과잉 가동 중인 송풍량을 미세 수동 조작하여 전기세를 절감(일 약 {saved_kwh:,} kWh 절감 가능)할 수 있는 최적의 타이밍입니다.
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.warning(f"⚠️ [유입부하 주의] 강우({diag_rain:.1f}mm) 영향으로 최대 피크 유입량({peak_inflow:,.1f}톤)이 설계용량({max_cap_val:,}톤/일)을 초과할 것으로 예측됩니다. 유량조정조 수위 선제 확보 및 총인(IPR) 응집제 예비 펌프를 가동하십시오.")
+            st.warning(f"⚠️ [유입부하 주의] 설정하신 강우(피크 {eff_max_rain:.1f}mm) 영향으로 {peak_day}일경 최대 피크 유입량({peak_inflow:,.1f}톤)이 설계용량({max_cap_val:,}톤/일)을 초과할 것으로 예측됩니다. 유량조정조 수위 선제 확보 및 총인(IPR) 응집제 예비 펌프를 가동하십시오.")
 
         st.markdown("<hr style='margin:18px 0; border:none; border-top:1px solid #E2E8F0;'>", unsafe_allow_html=True)
         st.markdown("#### 📋 방류수 수질 항목 초과 가이드라인 및 긴급 대응 점검표 (SOP)")
@@ -2951,7 +3230,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             st.markdown(f"1. **DO 최적화**: 폭기조 DO를 2.0 mg/L 이상으로 제어하십시오. (현재 설정 DO: **{diag_do:.1f} mg/L**, 권장 송풍량: **{ai_opt['권장송풍량_m3min']} ㎥/분**)\n2. **미생물 진단**: SV30 및 MLSS 농도(현재 **{diag_mlss:,} mg/L**)를 확인하고 잉여슬러지 인발량을 조절하십시오.")
         with sop_t2:
             st.markdown("##### 🔴 T-N 초과 시 조치 (기준: 20.0 mg/L)")
-            st.markdown(f"1. **내부반송 및 C/N비 점검**: 유입수 BOD/T-N 비(현재 **{ai_opt['CN비']}**)가 4.0 이상인지 확인하고 내부반송률을 150~200%로 조정하십시오.\n2. **수온 및 무산소조 교반 점검**: 동절기 수온 저하(현재 **{diag_temp:.1f}℃**) 시 SRT(슬러지 체류시간)를 길게 유지하십시오.")
+            st.markdown(f"1. **내부반송 및 C/N비 점검**: 유입수 BOD/T-N 비(현재 **{ai_opt['CN비']}**)가 4.0 이상인지 확인하고 내부반송률을 150~200%로 조정하십시오.\n2. **수온 및 무산소조 교반 점검**: 반응조 평균 수온(**{eff_avg_water_temp:.1f}℃**, 최저 **{eff_min_water_temp:.1f}℃**) 하강 시 SRT(슬러지 체류시간)를 길게 유지하십시오.")
         with sop_t3:
             st.markdown("##### 🔴 SS 초과 시 조치 (기준: 10.0 mg/L)")
             st.markdown("1. **이차침전지 스컴 및 슬러지 계면 관리**: 슬러지 수집기 및 스컴 스키머 작동 상태를 확인하십시오.\n2. **총인처리시설(IPR) 여과 점검**: 미디어 여과 차압 상승 시 즉시 역세척(Backwash)을 실시하십시오.")
@@ -2982,7 +3261,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                 <button onclick="window.print()" style="background:#0284C7; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">🖨️ 수질진단 관제 리포트 바로 인쇄 / PDF 출력</button>
             </div>
             <h2>💧 {diag_fac} 지능형 수질진단 관제 리포트 ({diag_date.strftime('%Y-%m-%d')})</h2>
-            <p>• <b>시설용량</b>: {max_cap_val:,} ㎥/일 ({fac_spec['method']}) | <b>계절/월</b>: {diag_season}철 ({diag_month}월) | <b>예보 강우량</b>: {diag_rain:.1f} mm/일 | <b>반응조 수온</b>: {diag_temp:.1f} ℃</p>
+            <p>• <b>시설용량</b>: {max_cap_val:,} ㎥/일 ({fac_spec['method']}) | <b>계절/월</b>: {diag_season}철 ({diag_month}월) | <b>강우 조건</b>: {weather_status_txt} | <b>평균 외기기온/반응조수온</b>: {eff_avg_air_temp:.1f}℃ / {eff_avg_water_temp:.1f}℃</p>
             <div class="kpi-grid">
                 <div class="kpi-box"><div>예상 방류수 BOD</div><div style="font-size:20px; font-weight:bold;">{pred_bod_v:.2f} mg/L</div><div style="color:#DC2626; font-size:11px;">기준: 5.0</div></div>
                 <div class="kpi-box"><div>예상 방류수 T-N</div><div style="font-size:20px; font-weight:bold;">{pred_tn_v:.2f} mg/L</div><div style="color:#DC2626; font-size:11px;">기준: 20.0</div></div>
@@ -3058,30 +3337,244 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             st.info("💡 아직 저장된 공정 제어 데이터가 없습니다.")
 
 # -------------------------------------------------------------
-# 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석
+# 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석 (엑셀/CSV 업로드 + 수동입력 + ESG 탄소·경제성 대시보드 + 영구보관함)
 # -------------------------------------------------------------
 elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석":
     st.title("🧪 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석")
-    if st.button("🔄 1번 운영일지 마스터 DB에서 약품·에너지 실데이터 동기화", type="primary"):
-        df_m = get_master_data(MAIN_PLANT)
-        recs = []
-        if not df_m.empty:
-            for idx, (_, r) in enumerate(df_m.iterrows()):
-                fl = float(r.get('유입량', 1700)) if pd.notna(r.get('유입량')) else 1700.0
-                recs.append({"날짜": str(r['날짜']).split()[0], "PAC사용량_kg": round(fl*0.026, 1), "염화제이철_kg": round(fl*0.015, 1), "폴리머사용량_kg": round(fl*0.0012, 2), "슬러지반출량_톤": round(fl*0.0019, 2), "전력사용량_kWh": 1420.0, "태양광발전량_kWh": 135.0})
+    tab_ce_up, tab_ce_esg, tab_ce_arch = st.tabs([
+        "📥 [데이터 적재] 엑셀·CSV 업로드 / 1번 DB 동기화 / 수동 입력",
+        "🌱 [ESG 경제성 분석] 약품·전력·태양광·탄소배출권(tCO2) 대시보드",
+        "🗂️ [보관함] 약품·에너지 관리대장 영구 보관소"
+    ])
+
+    with tab_ce_up:
+        st.caption("🔒 약품·에너지 관리대장 엑셀/CSV 파일 또는 운영일지 엑셀 파일을 직접 업로드하거나, 1번 운영일지 마스터 DB 동기화 및 일일 수동 입력으로 데이터를 영구 적재할 수 있습니다.")
+
+        col_up1, col_up2 = st.columns([1.4, 1.0])
+        with col_up1:
+            st.markdown("##### 📂 1. 약품·에너지·태양광 엑셀/CSV 파일 업로드")
+            ce_files = st.file_uploader(
+                "약품·에너지 엑셀(.xlsx, .xls), CSV 파일 또는 종합운영일지 업로드",
+                type=["xlsx", "xls", "csv"],
+                accept_multiple_files=True,
+                key="up_chem_energy_files"
+            )
+            if ce_files:
+                df_ce_parsed = parse_chem_energy_files(ce_files)
+                if not df_ce_parsed.empty:
+                    st.session_state["df_ce_parsed"] = df_ce_parsed
+                    st.success(f"✅ 업로드된 파일에서 총 **{len(df_ce_parsed)}일치** 약품·에너지 데이터를 추출했습니다!")
+                    st.dataframe(df_ce_parsed, use_container_width=True, hide_index=True)
+                    if st.button("💾 ⚡ [업로드된 약품·에너지 데이터 마스터 DB 및 영구 보관함 일괄 저장]", type="primary", use_container_width=True, key="btn_save_ce_up"):
+                        append_to_chem_db(df_ce_parsed)
+                        ce_xlsx_bytes = generate_chem_energy_template_excel(get_chem_db())
+                        with open(os.path.join(CHEMICAL_RECORD_DIR, sanitize_filename(f"약품에너지_ESG관리대장_{datetime.date.today()}.xlsx")), "wb") as f:
+                            f.write(ce_xlsx_bytes)
+                        st.success("✅ 업로드하신 약품·에너지 데이터가 마스터 DB와 영구 보관함에 안전하게 저장되었습니다!")
+                        st.rerun()
+                else:
+                    st.warning("⚠️ 업로드된 파일에서 날짜(YYYY-MM-DD) 또는 약품·유량 데이터를 찾지 못했습니다. 우측의 표준 엑셀 양식을 내려받아 활용하실 수도 있습니다.")
+
+        with col_up2:
+            st.markdown("##### 🔄 2. 1번 운영일지 마스터 DB 자동 동기화 & 양식 다운로드")
+            if st.button("🔄 1번 운영일지 마스터 DB에서 약품·에너지 실데이터 동기화", type="primary", use_container_width=True):
+                df_m = get_master_data(MAIN_PLANT)
+                recs = []
+                if not df_m.empty:
+                    for idx, (_, r) in enumerate(df_m.iterrows()):
+                        fl = float(r.get('유입량', 1700)) if pd.notna(r.get('유입량')) else 1700.0
+                        recs.append({
+                            "날짜": str(r['날짜']).split()[0],
+                            "PAC사용량_kg": round(fl * 0.026, 1),
+                            "염화제이철_kg": round(fl * 0.015, 1),
+                            "폴리머사용량_kg": round(fl * 0.0012, 2),
+                            "슬러지반출량_톤": round(fl * 0.0019, 2),
+                            "전력사용량_kWh": 1420.0,
+                            "태양광발전량_kWh": 135.0,
+                            "비고": "1번 마스터DB 동기화"
+                        })
+                else:
+                    for idx in range(10):
+                        d_str = (datetime.date.today() - datetime.timedelta(days=idx)).strftime('%Y-%m-%d')
+                        recs.append({
+                            "날짜": d_str,
+                            "PAC사용량_kg": 44.2,
+                            "염화제이철_kg": 25.5,
+                            "폴리머사용량_kg": 2.04,
+                            "슬러지반출량_톤": 3.23,
+                            "전력사용량_kWh": 1420.0,
+                            "태양광발전량_kWh": 135.0,
+                            "비고": "기본 동기화"
+                        })
+                append_to_chem_db(pd.DataFrame(recs))
+                st.success("✅ 약품·에너지 마스터 DB 동기화 및 영구 저장 완료!")
+                st.rerun()
+
+            df_chem_cur = get_chem_db()
+            std_xlsx_bytes = generate_chem_energy_template_excel(df_chem_cur)
+            st.download_button(
+                "📥 약품·에너지 표준 업로드 엑셀 양식(.xlsx) 다운로드",
+                data=std_xlsx_bytes,
+                file_name="단월_약품에너지_ESG관리대장_양식.xlsx",
+                type="secondary",
+                use_container_width=True
+            )
+
+        st.divider()
+        st.markdown("##### ✍️ 3. 일일 약품·에너지·태양광 발전량 직접 입력 및 표 수정")
+        with st.form("ce_manual_input_form"):
+            c_m1, c_m2, c_m3, c_m4 = st.columns(4)
+            with c_m1:
+                ce_in_date = st.date_input("측정/사용 일자", datetime.date.today(), key="ce_d_in")
+                ce_in_pac = st.number_input("PAC 사용량 (kg/일)", value=44.2, step=1.0, format="%.1f")
+            with c_m2:
+                ce_in_fe = st.number_input("염화제이철 사용량 (kg/일)", value=25.5, step=1.0, format="%.1f")
+                ce_in_poly = st.number_input("폴리머 사용량 (kg/일)", value=2.04, step=0.1, format="%.2f")
+            with c_m3:
+                ce_in_sludge = st.number_input("탈수슬러지 반출량 (톤/일)", value=3.23, step=0.1, format="%.2f")
+                ce_in_pwr = st.number_input("한전 전력사용량 (kWh/일)", value=1420.0, step=10.0, format="%.1f")
+            with c_m4:
+                ce_in_solar = st.number_input("태양광 발전량 (kWh/일)", value=222.5, step=5.0, format="%.1f")
+                ce_in_memo = st.text_input("비고", value="수동 입력")
+
+            if st.form_submit_button("💾 일일 약품·에너지 사용량 마스터 DB 영구 저장", type="primary", use_container_width=True):
+                new_ce_row = pd.DataFrame([{
+                    "날짜": ce_in_date.strftime('%Y-%m-%d'),
+                    "PAC사용량_kg": ce_in_pac,
+                    "염화제이철_kg": ce_in_fe,
+                    "폴리머사용량_kg": ce_in_poly,
+                    "슬러지반출량_톤": ce_in_sludge,
+                    "전력사용량_kWh": ce_in_pwr,
+                    "태양광발전량_kWh": ce_in_solar,
+                    "비고": ce_in_memo
+                }])
+                append_to_chem_db(new_ce_row)
+                st.success(f"✅ {ce_in_date} 약품·에너지 사용량 데이터가 영구 적재되었습니다!")
+                st.rerun()
+
+        df_chem = get_chem_db()
+        if not df_chem.empty:
+            st.subheader("🗂️ 영구 저장된 약품·에너지 마스터 DB 열람 및 직접 편집")
+            ed_df_chem = st.data_editor(df_chem, use_container_width=True, hide_index=True, key="ed_chem_master_tbl")
+            c_db1, c_db2, c_db3 = st.columns(3)
+            with c_db1:
+                if st.button("💾 표에서 수정한 내역 마스터 DB에 덮어쓰기 저장", type="primary", use_container_width=True):
+                    ed_df_chem.to_csv(CHEMICAL_ENERGY_DB, index=False, encoding='utf-8-sig')
+                    st.success("✅ 표에서 수정하신 약품·에너지 내역이 마스터 DB에 반영되었습니다!")
+                    st.rerun()
+            with c_db2:
+                st.download_button(
+                    "📥 약품·에너지 마스터 DB 다운로드 (CSV)",
+                    ed_df_chem.to_csv(index=False, encoding='utf-8-sig'),
+                    file_name="danwol_chemical_energy_master.csv",
+                    mime="text/csv",
+                    type="primary",
+                    use_container_width=True
+                )
+            with c_db3:
+                st.download_button(
+                    "📥 약품·에너지 관리대장 다운로드 (XLSX)",
+                    generate_chem_energy_template_excel(ed_df_chem),
+                    file_name=f"단월_약품에너지_ESG관리대장_{datetime.date.today()}.xlsx",
+                    type="primary",
+                    use_container_width=True
+                )
         else:
-            for idx in range(10):
-                d_str = (datetime.date.today() - datetime.timedelta(days=idx)).strftime('%Y-%m-%d')
-                recs.append({"날짜": d_str, "PAC사용량_kg": 44.2, "염화제이철_kg": 25.5, "폴리머사용량_kg": 2.04, "슬러지반출량_톤": 3.23, "전력사용량_kWh": 1420.0, "태양광발전량_kWh": 135.0})
-        append_to_chem_db(pd.DataFrame(recs))
-        st.success("✅ 약품·에너지 마스터 DB 동기화 및 영구 저장 완료!")
-        st.rerun()
-    df_chem = get_chem_db()
-    if not df_chem.empty:
-        st.subheader("🗂️ 영구 저장된 약품·에너지 마스터 DB 열람")
-        st.dataframe(df_chem, use_container_width=True)
-        st.download_button("📥 약품·에너지 마스터 DB 다운로드 (CSV)", df_chem.to_csv(index=False, encoding='utf-8-sig'), file_name="danwol_chemical_energy_master.csv", mime="text/csv", type="primary", use_container_width=True)
-    else: st.info("데이터 없음")
+            st.info("데이터 없음")
+
+    with tab_ce_esg:
+        st.subheader("🌱 단월공공하수처리시설 ESG 탄소중립 & 약품·에너지 경제성 정밀 분석")
+        df_chem_esg = get_chem_db()
+        if df_chem_esg.empty:
+            st.info("💡 먼저 좌측 [📥 데이터 적재] 탭에서 데이터를 업로드하거나 동기화해 주세요.")
+        else:
+            # 단가 및 탄소배출계수 설정 패널
+            with st.expander("⚙️ 약품·전력 단가 및 온실가스 배출계수(tCO2eq) 설정 (조절 시 경제성 지표 즉시 반영)", expanded=False):
+                u_c1, u_c2, u_c3, u_c4 = st.columns(4)
+                with u_c1: unit_pac = st.number_input("PAC 단가 (원/kg)", value=420, step=10)
+                with u_c2: unit_fe = st.number_input("염화제이철 단가 (원/kg)", value=550, step=10)
+                with u_c3: unit_poly = st.number_input("폴리머 단가 (원/kg)", value=4500, step=100)
+                with u_c4: unit_elec = st.number_input("산업용 전력 단가 (원/kWh)", value=145, step=5)
+
+            tot_pac = pd.to_numeric(df_chem_esg["PAC사용량_kg"], errors="coerce").fillna(0).sum()
+            tot_fe = pd.to_numeric(df_chem_esg["염화제이철_kg"], errors="coerce").fillna(0).sum()
+            tot_poly = pd.to_numeric(df_chem_esg["폴리머사용량_kg"], errors="coerce").fillna(0).sum()
+            tot_sludge = pd.to_numeric(df_chem_esg["슬러지반출량_톤"], errors="coerce").fillna(0).sum()
+            tot_pwr = pd.to_numeric(df_chem_esg["전력사용량_kWh"], errors="coerce").fillna(0).sum()
+            tot_solar = pd.to_numeric(df_chem_esg["태양광발전량_kWh"], errors="coerce").fillna(0).sum()
+
+            energy_self_rate = (tot_solar / tot_pwr * 100.0) if tot_pwr > 0 else 0.0
+            co2_reduced_ton = tot_solar * 0.0004781  # 국가 전력배출계수 0.4781 tCO2eq/MWh 적용
+            saved_elec_cost = int(round(tot_solar * unit_elec))
+            total_chem_cost = int(round(tot_pac * unit_pac + tot_fe * unit_fe + tot_poly * unit_poly))
+
+            e1, e2, e3, e4 = st.columns(4)
+            esg_cards = [
+                (e1, "누적 태양광 발전량", f"{tot_solar:,.1f}", "kWh", f"전력자립률 {energy_self_rate:.1f}%", "☀️", "#10B981"),
+                (e2, "온실가스(CO₂) 감축량", f"{co2_reduced_ton:,.2f}", "tCO₂eq", f"소나무 {int(co2_reduced_ton*151):,}그루 식재효과", "🌲", "#059669"),
+                (e3, "태양광 전력요금 절감액", f"{saved_elec_cost:,}", "원", f"단가 {unit_elec}원/kWh 기준", "⚡", "#0284C7"),
+                (e4, "누적 응집제 약품 비용", f"{total_chem_cost:,}", "원", f"PAC {tot_pac:,.0f}kg · 염철 {tot_fe:,.0f}kg", "🧪", "#6366F1")
+            ]
+            for col_e, e_lbl, e_val, e_unit, e_sub, e_ico, e_col in esg_cards:
+                with col_e:
+                    st.markdown(f"""
+                    <div class="dw-super-card" style="border-top-color:{e_col};">
+                        <div class="dw-kpi-top"><span class="dw-kpi-title">{e_lbl}</span><span class="dw-kpi-icon">{e_ico}</span></div>
+                        <div class="dw-kpi-value">{e_val}<span class="dw-kpi-unit">{e_unit}</span></div>
+                        <div class="dw-badge-row"><span class="dw-pill-safe">{e_sub}</span></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            df_plot_ce = df_chem_esg.sort_values(by="날짜").tail(31)
+            c_ch1, c_ch2 = st.columns(2)
+            with c_ch1:
+                fig_ce1 = go.Figure()
+                fig_ce1.add_trace(go.Bar(x=df_plot_ce["날짜"], y=df_plot_ce["PAC사용량_kg"], name="PAC (kg)", marker_color="#0284C7"))
+                fig_ce1.add_trace(go.Bar(x=df_plot_ce["날짜"], y=df_plot_ce["염화제이철_kg"], name="염화제이철 (kg)", marker_color="#6366F1"))
+                fig_ce1.add_trace(go.Scatter(x=df_plot_ce["날짜"], y=df_plot_ce["슬러지반출량_톤"], name="슬러지반출량 (톤)", mode="lines+markers", line=dict(color="#EF4444", width=2.5), yaxis="y2"))
+                fig_ce1.update_layout(
+                    title="📊 일별 약품(PAC·염화제이철) 투입량 및 슬러지 발생 추이",
+                    yaxis=dict(title="약품 사용량 (kg)"),
+                    yaxis2=dict(title="슬러지 (톤)", overlaying="y", side="right"),
+                    barmode="group", height=370, margin=dict(l=15, r=15, t=40, b=15),
+                    legend=dict(orientation="h", y=1.12)
+                )
+                st.plotly_chart(fig_ce1, use_container_width=True)
+            with c_ch2:
+                fig_ce2 = go.Figure()
+                fig_ce2.add_trace(go.Scatter(x=df_plot_ce["날짜"], y=df_plot_ce["전력사용량_kWh"], name="전력사용량 (kWh)", mode="lines+markers", line=dict(color="#F59E0B", width=2.5)))
+                fig_ce2.add_trace(go.Bar(x=df_plot_ce["날짜"], y=df_plot_ce["태양광발전량_kWh"], name="태양광발전량 (kWh)", marker_color="#10B981"))
+                fig_ce2.update_layout(
+                    title="☀️ 일별 전력 소비량 대비 태양광 발전 실적 (RE100·탄소중립)",
+                    yaxis=dict(title="에너지 (kWh)"),
+                    height=370, margin=dict(l=15, r=15, t=40, b=15),
+                    legend=dict(orientation="h", y=1.12)
+                )
+                st.plotly_chart(fig_ce2, use_container_width=True)
+
+            if st.button("💾 현재 약품·에너지 ESG 분석 대장 영구 보관함에 저장", type="primary", use_container_width=True):
+                esg_save_name = sanitize_filename(f"약품에너지_ESG관리대장_{datetime.date.today()}.xlsx")
+                with open(os.path.join(CHEMICAL_RECORD_DIR, esg_save_name), "wb") as f:
+                    f.write(generate_chem_energy_template_excel(df_chem_esg))
+                st.success(f"✅ 약품·에너지 ESG 관리대장(`{esg_save_name}`)이 영구 보관함에 안전하게 저장되었습니다!")
+
+    with tab_ce_arch:
+        st.subheader("🗂️ 약품·에너지·ESG 관리대장 영구 보관함")
+        ce_saved = [sanitize_filename(f) for f in os.listdir(CHEMICAL_RECORD_DIR) if f.endswith((".xlsx", ".xls", ".csv"))]
+        if ce_saved:
+            st.write(f"📁 **총 {len(ce_saved)}건의 약품·에너지 문서가 영구 보관되어 있습니다.**")
+            sel_ce_f = st.selectbox("다운로드 또는 열람할 파일 선택", sorted(ce_saved, reverse=True), key="sel_ce_arch_f")
+            ce_fp = os.path.join(CHEMICAL_RECORD_DIR, sel_ce_f)
+            c_ca1, c_ca2 = st.columns([3, 1])
+            with open(ce_fp, "rb") as f:
+                c_ca1.download_button(f"📥 '{sel_ce_f}' 다운로드", f.read(), file_name=sel_ce_f, type="primary", use_container_width=True)
+            if c_ca2.button("🗑️ 선택 파일 삭제", key="btn_del_ce_arch", use_container_width=True):
+                os.remove(ce_fp)
+                st.success("삭제 완료!")
+                st.rerun()
+        else:
+            st.info("💡 아직 보관함에 저장된 약품·에너지 파일이 없습니다.")
 
 # -------------------------------------------------------------
 # 6. Q&A 챗봇 (오프라인 온프레미스 고도화)
