@@ -77,7 +77,7 @@ st.markdown("""
         transform: translateY(-1px) !important;
     }
 
-    /* 💧 단월 슈퍼 프리미엄 글래스모피즘 KPI 카드 (용문 상위호환) */
+    /* 💧 단월(DANWOL) KNR+IPR 스마트 스카다(SCADA) & 통합 매트릭스 전용 CSS */
     .dw-super-card {
         background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
         border: 1px solid #E2E8F0;
@@ -217,15 +217,73 @@ st.markdown("""
         font-weight: 600;
     }
 
-    /* 기존 호환 클래스 */
-    .ym-kpi-card { background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 14px; padding: 16px 18px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04); }
-    .ym-kpi-label { font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 6px; }
-    .ym-kpi-val { font-size: 30px; font-weight: 800; color: #0F172A; line-height: 1.15; margin-bottom: 8px; }
-    .ym-pill-red { display: inline-block; background: #FEE2E2; color: #DC2626; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
-    .ym-pill-green { display: inline-block; background: #DCFCE7; color: #15803D; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
-    .ym-blue-banner { background: #EFF6FF; border-left: 5px solid #2563EB; border-radius: 10px; padding: 14px 18px; color: #1E3A8A; font-size: 14.5px; font-weight: 700; margin: 14px 0; }
-    .ym-green-safe-banner { background: linear-gradient(90deg, #ECFDF5 0%, #D1FAE5 100%); border: 1px solid #6EE7B7; border-left: 6px solid #10B981; border-radius: 12px; padding: 16px 20px; color: #065F46; font-size: 14.5px; font-weight: 800; margin: 12px 0; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08); }
-    .ym-yellow-warn-banner { background: linear-gradient(90deg, #FEFCE8 0%, #FEF3C7 100%); border: 1px solid #FDE68A; border-left: 5px solid #F59E0B; border-radius: 12px; padding: 13px 18px; color: #92400E; font-size: 14px; font-weight: 800; margin-bottom: 12px; }
+    /* 🛰️ 단월(DANWOL) 7개소 멀티 스카다(SCADA) 매트릭스 & 엔지니어링 패널 */
+    .dw-scada-header {
+        background: linear-gradient(135deg, #090D16 0%, #0F172A 50%, #1E293B 100%);
+        border: 1px solid #334155;
+        border-left: 6px solid #38BDF8;
+        border-radius: 16px;
+        padding: 20px 26px;
+        color: #F8FAFC;
+        margin-bottom: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 12px 28px -6px rgba(15, 23, 42, 0.35);
+    }
+    .dw-matrix-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .dw-matrix-card {
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        border-top: 3px solid #0284C7;
+        border-radius: 12px;
+        padding: 12px 10px;
+        color: #E2E8F0;
+        text-align: center;
+        transition: all 0.2s ease;
+    }
+    .dw-matrix-card.active-fac {
+        background: linear-gradient(180deg, #0C4A6E 0%, #0F172A 100%);
+        border: 1px solid #38BDF8;
+        border-top: 4px solid #38BDF8;
+        box-shadow: 0 0 16px rgba(56, 189, 248, 0.28);
+        transform: translateY(-2px);
+    }
+    .dw-eng-panel {
+        background: #FFFFFF;
+        border: 1px solid #CBD5E1;
+        border-top: 4px solid #0F172A;
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+        height: 100%;
+    }
+    .dw-eng-tag {
+        display: inline-block;
+        background: #F1F5F9;
+        color: #0F172A;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 3px 8px;
+        border-radius: 6px;
+        margin-bottom: 6px;
+    }
+    .dw-eng-metric {
+        font-size: 25px;
+        font-weight: 900;
+        color: #0369A1;
+        margin: 4px 0;
+    }
+    .dw-eng-sub {
+        font-size: 12px;
+        color: #475569;
+        font-weight: 600;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -3424,540 +3482,348 @@ elif menu == "📡 3. TMS 수질 2·4·6·8시간 후 AI 예측 & 신호등 실�
             st.info("💡 현재 보관된 TMS 데이터가 없습니다. [입력] 탭에서 직접 저장하거나 업로드한 데이터만 이곳에 보관됩니다.")
 
 # -------------------------------------------------------------
-# 4. 공정 제어 (지능형 수질진단 관제 대시보드 [슈퍼 프리미엄 에디션] + 시설별 AI 공정 연산 및 보관함)
+# 4. 단월(DANWOL) KNR+IPR 본장 & 소규모 6개소 통합 SCADA 엔지니어링 관제 센터 (독자 설계)
 # -------------------------------------------------------------
 elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진단":
-    # 사이드바 실시간 공정 제어 패널 (단월 본장 + 소규모 6개소 전환 및 강우·기온·수온 변동 추이 직접 지정 시뮬레이터 탑재)
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🎛️ 실시간 공정 제어 패널")
-    diag_fac = st.sidebar.selectbox("🏢 관제 대상 처리장 선택", [MAIN_PLANT] + SMALL_PLANTS, index=0, key="ym_fac_sel")
-    diag_date = st.sidebar.date_input("📅 진단 기준일 선택", datetime.date(2026, 11, 3), key="ym_diag_date")
-    st.sidebar.markdown("##### 🌦️ 날씨 · 기온 · 강우 변동 추이 설정")
-    diag_season = st.sidebar.selectbox("현재 계절", ["봄", "여름", "가을", "겨울"], index=2, key="ym_season")
-    diag_month = st.sidebar.slider("분석 대상 월 (3개년 통계 연동)", 1, 12, int(diag_date.month), key="ym_month")
-    diag_rain = st.sidebar.number_input("기준 예보 강우량 (mm/일)", value=0.00, min_value=0.00, step=1.0, format="%.2f", key="ym_rain")
-    diag_air_temp = st.sidebar.number_input("현재 외기 기온 (℃)", value=11.00, min_value=-25.0, max_value=40.0, step=0.5, format="%.1f", key="ym_air_temp")
-    st.sidebar.markdown("##### 🧪 현재 수질 & 운전 인자")
-    diag_temp = st.sidebar.number_input("반응조 현재 수온 (℃)", value=14.00, step=0.5, format="%.2f", key="ym_temp")
-    diag_mlss = st.sidebar.slider("생물반응조 MLSS (mg/L)", 2000, 5000, 3650, step=50, key="ym_mlss")
-    diag_do = st.sidebar.slider("호기조 DO 농도 (mg/L)", 0.8, 4.0, 2.1, step=0.1, key="ym_do")
+    st.sidebar.markdown("### 🛰️ 단월 SCADA 제어 파라미터")
+    dw_sel_fac = st.sidebar.selectbox("🏛️ 집중 진단 시설 선택", [MAIN_PLANT] + SMALL_PLANTS, index=0, key="dw_scada_fac")
+    dw_ref_date = st.sidebar.date_input("📆 관제 기준일자", datetime.date(2026, 10, 30), key="dw_scada_date")
+    dw_sel_month = st.sidebar.selectbox("📊 실측 연동 월 선택", list(range(1, 13)), index=int(dw_ref_date.month) - 1, key="dw_scada_month")
 
-    fac_spec = PLANT_DESIGN_SPECS.get(diag_fac, PLANT_DESIGN_SPECS[MAIN_PLANT])
+    st.sidebar.markdown("##### 🧬 KNR 생물반응조 & 총인(IPR) 설정")
+    dw_mlss_a = st.sidebar.slider("반응조 #A지 MLSS (mg/L)", 2200, 5200, 3620, step=50, key="dw_mlss_a")
+    dw_mlss_b = st.sidebar.slider("반응조 #B지 MLSS (mg/L)", 2200, 5200, 3710, step=50, key="dw_mlss_b")
+    dw_do_set = st.sidebar.slider("호기조 목표 DO (mg/L)", 1.0, 3.8, 2.0, step=0.1, key="dw_do_set")
+    dw_rtn_rate = st.sidebar.slider("내부반송률 (%)", 100, 300, 180, step=10, key="dw_rtn_rate")
+    dw_ipr_diff_p = st.sidebar.slider("IPR 총인 메디아 여과 차압 (kPa)", 5.0, 45.0, 14.5, step=0.5, key="dw_ipr_dp")
+
+    fac_spec = PLANT_DESIGN_SPECS.get(dw_sel_fac, PLANT_DESIGN_SPECS[MAIN_PLANT])
     max_cap_val = int(fac_spec["cap"])
-    warn_cap_val = int(round(max_cap_val * 0.91))
+    avg_mlss_ab = int(round((dw_mlss_a + dw_mlss_b) / 2.0))
 
-    tab_diag, tab_p1, tab_p2 = st.tabs([
-        "🎯 지능형 수질진단 관제 대시보드 (계절·강우·기온·디지털트윈 연동)",
-        "⚙️ 시설별 AI 공정 연산 및 진단",
-        "🗂️ 공정 제어 영구 보관함 (전체 시설 열람)"
+    tab_scada, tab_knr_sim, tab_p1, tab_p2 = st.tabs([
+        "🛰️ 1. 단월 7개소(본장+소규모6) 통합 SCADA & KNR+IPR 정밀관제",
+        "🎛️ 2. 인버터(Hz)·약注펌프·기온/강우 AI 자율제어 시뮬레이터",
+        "⚙️ 3. 시설별 일별 AI 최적 운전조건 연산·적재",
+        "🗂️ 4. 공정 제어 마스터 DB 보관함"
     ])
 
-    with tab_diag:
-        # 상단 프리미엄 헤더 바 (우측 배지는 깔끔하게 '🟢 AI 자율진단 엔진 가동중'으로 표시)
+    with tab_scada:
+        # 1) 상단 다크 네이비 SCADA 통합 관제 헤더
         st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #E2E8F0; padding-bottom:14px; margin-bottom:20px;">
+        <div class="dw-scada-header">
             <div>
-                <div style="display:inline-block; background:#E0F2FE; color:#0369A1; font-weight:800; font-size:12px; padding:4px 12px; border-radius:20px; margin-bottom:6px;">
-                    AI DIGITAL TWIN SIMULATOR · {fac_spec['method']} 공법
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+                    <span style="background:#0284C7; color:white; font-weight:800; font-size:11.5px; padding:3px 10px; border-radius:6px;">DANWOL SMART SCADA v3.6</span>
+                    <span style="color:#38BDF8; font-size:12.5px; font-weight:700;">양평공사 환경2팀 · 단월 통합관제소 (총 설계용량 2,078 ㎥/일)</span>
                 </div>
-                <h2 style="margin:0; font-size:28px; font-weight:900; color:#0F172A; letter-spacing:-0.5px;">
-                    지능형 수질진단 관제 대시보드 <span style="color:#0284C7; font-size:20px;">({diag_fac})</span>
+                <h2 style="margin:0; font-size:24px; font-weight:900; color:#FFFFFF; letter-spacing:-0.5px;">
+                    🛰️ {dw_sel_fac} [{fac_spec['method']}] 엔지니어링 정밀 진단 보드
                 </h2>
-                <div style="color:#64748B; font-size:14px; font-weight:500; margin-top:4px;">
-                    양평군 {diag_fac} 맞춤형 인공지능 시뮬레이터 시스템입니다. (일일 최대 시설 용량: <b>{max_cap_val:,}톤</b> | 기준일: {diag_date.strftime('%Y-%m-%d')})
+                <div style="color:#94A3B8; font-size:13px; margin-top:4px;">
+                    설계용량: <b style="color:#E2E8F0;">{max_cap_val:,} ㎥/일</b> | 약품체계: <b style="color:#38BDF8;">{fac_spec['chem_type']}</b> | 관제 기준: <b style="color:#E2E8F0;">{dw_ref_date.strftime('%Y-%m')} ({dw_sel_month}월 실측 마스터DB 연동)</b>
                 </div>
             </div>
             <div style="text-align:right;">
-                <span style="background:#ECFDF5; color:#059669; border:1px solid #6EE7B7; padding:6px 16px; border-radius:20px; font-size:13px; font-weight:800;">
-                    🟢 AI 자율진단 엔진 가동중
-                </span>
+                <div style="background:rgba(16, 185, 129, 0.18); color:#34D399; border:1px solid rgba(52, 211, 153, 0.45); padding:6px 14px; border-radius:8px; font-size:12.5px; font-weight:800;">
+                    ⚡ KNR+IPR 자율제어 루프 정상
+                </div>
+                <div style="font-size:11.5px; color:#94A3B8; margin-top:5px;">증설(1,500㎥/일) 연계 시운전 모니터링 병행중</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # -----------------------------------------------------------------
-        # 🎛️ 사용자 맞춤형 [강우량 · 외기 기온 · 반응조 수온] 일별 변동 추이 직접 지정 제어반
-        # -----------------------------------------------------------------
+        # 2) 단월 권역 7개소 (본장 + 소규모 6개소) 실시간 멀티 상태 매트릭스 보드
+        st.markdown("##### 🏛️ 단월 권역 7개 하수처리시설(본장 1,700톤 + 소규모 6개소 378톤) 통합 가동 매트릭스")
+        ym_prefix_scada = f"{dw_ref_date.year}-{dw_sel_month:02d}"
+        matrix_html_cards = ""
+        all_7_plants = [MAIN_PLANT] + SMALL_PLANTS
+        for p_name in all_7_plants:
+            p_spec = PLANT_DESIGN_SPECS[p_name]
+            df_p_m = get_master_data(p_name, f"{ym_prefix_scada}-01", f"{ym_prefix_scada}-31")
+            if df_p_m.empty:
+                df_p_m = get_master_data(p_name)
+            p_flow = float(df_p_m['방류량'].dropna().mean()) if (not df_p_m.empty and '방류량' in df_p_m.columns and df_p_m['방류량'].dropna().any()) else p_spec['cap'] * 0.75
+            p_bod = float(df_p_m['방류BOD'].dropna().mean()) if (not df_p_m.empty and '방류BOD' in df_p_m.columns and df_p_m['방류BOD'].dropna().any()) else 1.5
+            p_tp = float(df_p_m['방류TP'].dropna().mean()) if (not df_p_m.empty and '방류TP' in df_p_m.columns and df_p_m['방류TP'].dropna().any()) else 0.05
+            load_pct = round((p_flow / p_spec['cap']) * 100, 1)
+            short_name = "단월본장" if p_name == MAIN_PLANT else p_name
+            active_cls = "active-fac" if p_name == dw_sel_fac else ""
+            badge_col = "#34D399" if load_pct <= 95 else "#FBBF24"
+            matrix_html_cards += f"""
+            <div class="dw-matrix-card {active_cls}">
+                <div style="font-size:12px; font-weight:800; color:#38BDF8; margin-bottom:2px;">{short_name}</div>
+                <div style="font-size:10px; color:#94A3B8; margin-bottom:6px;">{p_spec['method']} ({int(p_spec['cap'])}톤)</div>
+                <div style="font-size:16px; font-weight:900; color:#FFFFFF;">{p_flow:,.1f} <span style="font-size:10px; font-weight:500;">㎥/일</span></div>
+                <div style="font-size:10.5px; color:{badge_col}; font-weight:700; margin:3px 0;">가동률 {load_pct}%</div>
+                <div style="font-size:10px; color:#CBD5E1; border-top:1px solid #1E293B; padding-top:4px; margin-top:4px;">
+                    BOD <b>{p_bod:.1f}</b> · T-P <b>{p_tp:.2f}</b>
+                </div>
+            </div>
+            """
+        st.markdown(f'<div class="dw-matrix-grid">{matrix_html_cards}</div>', unsafe_allow_html=True)
+
+        # 선택된 시설의 실측 데이터 로드 및 엔지니어링 지표 연산
+        df_sel_m = get_master_data(dw_sel_fac, f"{ym_prefix_scada}-01", f"{ym_prefix_scada}-31")
+        if df_sel_m.empty:
+            df_sel_m = get_master_data(dw_sel_fac)
+
+        in_flow_v = float(df_sel_m['유입량'].dropna().mean()) if (not df_sel_m.empty and '유입량' in df_sel_m.columns and df_sel_m['유입량'].dropna().any()) else max_cap_val * 0.92
+        out_flow_v = float(df_sel_m['방류량'].dropna().mean()) if (not df_sel_m.empty and '방류량' in df_sel_m.columns and df_sel_m['방류량'].dropna().any()) else in_flow_v * 0.89
+        reuse_v = float(df_sel_m['재이용수'].dropna().mean()) if (not df_sel_m.empty and '재이용수' in df_sel_m.columns and df_sel_m['재이용수'].dropna().any()) else max(0.0, in_flow_v - out_flow_v)
+        w_temp_v = float(df_sel_m['수온'].dropna().mean()) if (not df_sel_m.empty and '수온' in df_sel_m.columns and df_sel_m['수온'].dropna().any()) else 16.5
+
+        in_bod_v = float(df_sel_m['유입BOD'].dropna().mean()) if (not df_sel_m.empty and '유입BOD' in df_sel_m.columns and df_sel_m['유입BOD'].dropna().any()) else 168.0
+        in_toc_v = float(df_sel_m['유입TOC'].dropna().mean()) if (not df_sel_m.empty and '유입TOC' in df_sel_m.columns and df_sel_m['유입TOC'].dropna().any()) else 35.5
+        in_ss_v = float(df_sel_m['유입SS'].dropna().mean()) if (not df_sel_m.empty and '유입SS' in df_sel_m.columns and df_sel_m['유입SS'].dropna().any()) else 162.0
+        in_tn_v = float(df_sel_m['유입TN'].dropna().mean()) if (not df_sel_m.empty and '유입TN' in df_sel_m.columns and df_sel_m['유입TN'].dropna().any()) else 26.8
+        in_tp_v = float(df_sel_m['유입TP'].dropna().mean()) if (not df_sel_m.empty and '유입TP' in df_sel_m.columns and df_sel_m['유입TP'].dropna().any()) else 2.95
+
+        out_bod_v = float(df_sel_m['방류BOD'].dropna().mean()) if (not df_sel_m.empty and '방류BOD' in df_sel_m.columns and df_sel_m['방류BOD'].dropna().any()) else 0.7
+        out_toc_v = float(df_sel_m['방류TOC'].dropna().mean()) if (not df_sel_m.empty and '방류TOC' in df_sel_m.columns and df_sel_m['방류TOC'].dropna().any()) else 3.1
+        out_ss_v = float(df_sel_m['방류SS'].dropna().mean()) if (not df_sel_m.empty and '방류SS' in df_sel_m.columns and df_sel_m['방류SS'].dropna().any()) else 2.1
+        out_tn_v = float(df_sel_m['방류TN'].dropna().mean()) if (not df_sel_m.empty and '방류TN' in df_sel_m.columns and df_sel_m['방류TN'].dropna().any()) else 6.01
+        out_tp_v = float(df_sel_m['방류TP'].dropna().mean()) if (not df_sel_m.empty and '방류TP' in df_sel_m.columns and df_sel_m['방류TP'].dropna().any()) else 0.032
+        out_coli_v = float(df_sel_m['방류대장균'].dropna().mean()) if (not df_sel_m.empty and '방류대장균' in df_sel_m.columns and df_sel_m['방류대장균'].dropna().any()) else 85.0
+
+        ai_calc = calculate_ai_process_parameters(in_flow_v, in_bod_v, in_tn_v, in_tp_v, facility_name=dw_sel_fac)
+        fm_ratio = round((in_flow_v * in_bod_v) / max(1.0, (avg_mlss_ab * (max_cap_val * 0.45))), 3)
+        reuse_rate_pct = round((reuse_v / max(1.0, in_flow_v)) * 100.0, 1) if dw_sel_fac == MAIN_PLANT else 0.0
+        backwash_status = "정상 여과중 (역세척 여유)" if dw_ipr_diff_p < 25.0 else ("⚠️ 조기 역세척(Backwash) 권장" if dw_ipr_diff_p < 35.0 else "🔴 즉시 역세척 및 메디아 점검 필요")
+
+        # 3) 단월 고유의 4대 핵심 공정 모듈 엔지니어링 패널 (KNR 생물반응조 / IPR 총인처리 / 송풍·반송 제어 / 장내 재이용수·방류 부하)
+        st.markdown(f"##### 🔬 [{dw_sel_fac}] 4대 핵심 공정 엔지니어링 진단 패널")
+        ep1, ep2, ep3, ep4 = st.columns(4)
+        with ep1:
+            st.markdown(f"""
+            <div class="dw-eng-panel" style="border-top-color:#0284C7;">
+                <span class="dw-eng-tag">MODULE 01 · 생물반응조 (KNR)</span>
+                <div style="font-size:13px; font-weight:800; color:#0F172A;">유입 C/N비 & MLSS (#A·#B지)</div>
+                <div class="dw-eng-metric">C/N {ai_calc['CN비']} <span style="font-size:13px; color:#15803D;">(적정 ≥4.0)</span></div>
+                <div class="dw-eng-sub">• #A지 MLSS: <b>{dw_mlss_a:,}</b> / #B지: <b>{dw_mlss_b:,} mg/L</b></div>
+                <div class="dw-eng-sub">• F/M비: <b>{fm_ratio} kgBOD/kgMLSS·d</b></div>
+                <div class="dw-eng-sub">• 반응조 평균수온: <b>{w_temp_v:.1f} ℃</b> (탈질 안정)</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with ep2:
+            st.markdown(f"""
+            <div class="dw-eng-panel" style="border-top-color:#6366F1;">
+                <span class="dw-eng-tag">MODULE 02 · 총인처리설비 (IPR)</span>
+                <div style="font-size:13px; font-weight:800; color:#0F172A;">응집제 주입량 & 메디아 여과차압</div>
+                <div class="dw-eng-metric">T-P {out_tp_v:.3f} <span style="font-size:13px; color:#64748B;">mg/L (협약 0.2)</span></div>
+                <div class="dw-eng-sub">• 권장 염화제이철(38%): <b>{ai_calc['권장염화제이철_L']} L/일</b></div>
+                <div class="dw-eng-sub">• 권장 종침 PAC(17%): <b>{ai_calc['종침전PAC주입량_L']} L/일</b></div>
+                <div class="dw-eng-sub">• 여과기 차압: <b>{dw_ipr_diff_p:.1f} kPa</b> ({backwash_status})</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with ep3:
+            st.markdown(f"""
+            <div class="dw-eng-panel" style="border-top-color:#10B981;">
+                <span class="dw-eng-tag">MODULE 03 · 포기·내부반송 제어</span>
+                <div style="font-size:13px; font-weight:800; color:#0F172A;">AI 송풍량 & 질산화/탈질 밸런스</div>
+                <div class="dw-eng-metric">{ai_calc['권장송풍량_m3min']} <span style="font-size:14px;">㎥/min ({ai_calc['송풍기가동대수']}대)</span></div>
+                <div class="dw-eng-sub">• 호기조 DO 설정: <b>{dw_do_set:.1f} mg/L</b> / 반송률: <b>{dw_rtn_rate}%</b></div>
+                <div class="dw-eng-sub">• 유입 T-N <b>{in_tn_v:.1f}</b> ➔ 방류 T-N <b>{out_tn_v:.2f} mg/L</b></div>
+                <div class="dw-eng-sub">• 질소 제거율: <b style="color:#059669;">{round((1 - out_tn_v/max(1, in_tn_v))*100, 1)}%</b> 달성</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with ep4:
+            st.markdown(f"""
+            <div class="dw-eng-panel" style="border-top-color:#F59E0B;">
+                <span class="dw-eng-tag">MODULE 04 · 수계 부하 & 재이용수</span>
+                <div style="font-size:13px; font-weight:800; color:#0F172A;">장내 재이용(세척수) & 방류수질</div>
+                <div class="dw-eng-metric">{reuse_v:,.0f} <span style="font-size:14px;">㎥/일 (회수율 {reuse_rate_pct}%)</span></div>
+                <div class="dw-eng-sub">• 일평균 유입 <b>{in_flow_v:,.0f}</b> / 방류 <b>{out_flow_v:,.0f} ㎥/일</b></div>
+                <div class="dw-eng-sub">• 방류 BOD <b>{out_bod_v:.1f}</b> · TOC <b>{out_toc_v:.1f}</b> · SS <b>{out_ss_v:.1f}</b></div>
+                <div class="dw-eng-sub">• UV소독 총대장균군: <b>{int(round(out_coli_v)):,} 개/mL</b></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 4) 단월 독자 차트 섹션: 좌측 [일별 유입·방류·재이용수 수지 및 총인(T-P) 제거 추이] + 우측 [오염물질 일일 부하량(kg/일) 제거 분석]
+        c_dw_ch1, c_dw_ch2 = st.columns([1.45, 1.0])
+        with c_dw_ch1:
+            st.markdown(f"##### 📈 [{dw_sel_fac}] {dw_sel_month}월 실측 유량 수지(유입·방류·재이용) 및 T-P/T-N 고도처리 추이")
+            if not df_sel_m.empty and len(df_sel_m) > 1:
+                df_p_chart = df_sel_m.sort_values('날짜').tail(31)
+                fig_scada = make_subplots(
+                    rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.10, row_heights=[0.55, 0.45],
+                    specs=[[{"secondary_y": True}], [{"secondary_y": True}]],
+                    subplot_titles=("🌊 일별 유입량 · 방류량 · 장내 재이용수량 (㎥/일)", "🧪 생물반응조+IPR 거친 후 방류 T-N (mg/L) 및 T-P (mg/L) 실측 추이")
+                )
+                fig_scada.add_trace(go.Scatter(x=df_p_chart['날짜'], y=df_p_chart['유입량'], name="유입량(㎥/일)", mode="lines+markers", line=dict(color="#0284C7", width=2.5)), row=1, col=1, secondary_y=False)
+                fig_scada.add_trace(go.Scatter(x=df_p_chart['날짜'], y=df_p_chart['방류량'], name="방류량(㎥/일)", mode="lines", line=dict(color="#10B981", width=2, dash="dot")), row=1, col=1, secondary_y=False)
+                if '재이용수' in df_p_chart.columns and df_p_chart['재이용수'].notna().any():
+                    fig_scada.add_trace(go.Bar(x=df_p_chart['날짜'], y=df_p_chart['재이용수'], name="재이용수(㎥/일)", marker_color="rgba(245, 158, 11, 0.45)"), row=1, col=1, secondary_y=True)
+                fig_scada.add_hline(y=max_cap_val, line_dash="dash", line_color="#EF4444", annotation_text=f"설계용량({max_cap_val:,}㎥/일)", row=1, col=1, secondary_y=False)
+
+                if '방류TN' in df_p_chart.columns:
+                    fig_scada.add_trace(go.Scatter(x=df_p_chart['날짜'], y=df_p_chart['방류TN'], name="방류 T-N(mg/L)", mode="lines+markers", line=dict(color="#6366F1", width=2.2)), row=2, col=1, secondary_y=False)
+                if '방류TP' in df_p_chart.columns:
+                    fig_scada.add_trace(go.Scatter(x=df_p_chart['날짜'], y=df_p_chart['방류TP'], name="방류 T-P(mg/L)", mode="lines+markers", line=dict(color="#EC4899", width=2.2)), row=2, col=1, secondary_y=True)
+                fig_scada.update_layout(height=470, margin=dict(l=15, r=15, t=35, b=15), hovermode="x unified", legend=dict(orientation="h", y=1.08))
+                st.plotly_chart(fig_scada, use_container_width=True)
+            else:
+                st.info("선택된 기간의 실측 데이터가 부족합니다.")
+
+        with c_dw_ch2:
+            st.markdown("##### ⚖️ 일일 오염물질 유입부하 vs 방류부하 저감량 (kg/일)")
+            bod_in_kg = round(in_flow_v * in_bod_v * 0.001, 1)
+            bod_out_kg = round(out_flow_v * out_bod_v * 0.001, 2)
+            toc_in_kg = round(in_flow_v * in_toc_v * 0.001, 1)
+            toc_out_kg = round(out_flow_v * out_toc_v * 0.001, 2)
+            ss_in_kg = round(in_flow_v * in_ss_v * 0.001, 1)
+            ss_out_kg = round(out_flow_v * out_ss_v * 0.001, 2)
+            tn_in_kg = round(in_flow_v * in_tn_v * 0.001, 1)
+            tn_out_kg = round(out_flow_v * out_tn_v * 0.001, 2)
+            tp_in_kg = round(in_flow_v * in_tp_v * 0.001, 2)
+            tp_out_kg = round(out_flow_v * out_tp_v * 0.001, 3)
+
+            df_load_compare = pd.DataFrame([
+                {"항목": "BOD 부하", "유입부하(kg/일)": bod_in_kg, "방류부하(kg/일)": bod_out_kg, "일일제거량(kg/일)": round(bod_in_kg - bod_out_kg, 1), "제거율(%)": f"{round((1 - bod_out_kg/max(0.01, bod_in_kg))*100, 1)}%"},
+                {"항목": "TOC 부하", "유입부하(kg/일)": toc_in_kg, "방류부하(kg/일)": toc_out_kg, "일일제거량(kg/일)": round(toc_in_kg - toc_out_kg, 1), "제거율(%)": f"{round((1 - toc_out_kg/max(0.01, toc_in_kg))*100, 1)}%"},
+                {"항목": "SS 부하", "유입부하(kg/일)": ss_in_kg, "방류부하(kg/일)": ss_out_kg, "일일제거량(kg/일)": round(ss_in_kg - ss_out_kg, 1), "제거율(%)": f"{round((1 - ss_out_kg/max(0.01, ss_in_kg))*100, 1)}%"},
+                {"항목": "T-N 부하", "유입부하(kg/일)": tn_in_kg, "방류부하(kg/일)": tn_out_kg, "일일제거량(kg/일)": round(tn_in_kg - tn_out_kg, 1), "제거율(%)": f"{round((1 - tn_out_kg/max(0.01, tn_in_kg))*100, 1)}%"},
+                {"항목": "T-P 부하", "유입부하(kg/일)": tp_in_kg, "방류부하(kg/일)": tp_out_kg, "일일제거량(kg/일)": round(tp_in_kg - tp_out_kg, 2), "제거율(%)": f"{round((1 - tp_out_kg/max(0.001, tp_in_kg))*100, 1)}%"},
+            ])
+            fig_load = go.Figure()
+            fig_load.add_trace(go.Bar(x=df_load_compare["항목"], y=df_load_compare["유입부하(kg/일)"], name="유입 오염부하(kg/일)", marker_color="#94A3B8", text=df_load_compare["유입부하(kg/일)"], textposition="auto"))
+            fig_load.add_trace(go.Bar(x=df_load_compare["항목"], y=df_load_compare["일일제거량(kg/일)"], name="KNR+IPR 제거부하(kg/일)", marker_color="#0284C7", text=df_load_compare["제거율(%)"], textposition="auto"))
+            fig_load.update_layout(barmode="group", height=250, margin=dict(l=10, r=10, t=25, b=10), legend=dict(orientation="h", y=1.15))
+            st.plotly_chart(fig_load, use_container_width=True)
+            st.dataframe(df_load_compare, use_container_width=True, hide_index=True)
+
+        # 5) 단월 현장 맞춤형 설비·공정 기술진단 매뉴얼 (본장 KNR+IPR 및 소규모 6개소 현장 설비 기준)
+        st.divider()
+        st.markdown("##### 🛠️ 단월 현장 설비별 엔지니어링 점검 & 트러블슈팅 프로토콜")
+        dw_sop1, dw_sop2, dw_sop3, dw_sop4 = st.tabs([
+            "🧬 ① KNR 생물반응조 (#A·#B지) & DO/반송 제어",
+            "⚡ ② 총인처리시설 (IPR 메디아 여과·워시박스·공기압축기)",
+            "🧪 ③ 응집제 (PAC·염화제이철·폴리머) & 원심탈수기",
+            "🏡 ④ 소규모 6개소 (산음·삼가리·진목·몰운·단월마을·당의) 순회점검"
+        ])
+        with dw_sop1:
+            st.markdown(
+                f"* **#A지 / #B지 MLSS 균등 배분 관리**: 현재 #A지 **{dw_mlss_a:,} mg/L**, #B지 **{dw_mlss_b:,} mg/L** (편차 **{abs(dw_mlss_a - dw_mlss_b):,} mg/L**). 양 계열 편차가 300 mg/L 이상 벌어질 경우 분배조 게이트 및 반송슬러지 밸브 개도율을 조정하십시오.\n"
+                f"* **수온 변화에 따른 C/N비 및 질산화율 제어**: 현재 유입 C/N비는 **{ai_calc['CN비']}**이며 반응조 수온은 **{w_temp_v:.1f}℃**입니다. 동절기 수온 12℃ 이하 저하 시 잉여슬러지 인발량을 줄여 SRT(슬러지 체류시간)를 18일 이상으로 확보하고 내부반송률(현재 **{dw_rtn_rate}%**)을 유지하십시오."
+            )
+        with dw_sop2:
+            st.markdown(
+                f"* **IPR 총인처리 메디아 여과기 및 역세척 관리**: 현재 여과 차압은 **{dw_ipr_diff_p:.1f} kPa** ({backwash_status})입니다. 워시박스(Wash Box), 에어렌서, 에어벤트 배관 막힘 여부와 에어리프트 통수 상태를 주기적으로 점검하십시오.\n"
+                "* **총인 공기압축기(#A/#B) 및 교반기 점검**: 역세용 공기압축기 헤드 압력 및 수분 응축수 배출 상태를 확인하고, 급속/완속 응집교반기 감속기 이상 소음을 점검하십시오."
+            )
+        with dw_sop3:
+            st.markdown(
+                f"* **종침 PAC 및 IPR 염화제이철 정량펌프 점검**: 일일 권장 주입량은 염화제이철 **{ai_calc['권장염화제이철_L']} L/일**, 종침 PAC **{ai_calc['종침전PAC주입량_L']} L/일**입니다. 반응조 및 종침 약품 투입배관 스케일 막힘 여부를 상시 확인하십시오.\n"
+                "* **원심탈수기 & 케익호퍼 함수율 관리**: 고분자응집제(폴리머) 용해 농도(0.1~0.2%)와 원심탈수기 차속을 조절하여 탈수케익 함수율을 **80% 내외**로 안정화하십시오."
+            )
+        with dw_sop4:
+            st.markdown(
+                "* **산음(SWPP 100톤) / 삼가리(BIOSUF 120톤)**: 침전조 스컴 제거, 반응조·유량조정조 오뚜기(레벨스위치) 청소 및 잉여슬러지 적기 인발을 실시하십시오.\n"
+                "* **몰운(IC-SBR 60톤) / 당의(IC-SBR 45톤) / 단월마을(IC-SBR 30톤) / 진목(SOD 23톤)**: 디켄터(Decanter) 펌프 및 수위계 센서 청소, SOD 설비 및 방류유량계 센서 청소를 주 1회 이상 점검하십시오."
+            )
+
+    with tab_knr_sim:
+        st.subheader("🎛️ 기온·강우 변동 및 유입부하에 따른 [송풍기 인버터(Hz) · 약품 펌프 스트로크(%) · 예상 방류수질] AI 시뮬레이터")
+        st.caption("💡 단월 처리장의 실제 설비 규격(송풍기 25㎥/분급 인버터, 염화제이철·PAC 정량펌프, KNR 반응조)을 기반으로 기온·수온·강우 시나리오에 따른 최적 제어값을 시뮬레이션합니다.")
+
         import calendar
-        days_in_sel_m = calendar.monthrange(diag_date.year, diag_month)[1]
-        days_arr = list(range(1, days_in_sel_m + 1))
+        days_in_m_sim = calendar.monthrange(dw_ref_date.year, dw_sel_month)[1]
+        d_list_sim = list(range(1, days_in_m_sim + 1))
 
-        with st.expander("🌦️🌡️ [강우량 · 기온 · 반응조 수온] 월간 일별(1~말일) 변동 추이 직접 설정 및 표 편집 (클릭하여 열기/닫기)", expanded=True):
-            st.caption("💡 아래에서 **강우 시나리오(비 오는 날·지속 일수·강우량)**와 **기온/수온 변동 추이(초순➔말일 변화)**를 슬라이더로 지정하거나, **[일별 상세 표 직접 편집]**을 켜서 원하는 날짜의 강우량(mm)·기온(℃)·수온(℃)을 직접 입력할 수 있습니다.")
-            c_tr1, c_tr2, c_tr3 = st.columns([1.1, 1.1, 1.0])
-            with c_tr1:
-                st.markdown("**☔ 1. 강우 발생 패턴 지정**")
-                rain_mode = st.selectbox(
-                    "강우 시나리오 선택",
-                    ["평시 무강우 (전체 0mm)", "단발성 강우 (특정 구간 지정)", "월 2회 강우 (초순 + 중하순)", "장마·집중호우 (연속 강우)"],
-                    index=0 if diag_rain == 0 else 1,
-                    key="tr_rain_mode"
-                )
-                rain_peak_day = st.slider("강우 집중 시작일 (일)", 1, max(1, days_in_sel_m - 3), min(14, days_in_sel_m - 3), key="tr_rain_day")
-                rain_dur_days = st.slider("강우 지속 기간 (일수)", 1, 7, 3, key="tr_rain_dur")
-                rain_peak_mm = st.number_input("최대 피크 강우량 (mm/일)", value=float(diag_rain if diag_rain > 0 else 25.0), min_value=0.0, max_value=300.0, step=5.0, key="tr_rain_peak")
+        c_sim1, c_sim2, c_sim3 = st.columns(3)
+        with c_sim1:
+            sim_rain_pattern = st.selectbox("☔ 강우 유입(I/I) 시나리오", ["평시 청천 일지 기준", "중순 단발성 강우 (30mm)", "월 2회 강우 유입", "장마철 집중호우 (80mm)"], key="dw_sim_rain_p")
+            sim_peak_rain = st.slider("피크 강우량 설정 (mm/일)", 0.0, 150.0, 0.0 if "청천" in sim_rain_pattern else (80.0 if "집중" in sim_rain_pattern else 30.0), step=5.0, key="dw_sim_rain_v")
+        with c_sim2:
+            sim_temp_pattern = st.selectbox("🌡️ 외기기온·반응조수온 추이", ["현재 수온 유지", "가을➔겨울 수온 하강 추이", "봄➔여름 수온 상승 추이"], key="dw_sim_temp_p")
+            sim_w_temp_start, sim_w_temp_end = st.slider("월간 반응조 수온 범위 (초순 ➔ 말일 ℃)", 6.0, 28.0, (17.0, 13.0) if "하강" in sim_temp_pattern else ((13.0, 18.0) if "상승" in sim_temp_pattern else (float(round(w_temp_v, 1)), float(round(w_temp_v, 1)))), step=0.5, key="dw_sim_w_rng")
+        with c_sim3:
+            sim_pol_load = st.slider("🧪 유입 오염부하(BOD·T-N·T-P) 변동률 (%)", -30, 50, 0, step=5, key="dw_sim_pol")
+            use_sim_editor = st.toggle("📋 일별 시뮬레이션 수치 표 직접 편집", value=False, key="dw_sim_edit_tog")
 
-            with c_tr2:
-                st.markdown("**🌡️ 2. 기온 & 반응조 수온 변동 추이 지정**")
-                temp_trend_mode = st.selectbox(
-                    "기온·수온 월간 변동 추이 패턴",
-                    ["일정 유지 (현재 설정값 고정)", "점진적 하강 (가을➔겨울철 냉각 추이)", "점진적 상승 (봄➔여름철 온난화 추이)", "한파/급강하 포함 (중순 기온 급락)"],
-                    index=1 if diag_season in ["가을", "겨울"] else (2 if diag_season in ["봄", "여름"] else 0),
-                    key="tr_temp_mode"
-                )
-                air_t_start, air_t_end = st.slider(
-                    "월간 외기 기온 변동 범위 (초순 ℃ ➔ 말일 ℃)",
-                    -20.0, 38.0,
-                    (float(diag_air_temp + 3.0), float(diag_air_temp - 4.0)) if "하강" in temp_trend_mode else ((float(diag_air_temp - 3.0), float(diag_air_temp + 4.0)) if "상승" in temp_trend_mode else (float(diag_air_temp), float(diag_air_temp))),
-                    step=0.5,
-                    key="tr_air_range"
-                )
-                water_t_start, water_t_end = st.slider(
-                    "월간 반응조 수온 변동 범위 (초순 ℃ ➔ 말일 ℃)",
-                    4.0, 32.0,
-                    (float(diag_temp + 2.0), float(diag_temp - 2.5)) if "하강" in temp_trend_mode else ((float(diag_temp - 2.0), float(diag_temp + 2.5)) if "상승" in temp_trend_mode else (float(diag_temp), float(diag_temp))),
-                    step=0.5,
-                    key="tr_water_range"
-                )
+        sim_rows_list = []
+        scale_cap = max_cap_val / 1700.0
+        for idx_d, d_no in enumerate(d_list_sim):
+            frac = idx_d / max(1, days_in_m_sim - 1)
+            wt_d = round(sim_w_temp_start + (sim_w_temp_end - sim_w_temp_start) * frac, 1)
+            at_d = round(wt_d - 2.5 + 1.2 * np.sin(idx_d * 0.5), 1)
+            r_d = 0.0
+            if sim_peak_rain > 0:
+                if idx_d in [12, 13, 14]:
+                    r_d = round(sim_peak_rain * (1.0 if idx_d == 13 else 0.5), 1)
+                elif "2회" in sim_rain_pattern and idx_d in [23, 24]:
+                    r_d = round(sim_peak_rain * 0.65, 1)
+                elif "집중" in sim_rain_pattern and 10 <= idx_d <= 17:
+                    r_d = round(sim_peak_rain * (0.4 + 0.6 * abs(np.sin(idx_d))), 1)
 
-            with c_tr3:
-                st.markdown("**✍️ 3. 일별 상세 수치 직접 수정 옵션**")
-                use_manual_table = st.toggle("📋 일별(1~말일) 강우·기온·수온 표에서 직접 수정하기", value=False, key="tr_use_manual")
-                st.info("📌 슬라이더나 표에서 강우량과 기온·수온 추이를 변경하면 **예상 방류수질(BOD·T-N·SS·T-P·TOC), 디지털 트윈 운전값, 일별 유입예측 차트**가 즉시 연동되어 재계산됩니다.")
+            q_in_d = round(in_flow_v * (0.96 + 0.05 * np.sin(d_no * 0.4)) + (r_d * 8.2 * scale_cap), 1)
+            bod_in_d = round(in_bod_v * (1.0 + sim_pol_load * 0.01), 1)
+            tn_in_d = round(in_tn_v * (1.0 + sim_pol_load * 0.01), 2)
+            tp_in_d = round(in_tp_v * (1.0 + sim_pol_load * 0.01), 2)
 
-            # 패턴에 따른 일별 배열 생성
-            rain_arr = [0.0] * days_in_sel_m
-            if rain_mode != "평시 무강우 (전체 0mm)" and rain_peak_mm > 0:
-                for d_offset in range(rain_dur_days):
-                    idx_d = min(days_in_sel_m - 1, rain_peak_day - 1 + d_offset)
-                    # 가운데 날에 피크가 오도록 가중치 부여
-                    center_dist = abs(d_offset - (rain_dur_days - 1) / 2.0)
-                    weight = max(0.3, 1.0 - (center_dist / max(1.0, rain_dur_days / 1.5)))
-                    rain_arr[idx_d] = round(rain_peak_mm * weight, 1)
-                if rain_mode == "월 2회 강우 (초순 + 중하순)":
-                    for d_offset in range(max(1, rain_dur_days - 1)):
-                        idx_d2 = min(days_in_sel_m - 1, max(0, (rain_peak_day + 10) % days_in_sel_m + d_offset))
-                        rain_arr[idx_d2] = round(rain_peak_mm * 0.65, 1)
-                elif rain_mode == "장마·집중호우 (연속 강우)":
-                    for d_offset in range(min(10, days_in_sel_m - rain_peak_day)):
-                        idx_d3 = min(days_in_sel_m - 1, rain_peak_day - 1 + d_offset)
-                        rain_arr[idx_d3] = round(rain_peak_mm * (0.45 + 0.55 * abs(np.sin(d_offset))), 1)
+            p_res = calculate_ai_process_parameters(q_in_d, bod_in_d, tn_in_d, tp_in_d, facility_name=dw_sel_fac)
+            # 송풍기 인버터 주파수(Hz) 및 약품 펌프 스트로크(%) 환산
+            inv_hz = round(min(60.0, max(35.0, 42.0 + (p_res['권장송풍량_m3min'] / max(1.0, fac_spec['blower_cap'])) * 14.5)), 1)
+            chem_stroke = round(min(100.0, max(20.0, (p_res['권장염화제이철_L'] / max(1.0, max_cap_val * 0.035)) * 55.0)), 1) if dw_sel_fac == MAIN_PLANT else (round(min(100.0, (p_res['종침전PAC주입량_L'] / 3.0) * 50.0), 1) if dw_sel_fac == "몰운" else 0.0)
+            pred_tn_out = round(out_tn_v * (1.0 + max(0.0, (15.0 - wt_d) * 0.025)) * (1.0 + sim_pol_load * 0.004), 2)
+            pred_tp_out = round(out_tp_v * (1.0 + sim_pol_load * 0.005), 3)
 
-            air_temp_arr = []
-            water_temp_arr = []
-            for i_d in range(days_in_sel_m):
-                frac = i_d / max(1, days_in_sel_m - 1)
-                if temp_trend_mode == "일정 유지 (현재 설정값 고정)":
-                    a_val = float(diag_air_temp) + 0.6 * np.sin(i_d * 0.5)
-                    w_val = float(diag_temp) + 0.3 * np.sin(i_d * 0.5)
-                elif temp_trend_mode == "한파/급강하 포함 (중순 기온 급락)":
-                    dip = -6.0 * np.exp(-((i_d - days_in_sel_m * 0.55) ** 2) / 12.0)
-                    a_val = air_t_start + (air_t_end - air_t_start) * frac + dip
-                    w_val = water_t_start + (water_t_end - water_t_start) * frac + dip * 0.45
-                else:
-                    a_val = air_t_start + (air_t_end - air_t_start) * frac + 0.8 * np.sin(i_d * 0.6)
-                    w_val = water_t_start + (water_t_end - water_t_start) * frac + 0.35 * np.sin(i_d * 0.6)
-                air_temp_arr.append(round(a_val, 1))
-                water_temp_arr.append(round(max(2.0, w_val), 1))
-
-            # 일별 기본 유입량 + 강우 유입량(I/I) 연산
-            scale_f = max_cap_val / 1700.0
-            base_inflow_arr = []
-            for i_d, d_num in enumerate(days_arr):
-                dry_flow = int(max_cap_val * 0.88) + int((max_cap_val * 0.03) * np.sin(d_num * 0.45))
-                r_mm = rain_arr[i_d]
-                wet_extra = int(r_mm * 8.5 * scale_f) if r_mm > 0 else 0
-                base_inflow_arr.append(dry_flow + wet_extra)
-
-            df_trend_sim = pd.DataFrame({
-                "일(Day)": days_arr,
-                "강우량(mm)": rain_arr,
-                "외기기온(℃)": air_temp_arr,
-                "반응조수온(℃)": water_temp_arr,
-                "예측유입량(톤/일)": base_inflow_arr
+            sim_rows_list.append({
+                "일(Day)": d_no,
+                "강우량(mm)": r_d,
+                "외기기온(℃)": at_d,
+                "반응조수온(℃)": wt_d,
+                "예측유입량(㎥/일)": q_in_d,
+                "권장송풍량(㎥/분)": p_res['권장송풍량_m3min'],
+                "송풍기인버터(Hz)": inv_hz,
+                "응집제펌프스트로크(%)": chem_stroke,
+                "예상방류T-N(mg/L)": pred_tn_out,
+                "예상방류T-P(mg/L)": pred_tp_out
             })
 
-            if use_manual_table:
-                st.markdown("###### 📝 일별 강우량(mm) · 외기기온(℃) · 반응조수온(℃) · 예측유입량(톤/일) 직접 수정 테이블")
-                edited_trend_df = st.data_editor(
-                    df_trend_sim,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=260,
-                    key="ed_custom_weather_trend"
-                )
-                rain_arr = pd.to_numeric(edited_trend_df["강우량(mm)"], errors="coerce").fillna(0.0).tolist()
-                air_temp_arr = pd.to_numeric(edited_trend_df["외기기온(℃)"], errors="coerce").fillna(diag_air_temp).tolist()
-                water_temp_arr = pd.to_numeric(edited_trend_df["반응조수온(℃)"], errors="coerce").fillna(diag_temp).tolist()
-                # 강우량을 수정하면 유입량도 자동 연동 반영 (단, 사용자가 유입량을 직접 바꾼 경우 존중)
-                recalc_inflow = []
-                for i_d, d_num in enumerate(days_arr):
-                    orig_in = df_trend_sim["예측유입량(톤/일)"].iloc[i_d]
-                    user_in = pd.to_numeric(edited_trend_df["예측유입량(톤/일)"].iloc[i_d], errors="coerce")
-                    if pd.notna(user_in) and int(user_in) != int(orig_in):
-                        recalc_inflow.append(int(user_in))
-                    else:
-                        dry_flow = int(max_cap_val * 0.88) + int((max_cap_val * 0.03) * np.sin(d_num * 0.45))
-                        recalc_inflow.append(dry_flow + (int(rain_arr[i_d] * 8.5 * scale_f) if rain_arr[i_d] > 0 else 0))
-                base_inflow_arr = recalc_inflow
+        df_sim_ctrl = pd.DataFrame(sim_rows_list)
+        if use_sim_editor:
+            df_sim_ctrl = st.data_editor(df_sim_ctrl, use_container_width=True, hide_index=True, height=280, key="dw_sim_df_ed")
 
-        # 설정된 변동 추이의 평균/최대값 추출하여 수질 예측에 실시간 반영
-        eff_max_rain = max(rain_arr) if rain_arr else float(diag_rain)
-        eff_avg_water_temp = float(np.mean(water_temp_arr)) if water_temp_arr else float(diag_temp)
-        eff_min_water_temp = float(np.min(water_temp_arr)) if water_temp_arr else float(diag_temp)
-        eff_avg_air_temp = float(np.mean(air_temp_arr)) if air_temp_arr else float(diag_air_temp)
-
-        # 계절·강우·수온·MLSS·DO 기반 동적 예측 수질 산출 (실측 마스터 DB 연동)
-        ym_q = f"{diag_date.year}-{diag_month:02d}"
-        df_m_diag = get_master_data(diag_fac, f"{ym_q}-01", f"{ym_q}-31")
-        if df_m_diag.empty:
-            df_m_diag = get_master_data(diag_fac)
-
-        base_bod_d = float(df_m_diag['방류BOD'].dropna().mean()) if (not df_m_diag.empty and '방류BOD' in df_m_diag.columns and df_m_diag['방류BOD'].dropna().any()) else 0.70
-        base_tn_d = float(df_m_diag['방류TN'].dropna().mean()) if (not df_m_diag.empty and '방류TN' in df_m_diag.columns and df_m_diag['방류TN'].dropna().any()) else 6.01
-        base_ss_d = float(df_m_diag['방류SS'].dropna().mean()) if (not df_m_diag.empty and '방류SS' in df_m_diag.columns and df_m_diag['방류SS'].dropna().any()) else 2.10
-        base_tp_d = float(df_m_diag['방류TP'].dropna().mean()) if (not df_m_diag.empty and '방류TP' in df_m_diag.columns and df_m_diag['방류TP'].dropna().any()) else 0.032
-        base_toc_d = float(df_m_diag['방류TOC'].dropna().mean()) if (not df_m_diag.empty and '방류TOC' in df_m_diag.columns and df_m_diag['방류TOC'].dropna().any()) else 3.10
-        base_coli_d = float(df_m_diag['방류대장균'].dropna().mean()) if (not df_m_diag.empty and '방류대장균' in df_m_diag.columns and df_m_diag['방류대장균'].dropna().any()) else 45.0
-
-        rain_adj = 1.0 + max(0.0, (eff_max_rain - 10.0) * 0.004)
-        temp_adj = 1.0 + max(0.0, (16.0 - eff_avg_water_temp) * 0.018)
-        do_adj = 1.0 - ((diag_do - 2.0) * 0.05)
-
-        pred_bod_v = round(max(0.1, base_bod_d * rain_adj * do_adj), 2)
-        pred_tn_v = round(max(1.0, base_tn_d * temp_adj * rain_adj), 2)
-        pred_ss_v = round(max(0.2, base_ss_d * rain_adj), 2)
-        pred_tp_v = round(max(0.008, base_tp_d * rain_adj), 3)
-        pred_toc_v = round(max(0.8, base_toc_d * rain_adj * do_adj), 2)
-        pred_coli_v = max(1, int(round(base_coli_d * rain_adj)))
-
-        # 5대 핵심 수질 슈퍼 프리미엄 카드
-        k1, k2, k3, k4, k5 = st.columns(5)
-        kpi_super_specs = [
-            (k1, "예상 방류수 BOD", f"{pred_bod_v:.2f}", "mg/L", 5.0, pred_bod_v, "🧪", "#0284C7"),
-            (k2, "예상 방류수 T-N", f"{pred_tn_v:.2f}", "mg/L", 20.0, pred_tn_v, "🧬", "#6366F1"),
-            (k3, "예상 방류수 SS", f"{pred_ss_v:.2f}", "mg/L", 10.0, pred_ss_v, "💧", "#0EA5E9"),
-            (k4, "예상 방류수 T-P", f"{pred_tp_v:.3f}", "mg/L", 0.20, pred_tp_v, "⚡", "#10B981"),
-            (k5, "예상 방류 대장균", f"{pred_coli_v:,}", "개/mL", 1000.0, float(pred_coli_v), "🦠", "#8B5CF6"),
-        ]
-        for col_obj, k_lbl, k_val_s, k_unit_s, k_lim, k_cur, k_ico, k_color in kpi_super_specs:
-            ratio_pct = min(100, max(4, int(round((k_cur / k_lim) * 100))))
-            safety_margin = max(0, 100 - ratio_pct)
-            bar_color = "#10B981" if ratio_pct < 70 else ("#F59E0B" if ratio_pct < 90 else "#EF4444")
-            if k_lim < 1:
-                k_lim_str = f"{k_lim:.2f}"
-            elif k_lim < 100:
-                k_lim_str = f"{k_lim:.1f}"
-            else:
-                k_lim_str = f"{int(k_lim)}"
-            with col_obj:
-                st.markdown(f"""
-                <div class="dw-super-card" style="border-top-color: {k_color};">
-                    <div class="dw-kpi-top">
-                        <span class="dw-kpi-title">{k_lbl}</span>
-                        <span class="dw-kpi-icon">{k_ico}</span>
-                    </div>
-                    <div class="dw-kpi-value">{k_val_s}<span class="dw-kpi-unit">{k_unit_s}</span></div>
-                    <div class="dw-progress-bg">
-                        <div class="dw-progress-fill" style="width:{ratio_pct}%; background:{bar_color};"></div>
-                    </div>
-                    <div class="dw-badge-row">
-                        <span class="dw-pill-limit">↑ ↑ 기준: {k_lim_str}</span>
-                        <span class="dw-pill-safe">안전여유 {safety_margin}%</span>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        # 유기물 분해 지표 진단 (연도별 법령 자동 전환) + 제거효율 배너
-        toc_margin_pct = round((1.0 - (pred_toc_v / 15.0)) * 100, 1)
-        st.markdown("<div style='margin-top:18px;'></div>", unsafe_allow_html=True)
-        st.markdown("#### 🛡️ 유기물 분해 지표 진단 (연도별 법령 자동 전환 & 실시간 여유율)")
-        st.markdown(f"""
-        <div class="dw-toc-banner">
-            <div>
-                <span style="background:#0284C7; color:white; font-size:11.5px; font-weight:800; padding:4px 10px; border-radius:6px; margin-right:10px;">법령 자동전환</span>
-                <span style="color:#0F172A; font-size:15px; font-weight:800;">2024년 이후 현행 법령 기준: TOC (총유기탄소)</span>
-                <span style="color:#0369A1; font-size:15.5px; font-weight:900; margin-left:10px;">| 예상 방류수 TOC 결과: {pred_toc_v:.2f} mg/L</span>
-                <span style="color:#475569; font-size:13.5px; font-weight:700; margin-left:6px;">(↑ 기준: 15.0 mg/L)</span>
-            </div>
-            <div style="background:#DCFCE7; color:#15803D; font-weight:800; font-size:13px; padding:6px 14px; border-radius:20px; border:1px solid #86EFAC;">
-                ✅ 법적 기준 대비 {toc_margin_pct}% 안전 여유 확보
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # KNR + IPR 5단계 스마트 공정 디지털 트윈 상태바 (강우·기온·수온 추이 반영)
-        ai_opt = calculate_ai_process_parameters(float(np.mean(base_inflow_arr)), 165.0, 26.5, 2.9, facility_name=diag_fac)
-        rainy_days_cnt = sum(1 for r_v in rain_arr if r_v > 0)
-        weather_status_txt = "청천시(무강우) 평시 유입" if eff_max_rain <= 0 else f"강우 {rainy_days_cnt}일 (피크 {eff_max_rain:.1f}mm)"
-        st.markdown(f"""
-        <div class="dw-flow-container">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:14.5px; font-weight:800; color:#E2E8F0;">⚡ {diag_fac} [{fac_spec['method']}] 실시간 디지털 트윈 공정 제어 상태</span>
-                <span style="font-size:12px; color:#38BDF8; font-weight:700;">평균 외기기온 {eff_avg_air_temp:.1f}℃ · 평균 반응조수온 {eff_avg_water_temp:.1f}℃ 연동</span>
-            </div>
-            <div class="dw-flow-grid">
-                <div class="dw-flow-node">
-                    <div class="dw-flow-node-title">① 유입·스크린·침사지</div>
-                    <div class="dw-flow-node-val">{int(round(np.mean(base_inflow_arr))):,} ㎥/일</div>
-                    <div class="dw-flow-node-sub">{weather_status_txt}</div>
-                </div>
-                <div class="dw-flow-node">
-                    <div class="dw-flow-node-title">② KNR 생물반응조</div>
-                    <div class="dw-flow-node-val">MLSS {diag_mlss:,}</div>
-                    <div class="dw-flow-node-sub">평균수온 {eff_avg_water_temp:.1f}℃ · DO {diag_do:.1f}</div>
-                </div>
-                <div class="dw-flow-node">
-                    <div class="dw-flow-node-title">③ AI 송풍기 최적제어</div>
-                    <div class="dw-flow-node-val">{ai_opt['권장송풍량_m3min']} ㎥/분</div>
-                    <div class="dw-flow-node-sub">권장 가동 {ai_opt['송풍기가동대수']}대 (절전모드)</div>
-                </div>
-                <div class="dw-flow-node">
-                    <div class="dw-flow-node-title">④ 종침 & IPR 총인처리</div>
-                    <div class="dw-flow-node-val">FeCl₃ {ai_opt['권장염화제이철_L']} L</div>
-                    <div class="dw-flow-node-sub">PAC {ai_opt['종침전PAC주입량_L']} L/일 정밀주입</div>
-                </div>
-                <div class="dw-flow-node">
-                    <div class="dw-flow-node-title">⑤ UV소독 · 최종방류</div>
-                    <div class="dw-flow-node-val">T-P {pred_tp_v:.3f}</div>
-                    <div class="dw-flow-node-sub">전 항목 협약수질 100% 이내</div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        # 메인 차트 (유입량·강우량 + 외기기온·반응조수온 변동 추이 2단 연동 차트) + 우측 계절별 운영 지침
-        col_chart, col_guide = st.columns([1.45, 1.0])
-        with col_chart:
-            st.markdown(f"#### 📊 단월 AI 유입예측 & 강우·기온·수온 일별 변동 추이 리포트 ({diag_season}철 / {diag_month}월)")
-            peak_inflow = max(base_inflow_arr)
-            peak_day = days_arr[base_inflow_arr.index(peak_inflow)]
-
-            fig_dual = make_subplots(
-                rows=2, cols=1,
-                shared_xaxes=True,
-                vertical_spacing=0.10,
-                row_heights=[0.62, 0.38],
-                specs=[[{"secondary_y": True}], [{"secondary_y": False}]],
-                subplot_titles=(
-                    f"🌊 일별 하수 유입량(톤/일) 및 지정 강우량(mm) 추이",
-                    f"🌡️ 일별 외기 기온(℃) 및 생물반응조 수온(℃) 변동 추이"
-                )
+        fig_ctrl = make_subplots(
+            rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.12, row_heights=[0.52, 0.48],
+            specs=[[{"secondary_y": True}], [{"secondary_y": True}]],
+            subplot_titles=(
+                "🌊 예측 유입하수량(㎥/일) & 강우량(mm) 및 반응조 수온(℃) 추이",
+                "⚙️ AI 자율제어 출력: 송풍기 인버터 주파수(Hz) & 총인 응집제 정량펌프 스트로크(%)"
             )
-            # 1단: 강우량 막대 + 예측 유입량 스플라인
-            fig_dual.add_trace(
-                go.Bar(
-                    x=days_arr, y=rain_arr,
-                    name="지정 강우량 (mm)",
-                    marker_color="rgba(99, 102, 241, 0.42)",
-                    marker_line_color="rgba(99, 102, 241, 0.85)",
-                    marker_line_width=1
-                ),
-                row=1, col=1, secondary_y=True
-            )
-            fig_dual.add_trace(
-                go.Scatter(
-                    x=days_arr, y=base_inflow_arr,
-                    mode="lines+markers",
-                    name="예측 유입량 (톤/일)",
-                    line=dict(color="#0284C7", width=3, shape="spline"),
-                    fill="tozeroy",
-                    fillcolor="rgba(2, 132, 199, 0.08)",
-                    marker=dict(size=6, color="#0369A1", line=dict(width=1.2, color="white"))
-                ),
-                row=1, col=1, secondary_y=False
-            )
-            fig_dual.add_hline(y=max_cap_val, line_dash="dash", line_color="#EF4444", line_width=2, annotation_text=f"최대 처리용량 ({max_cap_val:,}톤)", annotation_position="top left", row=1, col=1, secondary_y=False)
-            fig_dual.add_hline(y=warn_cap_val, line_dash="dot", line_color="#F59E0B", line_width=2, annotation_text=f"주의 경계선 ({warn_cap_val:,}톤)", annotation_position="bottom left", row=1, col=1, secondary_y=False)
+        )
+        fig_ctrl.add_trace(go.Bar(x=df_sim_ctrl["일(Day)"], y=df_sim_ctrl["강우량(mm)"], name="강우량(mm)", marker_color="rgba(56, 189, 248, 0.45)"), row=1, col=1, secondary_y=True)
+        fig_ctrl.add_trace(go.Scatter(x=df_sim_ctrl["일(Day)"], y=df_sim_ctrl["예측유입량(㎥/일)"], name="예측유입량(㎥/일)", mode="lines+markers", line=dict(color="#0284C7", width=2.8)), row=1, col=1, secondary_y=False)
+        fig_ctrl.add_trace(go.Scatter(x=df_sim_ctrl["일(Day)"], y=df_sim_ctrl["반응조수온(℃)"], name="반응조수온(℃)", mode="lines", line=dict(color="#10B981", width=2.2, dash="dot")), row=1, col=1, secondary_y=True)
 
-            fig_dual.add_annotation(
-                x=peak_day, y=peak_inflow,
-                text=f"최대 피크: {peak_inflow:,}톤 ({peak_day}일)",
-                showarrow=True, arrowhead=2, arrowcolor="#0284C7",
-                bgcolor="#0F172A", font=dict(color="white", size=11),
-                row=1, col=1
-            )
+        fig_ctrl.add_trace(go.Scatter(x=df_sim_ctrl["일(Day)"], y=df_sim_ctrl["송풍기인버터(Hz)"], name="송풍기 인버터(Hz)", mode="lines+markers", line=dict(color="#6366F1", width=2.8)), row=2, col=1, secondary_y=False)
+        fig_ctrl.add_trace(go.Scatter(x=df_sim_ctrl["일(Day)"], y=df_sim_ctrl["응집제펌프스트로크(%)"], name="응집제 펌프 스트로크(%)", mode="lines+markers", line=dict(color="#F59E0B", width=2.5)), row=2, col=1, secondary_y=True)
 
-            # 2단: 외기 기온 & 반응조 수온 변동 추이
-            fig_dual.add_trace(
-                go.Scatter(
-                    x=days_arr, y=air_temp_arr,
-                    mode="lines+markers",
-                    name="외기 기온 (℃)",
-                    line=dict(color="#F59E0B", width=2.5, dash="dot"),
-                    marker=dict(size=5, color="#D97706")
-                ),
-                row=2, col=1
-            )
-            fig_dual.add_trace(
-                go.Scatter(
-                    x=days_arr, y=water_temp_arr,
-                    mode="lines+markers",
-                    name="반응조 수온 (℃)",
-                    line=dict(color="#10B981", width=3, shape="spline"),
-                    marker=dict(size=6, color="#059669")
-                ),
-                row=2, col=1
-            )
-            fig_dual.add_hline(y=12.0, line_dash="dot", line_color="#EF4444", line_width=1.5, annotation_text="질산화 저하 주의 수온 (12℃)", annotation_position="bottom right", row=2, col=1)
-
-            fig_dual.update_layout(
-                height=520,
-                margin=dict(l=15, r=15, t=35, b=15),
-                legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0),
-                plot_bgcolor="#FFFFFF",
-                paper_bgcolor="#FFFFFF",
-                hovermode="x unified"
-            )
-            fig_dual.update_xaxes(title_text="일 (Day)", showgrid=True, gridcolor="#F1F5F9", row=2, col=1)
-            fig_dual.update_yaxes(title_text="유입량 (톤/일)", range=[int(max_cap_val * 0.55), max(int(max_cap_val * 1.18), int(peak_inflow * 1.08))], showgrid=True, gridcolor="#F1F5F9", row=1, col=1, secondary_y=False)
-            fig_dual.update_yaxes(title_text="강우량 (mm)", range=[0, max(45, eff_max_rain * 1.5)], showgrid=False, row=1, col=1, secondary_y=True)
-            fig_dual.update_yaxes(title_text="온도 (℃)", showgrid=True, gridcolor="#F1F5F9", row=2, col=1)
-            st.plotly_chart(fig_dual, use_container_width=True)
-
-        with col_guide:
-            st.markdown(f"#### 📅 {diag_season}철 공정 운영 주의사항 ({diag_month}월 관제)")
-            season_banners = {
-                "봄": "해빙기 유입수온 상승 전환 및 미생물 활성도 변동 관리 단계",
-                "여름": "하절기 집중호우(I/I) 유입 급증 및 고수온 DO 저하 집중 관리 단계",
-                "가을": "동절기 대비 미생물 침강성 관리 및 공정 안정화 단계",
-                "겨울": "저수온기 질산화 효율 저하 방지 및 보온·송풍량 정밀 제어 단계"
-            }
-            st.markdown(f"""
-            <div class="ym-yellow-warn-banner">
-                ▶ {season_banners.get(diag_season, "동절기 대비 미생물 침강성 관리 및 공정 안정화 단계")}
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown("**[현장 실시간 점검 지침 (설정된 기온·수온·강우 추이 연동)]**")
-            st.markdown(
-                f"* **기온·수온 추이**: 외기 평균 **{eff_avg_air_temp:.1f}℃** / 반응조 수온 **{water_temp_arr[0]:.1f}℃ ➔ {water_temp_arr[-1]:.1f}℃** (최저 **{eff_min_water_temp:.1f}℃**) 변동에 대비하여 MLSS 농도 적정 유지 (현재 **{diag_mlss:,} mg/L**)\n"
-                f"* **강우·유입 대비**: 월간 강우일수 **{rainy_days_cnt}일** (최대 **{eff_max_rain:.1f}mm/일**) 설정에 따른 협잡물 스크린 및 유량조정조 수위 점검\n"
-                "* **총인(IPR) 약품 점검**: 메디아 여과기 차압 및 응집제(염화제이철·PAC) 정량펌프 주입 라인 점검\n"
-                "* **법령 기준 확인**: 최종 방류수 계절별 법령 기준(TOC, T-N, T-P 등) 자동 전환 시스템 정상 작동 확인"
-            )
-
-            # 6대 수질 제거효율 레이더 차트
-            radar_cats = ['BOD 제거율', 'TOC 제거율', 'SS 제거율', 'T-N 제거율', 'T-P 제거율', '대장균 살균율']
-            radar_vals = [99.4, 91.3, 98.7, 77.5, 98.9, 99.9]
-            fig_radar = go.Figure()
-            fig_radar.add_trace(go.Scatterpolar(
-                r=radar_vals + [radar_vals[0]],
-                theta=radar_cats + [radar_cats[0]],
-                fill='toself',
-                fillcolor='rgba(2, 132, 199, 0.22)',
-                line=dict(color='#0284C7', width=2.5),
-                name='단월 제거효율(%)'
-            ))
-            fig_radar.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[60, 100], tickfont=dict(size=9))),
-                showlegend=False,
-                height=210,
-                margin=dict(l=30, r=30, t=15, b=15),
-                paper_bgcolor="rgba(0,0,0,0)"
-            )
-            st.plotly_chart(fig_radar, use_container_width=True)
-
-        st.markdown("<hr style='margin:16px 0; border:none; border-top:1px solid #E2E8F0;'>", unsafe_allow_html=True)
-        st.markdown("#### 🚨 실시간 공정 위험도 시스템 리포트 & 에너지 절감 코칭")
-        if peak_inflow <= max_cap_val:
-            saved_kwh = int(round(max_cap_val * 0.085))
-            st.markdown(f"""
-            <div class="ym-green-safe-banner">
-                💚 [현재 수질 안전] 지정하신 기온({eff_avg_air_temp:.1f}℃)·수온({eff_avg_water_temp:.1f}℃) 및 강우(최대 {eff_max_rain:.1f}mm) 조건에서 모든 일별 유입 트렌드가 기준치 이내로 안정적입니다. (최대 피크 {peak_inflow:,.1f}톤 / 설계용량 {max_cap_val:,}톤) 과잉 가동 중인 송풍량을 미세 수동 조작하여 전기세를 절감(일 약 {saved_kwh:,} kWh 절감 가능)할 수 있는 최적의 타이밍입니다.
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.warning(f"⚠️ [유입부하 주의] 설정하신 강우(피크 {eff_max_rain:.1f}mm) 영향으로 {peak_day}일경 최대 피크 유입량({peak_inflow:,.1f}톤)이 설계용량({max_cap_val:,}톤/일)을 초과할 것으로 예측됩니다. 유량조정조 수위 선제 확보 및 총인(IPR) 응집제 예비 펌프를 가동하십시오.")
-
-        st.markdown("<hr style='margin:18px 0; border:none; border-top:1px solid #E2E8F0;'>", unsafe_allow_html=True)
-        st.markdown("#### 📋 방류수 수질 항목 초과 가이드라인 및 긴급 대응 점검표 (SOP)")
-        sop_t1, sop_t2, sop_t3, sop_t4, sop_t5, sop_t6 = st.tabs([
-            "BOD 조치 지침", "T-N 조치 지침", "SS 조치 지침", "T-P 조치 지침", "대장균 조치 지침", "TOC 조치 지침"
-        ])
-        with sop_t1:
-            st.markdown("##### 🔴 BOD 초과 시 조치 (협약기준: 5.0 mg/L / 법적기준: 10.0 mg/L)")
-            st.markdown(f"1. **DO 최적화**: 폭기조 DO를 2.0 mg/L 이상으로 제어하십시오. (현재 설정 DO: **{diag_do:.1f} mg/L**, 권장 송풍량: **{ai_opt['권장송풍량_m3min']} ㎥/분**)\n2. **미생물 진단**: SV30 및 MLSS 농도(현재 **{diag_mlss:,} mg/L**)를 확인하고 잉여슬러지 인발량을 조절하십시오.")
-        with sop_t2:
-            st.markdown("##### 🔴 T-N 초과 시 조치 (기준: 20.0 mg/L)")
-            st.markdown(f"1. **내부반송 및 C/N비 점검**: 유입수 BOD/T-N 비(현재 **{ai_opt['CN비']}**)가 4.0 이상인지 확인하고 내부반송률을 150~200%로 조정하십시오.\n2. **수온 및 무산소조 교반 점검**: 반응조 평균 수온(**{eff_avg_water_temp:.1f}℃**, 최저 **{eff_min_water_temp:.1f}℃**) 하강 시 SRT(슬러지 체류시간)를 길게 유지하십시오.")
-        with sop_t3:
-            st.markdown("##### 🔴 SS 초과 시 조치 (기준: 10.0 mg/L)")
-            st.markdown("1. **이차침전지 스컴 및 슬러지 계면 관리**: 슬러지 수집기 및 스컴 스키머 작동 상태를 확인하십시오.\n2. **총인처리시설(IPR) 여과 점검**: 미디어 여과 차압 상승 시 즉시 역세척(Backwash)을 실시하십시오.")
-        with sop_t4:
-            st.markdown("##### 🔴 T-P 초과 시 조치 (기준: 0.20 mg/L)")
-            st.markdown(f"1. **응집제 주입량 상향**: 총인처리시설(IPR) 염화제이철(권장 **{ai_opt['권장염화제이철_L']} L/일**) 및 종침 PAC(권장 **{ai_opt['종침전PAC주입량_L']} L/일**) 정량펌프 주입율을 10~20% 상향 조정하십시오.\n2. **응집·침전 상태 확인**: 급속·완속 교반기 회전수 및 폴리머 용해 상태를 점검하십시오.")
-        with sop_t5:
-            st.markdown("##### 🔴 대장균 초과 시 조치 (기준: 1,000 개/mL)")
-            st.markdown("1. **UV 소독설비 점검**: UV 램프 점등 상태, 석영관 오염도(세척기 작동) 및 자외선 강도계를 확인하십시오.\n2. **방류수 탁도 관리**: SS 상승으로 인한 자외선 투과율 저하 여부를 함께 점검하십시오.")
-        with sop_t6:
-            st.markdown("##### 🔴 TOC 초과 시 조치 (기준: 15.0 mg/L)")
-            st.markdown("1. **난분해성 유기물 유입 확인**: 외부 연계수 또는 고농도 비점오염원 유입 여부를 확인하십시오.\n2. **물리·화학적 고도처리 연계**: 생물학적 분해 효율 증대와 함께 총인 응집침전 공정의 유기물 동시 제거 효율을 극대화하십시오.")
-
-        # 수질진단 리포트 인쇄 / 다운로드 / 영구 보관함 저장 버튼
-        diag_report_html = f"""
-        <!DOCTYPE html><html><head><meta charset="UTF-8">
-        <style>
-            @page {{ size: A4 portrait; margin: 12mm; }}
-            body {{ font-family: 'Malgun Gothic', sans-serif; color:#0F172A; margin:15px; }}
-            h2 {{ border-bottom: 2px solid #0284C7; padding-bottom: 8px; color:#0F172A; }}
-            .kpi-grid {{ display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; margin:15px 0; }}
-            .kpi-box {{ border:1px solid #CBD5E1; border-top:4px solid #0284C7; border-radius:8px; padding:10px; text-align:center; }}
-            .banner {{ background:#EFF6FF; border-left:5px solid #0284C7; padding:12px; margin:12px 0; font-weight:bold; }}
-            .safe-box {{ background:#ECFDF5; border:1px solid #6EE7B7; padding:12px; border-radius:8px; font-weight:bold; color:#065F46; }}
-            @media print {{ .no-print {{ display:none !important; }} }}
-        </style></head><body>
-            <div class="no-print" style="text-align:right; margin-bottom:10px;">
-                <button onclick="window.print()" style="background:#0284C7; color:white; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer;">🖨️ 수질진단 관제 리포트 바로 인쇄 / PDF 출력</button>
-            </div>
-            <h2>💧 {diag_fac} 지능형 수질진단 관제 리포트 ({diag_date.strftime('%Y-%m-%d')})</h2>
-            <p>• <b>시설용량</b>: {max_cap_val:,} ㎥/일 ({fac_spec['method']}) | <b>계절/월</b>: {diag_season}철 ({diag_month}월) | <b>강우 조건</b>: {weather_status_txt} | <b>평균 외기기온/반응조수온</b>: {eff_avg_air_temp:.1f}℃ / {eff_avg_water_temp:.1f}℃</p>
-            <div class="kpi-grid">
-                <div class="kpi-box"><div>예상 방류수 BOD</div><div style="font-size:20px; font-weight:bold;">{pred_bod_v:.2f} mg/L</div><div style="color:#DC2626; font-size:11px;">기준: 5.0</div></div>
-                <div class="kpi-box"><div>예상 방류수 T-N</div><div style="font-size:20px; font-weight:bold;">{pred_tn_v:.2f} mg/L</div><div style="color:#DC2626; font-size:11px;">기준: 20.0</div></div>
-                <div class="kpi-box"><div>예상 방류수 SS</div><div style="font-size:20px; font-weight:bold;">{pred_ss_v:.2f} mg/L</div><div style="color:#DC2626; font-size:11px;">기준: 10.0</div></div>
-                <div class="kpi-box"><div>예상 방류수 T-P</div><div style="font-size:20px; font-weight:bold;">{pred_tp_v:.3f} mg/L</div><div style="color:#DC2626; font-size:11px;">기준: 0.20</div></div>
-                <div class="kpi-box"><div>예상 방류 대장균</div><div style="font-size:20px; font-weight:bold;">{pred_coli_v:,} 개/mL</div><div style="color:#DC2626; font-size:11px;">기준: 1000</div></div>
-            </div>
-            <div class="banner">2024년 이후 현행 법령 기준: TOC (총유기탄소) | 예상 방류수 TOC 결과: {pred_toc_v:.2f} mg/L (기준: 15.0 mg/L, 안전여유 {toc_margin_pct}%)</div>
-            <div class="safe-box">💚 [실시간 공정 위험도 리포트] 최대 피크 유입량 {peak_inflow:,.1f}톤/일 | AI 권장 송풍량: {ai_opt['권장송풍량_m3min']} ㎥/분 (가동 {ai_opt['송풍기가동대수']}대) | 권장 염화제이철: {ai_opt['권장염화제이철_L']} L/일</div>
-        </body></html>
-        """
-        st.divider()
-        c_pr1, c_pr2 = st.columns(2)
-        with c_pr1:
-            st.download_button(
-                f"📥 {diag_fac}_지능형수질진단리포트_{diag_date}.html (인쇄/PDF용) 다운로드",
-                data=diag_report_html,
-                file_name=sanitize_filename(f"{diag_fac}_지능형수질진단리포트_{diag_date}.html"),
-                mime="text/html",
-                type="primary",
-                use_container_width=True
-            )
-        with c_pr2:
-            if st.button("💾 현재 수질진단 리포트 및 AI 운전조건 영구 보관함 저장", type="primary", use_container_width=True):
-                rep_save_p = os.path.join(HWPX_RECORD_DIR, sanitize_filename(f"수질진단리포트_{diag_fac}_{diag_date}.html"))
-                with open(rep_save_p, "w", encoding="utf-8") as f:
-                    f.write(diag_report_html)
-                append_to_process_db(pd.DataFrame([{
-                    "날짜": diag_date.strftime('%Y-%m-%d'),
-                    "CN비": ai_opt['CN비'],
-                    "권장송풍량_m3min": ai_opt['권장송풍량_m3min'],
-                    "송풍기가동대수": ai_opt['송풍기가동대수'],
-                    "권장염화제이철_L": ai_opt['권장염화제이철_L'],
-                    "종침전PAC주입량_L": ai_opt['종침전PAC주입량_L']
-                }]), facility_name=diag_fac)
-                st.success(f"✅ {diag_fac} 지능형 수질진단 리포트와 AI 운전조건이 영구 보관함에 안전하게 저장되었습니다!")
+        fig_ctrl.update_layout(height=500, margin=dict(l=15, r=15, t=35, b=15), hovermode="x unified", legend=dict(orientation="h", y=1.08))
+        st.plotly_chart(fig_ctrl, use_container_width=True)
+        st.dataframe(df_sim_ctrl, use_container_width=True, hide_index=True)
 
     with tab_p1:
-        sel_p = st.selectbox("🎯 공정 대상 시설 선택", [MAIN_PLANT] + SMALL_PLANTS)
+        sel_p = st.selectbox("🎯 공정 연산 대상 시설 선택", [MAIN_PLANT] + SMALL_PLANTS, key="dw_calc_fac_sel")
         target_spec = PLANT_DESIGN_SPECS[sel_p]
-        st.info(f"🏢 **시설명**: {sel_p} | **공법**: {target_spec['method']} | **설계용량**: {target_spec['cap']} ㎥/일")
-        if st.button("🔄 공정 데이터 연산 및 영구 적재", type="primary"):
+        st.info(f"🏢 **시설명**: {sel_p} | **공법**: {target_spec['method']} | **설계용량**: {target_spec['cap']} ㎥/일 | **약품**: {target_spec['chem_type']}")
+        if st.button("🔄 선택 시설 일별 AI 최적 운전조건 연산 및 마스터 DB 영구 적재", type="primary", use_container_width=True):
             df_fac = get_master_data(sel_p)
             recs = []
             if not df_fac.empty:
                 for idx, (_, r) in enumerate(df_fac.iterrows()):
-                    res = calculate_ai_process_parameters(r.get('유입량', target_spec['cap']), 120, 25, 2.8, facility_name=sel_p, date_seed=idx)
+                    res = calculate_ai_process_parameters(
+                        r.get('유입량', target_spec['cap']),
+                        r.get('유입BOD', 135.0),
+                        r.get('유입TN', 26.0),
+                        r.get('유입TP', 2.8),
+                        facility_name=sel_p,
+                        date_seed=idx
+                    )
                     recs.append({
                         "날짜": r['날짜'], "CN비": res['CN비'],
                         "권장송풍량_m3min": res['권장송풍량_m3min'], "송풍기가동대수": res['송풍기가동대수'],
@@ -3966,7 +3832,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             else:
                 for idx in range(10):
                     d_str = (datetime.date.today() - datetime.timedelta(days=idx)).strftime('%Y-%m-%d')
-                    res = calculate_ai_process_parameters(target_spec['cap'], 120, 25, 2.8, facility_name=sel_p, date_seed=idx)
+                    res = calculate_ai_process_parameters(target_spec['cap'], 135.0, 26.0, 2.8, facility_name=sel_p, date_seed=idx)
                     recs.append({
                         "날짜": d_str, "CN비": res['CN비'],
                         "권장송풍량_m3min": res['권장송풍량_m3min'], "송풍기가동대수": res['송풍기가동대수'],
@@ -3976,6 +3842,7 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             st.success("✅ AI 최적 운전조건 연산 및 영구 적재 완료!")
             st.rerun()
         st.dataframe(get_process_db(sel_p), use_container_width=True)
+
     with tab_p2:
         st.subheader("🗂️ 영구 저장된 공정 제어 마스터 DB 전체 열람")
         if os.path.exists(PROCESS_CONTROL_DB):
