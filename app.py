@@ -3537,13 +3537,14 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
         # 2) 단월 권역 7개소 (본장 + 소규모 6개소) 실시간 멀티 상태 매트릭스 보드
         st.markdown("##### 🏛️ 단월 권역 7개 하수처리시설(본장 1,700톤 + 소규모 6개소 378톤) 통합 가동 매트릭스")
         ym_prefix_scada = f"{dw_ref_date.year}-{dw_sel_month:02d}"
-        matrix_html_cards = ""
+        matrix_html_cards = []
         all_7_plants = [MAIN_PLANT] + SMALL_PLANTS
         for p_name in all_7_plants:
             p_spec = PLANT_DESIGN_SPECS[p_name]
             df_p_m = get_master_data(p_name, f"{ym_prefix_scada}-01", f"{ym_prefix_scada}-31")
-            if df_p_m.empty:
-                df_p_m = get_master_data(p_name)
+            if df_p_m.empty or ('방류량' in df_p_m.columns and not df_p_m['방류량'].dropna().any()):
+                df_p_all = get_master_data(p_name)
+                df_p_m = df_p_all[df_p_all['방류량'].notna()].tail(31) if (not df_p_all.empty and '방류량' in df_p_all.columns) else df_p_all
             p_flow = float(df_p_m['방류량'].dropna().mean()) if (not df_p_m.empty and '방류량' in df_p_m.columns and df_p_m['방류량'].dropna().any()) else p_spec['cap'] * 0.75
             p_bod = float(df_p_m['방류BOD'].dropna().mean()) if (not df_p_m.empty and '방류BOD' in df_p_m.columns and df_p_m['방류BOD'].dropna().any()) else 1.5
             p_tp = float(df_p_m['방류TP'].dropna().mean()) if (not df_p_m.empty and '방류TP' in df_p_m.columns and df_p_m['방류TP'].dropna().any()) else 0.05
@@ -3551,23 +3552,24 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             short_name = "단월본장" if p_name == MAIN_PLANT else p_name
             active_cls = "active-fac" if p_name == dw_sel_fac else ""
             badge_col = "#34D399" if load_pct <= 95 else "#FBBF24"
-            matrix_html_cards += f"""
-            <div class="dw-matrix-card {active_cls}">
-                <div style="font-size:12px; font-weight:800; color:#38BDF8; margin-bottom:2px;">{short_name}</div>
-                <div style="font-size:10px; color:#94A3B8; margin-bottom:6px;">{p_spec['method']} ({int(p_spec['cap'])}톤)</div>
-                <div style="font-size:16px; font-weight:900; color:#FFFFFF;">{p_flow:,.1f} <span style="font-size:10px; font-weight:500;">㎥/일</span></div>
-                <div style="font-size:10.5px; color:{badge_col}; font-weight:700; margin:3px 0;">가동률 {load_pct}%</div>
-                <div style="font-size:10px; color:#CBD5E1; border-top:1px solid #1E293B; padding-top:4px; margin-top:4px;">
-                    BOD <b>{p_bod:.1f}</b> · T-P <b>{p_tp:.2f}</b>
-                </div>
-            </div>
-            """
-        st.markdown(f'<div class="dw-matrix-grid">{matrix_html_cards}</div>', unsafe_allow_html=True)
+            card_str = (
+                f'<div class="dw-matrix-card {active_cls}">'
+                f'<div style="font-size:12px; font-weight:800; color:#38BDF8; margin-bottom:2px;">{short_name}</div>'
+                f'<div style="font-size:10px; color:#94A3B8; margin-bottom:6px;">{p_spec["method"]} ({int(p_spec["cap"])}톤)</div>'
+                f'<div style="font-size:16px; font-weight:900; color:#FFFFFF;">{p_flow:,.1f} <span style="font-size:10px; font-weight:500;">㎥/일</span></div>'
+                f'<div style="font-size:10.5px; color:{badge_col}; font-weight:700; margin:3px 0;">가동률 {load_pct}%</div>'
+                f'<div style="font-size:10px; color:#CBD5E1; border-top:1px solid #1E293B; padding-top:4px; margin-top:4px;">'
+                f'BOD <b>{p_bod:.1f}</b> · T-P <b>{p_tp:.2f}</b>'
+                f'</div></div>'
+            )
+            matrix_html_cards.append(card_str)
+        st.markdown(f'<div class="dw-matrix-grid">{"".join(matrix_html_cards)}</div>', unsafe_allow_html=True)
 
         # 선택된 시설의 실측 데이터 로드 및 엔지니어링 지표 연산
         df_sel_m = get_master_data(dw_sel_fac, f"{ym_prefix_scada}-01", f"{ym_prefix_scada}-31")
-        if df_sel_m.empty:
-            df_sel_m = get_master_data(dw_sel_fac)
+        if df_sel_m.empty or ('방류량' in df_sel_m.columns and not df_sel_m['방류량'].dropna().any()):
+            df_sel_all = get_master_data(dw_sel_fac)
+            df_sel_m = df_sel_all[df_sel_all['방류량'].notna()].tail(31) if (not df_sel_all.empty and '방류량' in df_sel_all.columns) else df_sel_all
 
         in_flow_v = float(df_sel_m['유입량'].dropna().mean()) if (not df_sel_m.empty and '유입량' in df_sel_m.columns and df_sel_m['유입량'].dropna().any()) else max_cap_val * 0.92
         out_flow_v = float(df_sel_m['방류량'].dropna().mean()) if (not df_sel_m.empty and '방류량' in df_sel_m.columns and df_sel_m['방류량'].dropna().any()) else in_flow_v * 0.89
