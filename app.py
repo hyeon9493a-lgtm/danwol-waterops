@@ -308,6 +308,8 @@ TBM_RECORD_DIR = "tbm_records"
 SIGNATURE_DIR = "signature_storage"
 HWPX_RECORD_DIR = "hwpx_records"
 CHEMICAL_RECORD_DIR = "chemical_records"
+INSPECTION_RECORD_DIR = "inspection_confirm_records"
+CHEMICAL_INSPECTION_DB = "danwol_chemical_inspection_master.csv"
 MASTER_ACCUM_DB = "danwol_accumulated_master.csv"
 TMS_ACCUM_DB = "danwol_tms_master.csv"
 PROCESS_CONTROL_DB = "danwol_process_control_master.csv"
@@ -321,7 +323,8 @@ ALL_STORAGE_DIRS = {
     "HWPX 월간보고서 보관함 (hwpx_records)": HWPX_RECORD_DIR,
     "TBM 표준회의록 보관함 (tbm_records)": TBM_RECORD_DIR,
     "전자서명 이미지 보관소 (signature_storage)": SIGNATURE_DIR,
-    "약품 입출고 증빙 보관소 (chemical_records)": CHEMICAL_RECORD_DIR
+    "약품 입출고 증빙 보관소 (chemical_records)": CHEMICAL_RECORD_DIR,
+    "약품검수확인서 영구 보관함 (inspection_confirm_records)": INSPECTION_RECORD_DIR
 }
 
 ALL_MASTER_DBS = {
@@ -329,10 +332,11 @@ ALL_MASTER_DBS = {
     "TMS 실시간·예측 수질 마스터 DB": TMS_ACCUM_DB,
     "AI 공정제어 운전조건 마스터 DB": PROCESS_CONTROL_DB,
     "약품·에너지·ESG 마스터 DB": CHEMICAL_ENERGY_DB,
-    "약품 구매·재고 수불부 마스터 DB": CHEMICAL_INVENTORY_DB
+    "약품 구매·재고 수불부 마스터 DB": CHEMICAL_INVENTORY_DB,
+    "약품검수확인서 영구 마스터 DB": CHEMICAL_INSPECTION_DB
 }
 
-for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, SIGNATURE_DIR, HWPX_RECORD_DIR, CHEMICAL_RECORD_DIR]:
+for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, SIGNATURE_DIR, HWPX_RECORD_DIR, CHEMICAL_RECORD_DIR, INSPECTION_RECORD_DIR]:
     if not os.path.exists(p): os.makedirs(p)
 
 def sanitize_filename(filename):
@@ -1977,6 +1981,181 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
         zf.writestr("Contents/section0.xml", sec_xml.encode('utf-8'))
     return out_buf.getvalue()
 
+INSPECTION_DB_COLS = [
+    "검수ID", "날짜", "처리장명", "약품명", "수량_kg", "합계",
+    "현장검수자", "비고", "사진설명", "상단사진파일", "하단사진파일",
+    "하수도시스템연동상태", "저장시각"
+]
+
+def format_inspection_inspector(raw_name: str) -> str:
+    cleaned = (raw_name or "").strip()
+    if not cleaned:
+        return "(인)"
+    cleaned = re.sub(r"\s*\(인\)\s*$", "", cleaned).strip()
+    return f"{cleaned} (인)" if cleaned else "(인)"
+
+def build_inspection_photo_caption(chem_name: str, custom_caption: str = "") -> str:
+    clean_chem = (chem_name or "").strip()
+    suffix = "현장입고 / 계근표"
+    if custom_caption and custom_caption.strip():
+        cap = custom_caption.strip()
+        if not cap.endswith(suffix):
+            cap = f"{cap} {suffix}"
+        return cap
+    return f"{clean_chem} {suffix}" if clean_chem else suffix
+
+def save_inspection_photo_file(uploaded_file, prefix: str, date_str: str) -> str:
+    if uploaded_file is None:
+        return ""
+    try:
+        raw_bytes = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
+        if not raw_bytes:
+            return ""
+        ext = os.path.splitext(getattr(uploaded_file, "name", "photo.jpg"))[1].lower()
+        if ext not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}:
+            ext = ".jpg"
+        safe_dt = re.sub(r"[^0-9\-]", "", str(date_str)) or datetime.datetime.now(KST).strftime("%Y-%m-%d")
+        fname = sanitize_filename(f"검수_{prefix}_{safe_dt}_{uuid.uuid4().hex[:8]}{ext}")
+        fpath = os.path.join(INSPECTION_RECORD_DIR, fname)
+        with open(fpath, "wb") as f:
+            f.write(raw_bytes)
+        return fname
+    except Exception:
+        return ""
+
+def load_inspection_photo_base64(fname: str) -> str:
+    if not fname:
+        return ""
+    fpath = os.path.join(INSPECTION_RECORD_DIR, sanitize_filename(fname))
+    if os.path.exists(fpath) and os.path.isfile(fpath):
+        try:
+            with open(fpath, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
+        except Exception:
+            return ""
+    return ""
+
+def append_to_inspection_db(record_dict: dict):
+    row_clean = {col: record_dict.get(col, "") for col in INSPECTION_DB_COLS}
+    df_new = pd.DataFrame([row_clean])
+    if os.path.exists(CHEMICAL_INSPECTION_DB):
+        try:
+            df_old = pd.read_csv(CHEMICAL_INSPECTION_DB)
+            for c in INSPECTION_DB_COLS:
+                if c not in df_old.columns:
+                    df_old[c] = ""
+            df_comb = pd.concat([df_old[INSPECTION_DB_COLS], df_new], ignore_index=True)
+        except Exception:
+            df_comb = df_new
+    else:
+        df_comb = df_new
+    df_comb.to_csv(CHEMICAL_INSPECTION_DB, index=False, encoding="utf-8-sig")
+    return df_comb
+
+def get_inspection_db() -> pd.DataFrame:
+    if not os.path.exists(CHEMICAL_INSPECTION_DB):
+        return pd.DataFrame(columns=INSPECTION_DB_COLS)
+    try:
+        df = pd.read_csv(CHEMICAL_INSPECTION_DB)
+        for c in INSPECTION_DB_COLS:
+            if c not in df.columns:
+                df[c] = ""
+        return df[INSPECTION_DB_COLS].iloc[::-1].reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame(columns=INSPECTION_DB_COLS)
+
+def build_inspection_doc_html(
+    dot_date: str,
+    facility_name: str,
+    chemical_name: str,
+    qty_str: str,
+    inspector_with_seal: str,
+    remark_str: str,
+    total_str: str,
+    top_b64: str,
+    bottom_b64: str,
+    caption_str: str
+) -> str:
+    top_html = (
+        f'<img src="data:image/png;base64,{top_b64}" style="max-width:100%; max-height:255px; object-fit:contain;" />'
+        if top_b64
+        else '<div style="color:#64748b; font-size:12px;">상단 현장 납품 사진 미등록</div>'
+    )
+    bottom_html = (
+        f'<img src="data:image/png;base64,{bottom_b64}" style="max-width:100%; max-height:255px; object-fit:contain;" />'
+        if bottom_b64
+        else '<div style="color:#64748b; font-size:12px;">하단 현장입고 / 계근표 사진 미등록</div>'
+    )
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {{ size: A4 portrait; margin: 12mm; }}
+  body {{ font-family: "Malgun Gothic", "맑은 고딕", sans-serif; margin: 0; padding: 12px; background: #fff; color: #000; }}
+  .doc-box {{ max-width: 740px; margin: 0 auto; background: #fff; }}
+  .doc-title {{ text-align: center; font-size: 24px; font-weight: 700; letter-spacing: 12px; margin: 6px 0 16px 0; }}
+  table.main-tbl {{ width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }}
+  table.main-tbl th, table.main-tbl td {{ border: 1.2px solid #000; padding: 7px 6px; text-align: center; vertical-align: middle; }}
+  table.main-tbl th {{ background: #f3f4f6; font-weight: 700; }}
+  table.photo-tbl {{ width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 12px; }}
+  table.photo-tbl td {{ border: 1.2px solid #000; text-align: center; vertical-align: middle; }}
+  .photo-area {{ height: 275px; padding: 8px; }}
+  .cap-label {{ width: 110px; height: 36px; font-weight: 700; background: #f8fafc; }}
+  .cap-val {{ height: 36px; font-weight: 700; font-size: 12.5px; }}
+  @media print {{ .no-print {{ display: none !important; }} body {{ padding: 0; }} }}
+</style>
+</head>
+<body>
+  <div class="doc-box">
+    <div class="no-print" style="text-align:right; margin-bottom:8px;">
+      <button onclick="window.print()" style="background:#0284C7; color:#fff; border:none; padding:6px 14px; border-radius:6px; font-weight:700; cursor:pointer;">
+        🖨️ 약품검수확인서 인쇄 / PDF 저장
+      </button>
+    </div>
+    <div class="doc-title">약 품 검 수 확 인 서</div>
+    <table class="main-tbl">
+      <thead>
+        <tr>
+          <th style="width:15%;">날짜</th>
+          <th style="width:23%;">처리장명</th>
+          <th style="width:16%;">약품명</th>
+          <th style="width:14%;">수량(kg)</th>
+          <th style="width:19%;">현장검수자</th>
+          <th style="width:13%;">비고</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{dot_date}</td>
+          <td>{facility_name}</td>
+          <td>{chemical_name}</td>
+          <td>{qty_str}</td>
+          <td>{inspector_with_seal}</td>
+          <td>{remark_str}</td>
+        </tr>
+        <tr>
+          <td colspan="3" style="font-weight:700; background:#fafafa;">합 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 계</td>
+          <td style="font-weight:700;">{total_str}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table class="photo-tbl">
+      <tbody>
+        <tr><td colspan="2" class="photo-area">{top_html}</td></tr>
+        <tr><td colspan="2" class="photo-area">{bottom_html}</td></tr>
+        <tr>
+          <td class="cap-label">사진설명</td>
+          <td class="cap-val">{caption_str}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>"""
+
 def create_full_backup_zip():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -2147,7 +2326,8 @@ menu = st.sidebar.radio(
         "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프레미스)",
         "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함",
         "💊 8. 약품 구매 및 사용 관리 & 보관함",
-        "🗄️ 9. 통합 영구저장소(보관함·마스터DB) 열람 및 백업 센터"
+        "🗄️ 9. 통합 영구저장소(보관함·마스터DB) 열람 및 백업 센터",
+        "🧾 10. 약품검수확인서 작성·사진설명 자동화 & 하수도 시스템 영구저장"
     ]
 )
 
@@ -5276,3 +5456,195 @@ elif menu == "🗄️ 9. 통합 영구저장소(보관함·마스터DB) 열람 �
                             st.info("엑셀 파일을 다운로드하여 확인해 주세요.")
             else:
                 st.info(f"💡 `{target_dir_path}/` 폴더가 비어 있습니다.")
+
+# -------------------------------------------------------------
+# 10. 약품검수확인서 작성·사진설명 자동화 & 하수도 시스템 영구저장
+# -------------------------------------------------------------
+elif menu == "🧾 10. 약품검수확인서 작성·사진설명 자동화 & 하수도 시스템 영구저장":
+    st.title("🧾 약품검수확인서 작성·사진설명 자동화 & 하수도 시스템 영구저장")
+    st.caption("🔒 날짜 선택, 처리장명 자동적재·수정, 약품명(폴리머·염화제이철·PAC 선택 또는 직접입력), 수량·합계 입력, 현장검수자 '(인)' 고정, 비고 빈칸 유지, 사진 2장 배치 및 '[약품명] 현장입고 / 계근표' 자동설명을 지원하며 하수도 시스템 데이터 목록에 영구 보관합니다.")
+
+    tab_insp_write, tab_insp_master = st.tabs([
+        "✍️ [작성·미리보기·영구저장] 약품검수확인서",
+        "🗄️ [하수도 시스템 목록] 영구 저장 데이터 열람·불러오기·내보내기"
+    ])
+
+    with tab_insp_write:
+        if "insp_loaded_row" not in st.session_state:
+            st.session_state["insp_loaded_row"] = None
+
+        loaded = st.session_state["insp_loaded_row"] or {}
+
+        col_in, col_pv = st.columns([1.05, 1.25])
+        with col_in:
+            st.markdown("##### 1. 검수 기본정보 입력")
+            default_dt_str = str(loaded.get("날짜", "2026-11-21")).replace(".", "-")[:10]
+            try:
+                default_dt_obj = datetime.date.fromisoformat(default_dt_str)
+            except Exception:
+                default_dt_obj = datetime.date(2026, 11, 21)
+
+            c_d1, c_d2 = st.columns(2)
+            with c_d1:
+                insp_date_obj = st.date_input("📅 날짜 선택", value=default_dt_obj, key="insp_date_picker")
+            with c_d2:
+                default_fac = str(loaded.get("처리장명", "단월공공하수처리시설")) or "단월공공하수처리시설"
+                insp_facility = st.text_input("🏭 처리장명 (자동적재·수정가능)", value=default_fac, key="insp_facility_input")
+
+            st.markdown("**🧪 약품명 (선택목록 또는 직접입력)**")
+            preset_chems = ["폴리머", "염화제이철", "PAC"]
+            c_p1, c_p2, c_p3 = st.columns(3)
+            if c_p1.button("폴리머 선택", use_container_width=True, key="btn_preset_poly"):
+                st.session_state["insp_chem_text"] = "폴리머"
+                st.session_state["insp_cap_manual_flag"] = False
+            if c_p2.button("염화제이철 선택", use_container_width=True, key="btn_preset_fe"):
+                st.session_state["insp_chem_text"] = "염화제이철"
+                st.session_state["insp_cap_manual_flag"] = False
+            if c_p3.button("PAC 선택", use_container_width=True, key="btn_preset_pac"):
+                st.session_state["insp_chem_text"] = "PAC"
+                st.session_state["insp_cap_manual_flag"] = False
+
+            if "insp_chem_text" not in st.session_state:
+                st.session_state["insp_chem_text"] = str(loaded.get("약품명", "폴리머"))
+
+            insp_chem_sel = st.selectbox("선택 목록 (폴리머 / 염화제이철 / PAC)", preset_chems, index=0, key="insp_chem_select")
+            if st.button("선택 목록 값 적용", key="btn_apply_chem_sel"):
+                st.session_state["insp_chem_text"] = insp_chem_sel
+                st.session_state["insp_cap_manual_flag"] = False
+
+            insp_chemical = st.text_input("약품명 직접 입력/확인", key="insp_chem_text", placeholder="폴리머, 염화제이철, PAC 또는 직접 입력")
+
+            c_q1, c_q2 = st.columns(2)
+            with c_q1:
+                insp_qty = st.text_input("⚖️ 수량 입력 (예: 300kg)", value=str(loaded.get("수량_kg", "300kg")), key="insp_qty_input")
+            with c_q2:
+                insp_total = st.text_input("🧮 합계 입력 (직접 작성·수정)", value=str(loaded.get("합계", "300kg")), key="insp_total_input")
+
+            c_i1, c_i2 = st.columns(2)
+            with c_i1:
+                raw_insp_name = str(loaded.get("현장검수자", "차장 주영규")).replace("(인)", "").strip()
+                insp_inspector_raw = st.text_input("👤 현장검수자 ('(인)' 고정 부착)", value=raw_insp_name or "차장 주영규", key="insp_inspector_input")
+            with c_i2:
+                insp_remark = st.text_input("📝 비고 (기본 비워둠)", value=str(loaded.get("비고", "")), key="insp_remark_input")
+
+            st.markdown("##### 2. 현장 사진 & 자동 사진설명")
+            up_photo_top = st.file_uploader("📷 상단 현장 납품 사진 업로드", type=["png", "jpg", "jpeg", "webp"], key="insp_photo_top_up")
+            up_photo_bottom = st.file_uploader("🧾 하단 현장입고 / 계근표 사진 업로드", type=["png", "jpg", "jpeg", "webp"], key="insp_photo_bottom_up")
+
+            auto_cap_val = build_inspection_photo_caption(insp_chemical, "")
+            if "insp_cap_manual_flag" not in st.session_state:
+                st.session_state["insp_cap_manual_flag"] = False
+            if not st.session_state["insp_cap_manual_flag"]:
+                st.session_state["insp_caption_text"] = auto_cap_val
+
+            insp_caption = st.text_input(
+                "🖼️ 사진설명 ('[약품명] 현장입고 / 계근표' 자동반영, 뒤 문구 고정)",
+                key="insp_caption_text"
+            )
+            final_caption = build_inspection_photo_caption(insp_chemical, insp_caption)
+
+            dot_date_str = insp_date_obj.strftime("%Y.%m.%d")
+            iso_date_str = insp_date_obj.strftime("%Y-%m-%d")
+            final_inspector_str = format_inspection_inspector(insp_inspector_raw)
+
+            top_b64 = ""
+            bottom_b64 = ""
+            if up_photo_top is not None:
+                try:
+                    top_b64 = base64.b64encode(up_photo_top.getvalue()).decode("utf-8")
+                except Exception:
+                    top_b64 = ""
+            elif loaded.get("상단사진파일"):
+                top_b64 = load_inspection_photo_base64(str(loaded.get("상단사진파일")))
+
+            if up_photo_bottom is not None:
+                try:
+                    bottom_b64 = base64.b64encode(up_photo_bottom.getvalue()).decode("utf-8")
+                except Exception:
+                    bottom_b64 = ""
+            elif loaded.get("하단사진파일"):
+                bottom_b64 = load_inspection_photo_base64(str(loaded.get("하단사진파일")))
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💾 하수도 시스템 마스터 DB에 영구 저장하기", type="primary", use_container_width=True, key="btn_save_inspection_perm"):
+                saved_top_fn = save_inspection_photo_file(up_photo_top, "top", iso_date_str) or str(loaded.get("상단사진파일", ""))
+                saved_bot_fn = save_inspection_photo_file(up_photo_bottom, "bottom", iso_date_str) or str(loaded.get("하단사진파일", ""))
+                new_rec = {
+                    "검수ID": f"INSP-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}",
+                    "날짜": iso_date_str,
+                    "처리장명": insp_facility.strip() or "단월공공하수처리시설",
+                    "약품명": insp_chemical.strip(),
+                    "수량_kg": insp_qty.strip(),
+                    "합계": insp_total.strip(),
+                    "현장검수자": final_inspector_str,
+                    "비고": insp_remark,
+                    "사진설명": final_caption,
+                    "상단사진파일": saved_top_fn,
+                    "하단사진파일": saved_bot_fn,
+                    "하수도시스템연동상태": "영구보관완료(하수도시스템연계대기)",
+                    "저장시각": datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+                }
+                append_to_inspection_db(new_rec)
+                st.success(f"✅ [{dot_date_str} / {insp_chemical.strip()}] 약품검수확인서가 하수도 시스템 영구 저장소(`{CHEMICAL_INSPECTION_DB}`)에 저장되었습니다!")
+
+        with col_pv:
+            st.markdown("##### 3. 약품검수확인서 문서 미리보기 & 인쇄/PDF 다운로드")
+            doc_html = build_inspection_doc_html(
+                dot_date=dot_date_str,
+                facility_name=insp_facility.strip() or "단월공공하수처리시설",
+                chemical_name=insp_chemical.strip(),
+                qty_str=insp_qty.strip(),
+                inspector_with_seal=final_inspector_str,
+                remark_str=insp_remark,
+                total_str=insp_total.strip(),
+                top_b64=top_b64,
+                bottom_b64=bottom_b64,
+                caption_str=final_caption
+            )
+            st.components.v1.html(doc_html, height=760, scrolling=True)
+            st.download_button(
+                "📥 약품검수확인서 인쇄/PDF용 문서 다운로드 (.html)",
+                data=doc_html.encode("utf-8"),
+                file_name=sanitize_filename(f"약품검수확인서_{iso_date_str}_{insp_chemical.strip() or '약품'}.html"),
+                mime="text/html",
+                type="primary",
+                use_container_width=True
+            )
+
+    with tab_insp_master:
+        st.subheader("🗄️ 영구 저장된 약품검수확인서 마스터 목록 (추후 하수도 시스템 추가용)")
+        df_insp_all = get_inspection_db()
+        if df_insp_all.empty:
+            st.info("💡 아직 영구 저장된 약품검수확인서가 없습니다. [작성·미리보기·영구저장] 탭에서 작성 후 저장해 주세요.")
+        else:
+            st.write(f"📊 **총 {len(df_insp_all)}건의 검수확인서가 영구 저장되어 있습니다.**")
+            st.dataframe(df_insp_all, use_container_width=True, hide_index=True)
+
+            c_exp1, c_exp2 = st.columns(2)
+            with c_exp1:
+                st.download_button(
+                    "📥 하수도 시스템 연동용 CSV 목록 다운로드",
+                    data=df_insp_all.to_csv(index=False, encoding="utf-8-sig"),
+                    file_name=f"하수도_약품검수확인서_목록_{datetime.datetime.now(KST).strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    type="primary",
+                    use_container_width=True
+                )
+            with c_exp2:
+                st.download_button(
+                    "📥 하수도 시스템 연동용 JSON 데이터 다운로드",
+                    data=json.dumps(df_insp_all.to_dict(orient="records"), ensure_ascii=False, indent=2).encode("utf-8"),
+                    file_name=f"하수도_약품검수확인서_목록_{datetime.datetime.now(KST).strftime('%Y%m%d')}.json",
+                    mime="application/json",
+                    type="primary",
+                    use_container_width=True
+                )
+
+            sel_insp_id = st.selectbox("양식에 다시 불러올 검수ID 선택", df_insp_all["검수ID"].tolist(), key="sel_load_insp_id")
+            if st.button("🔄 선택한 검수 내역을 작성 양식에 불러오기", use_container_width=True, key="btn_load_insp_to_form"):
+                matched = df_insp_all[df_insp_all["검수ID"] == sel_insp_id]
+                if not matched.empty:
+                    st.session_state["insp_loaded_row"] = matched.iloc[0].to_dict()
+                    st.session_state["insp_chem_text"] = str(matched.iloc[0].get("약품명", "폴리머"))
+                    st.session_state["insp_caption_text"] = str(matched.iloc[0].get("사진설명", ""))
+                    st.success(f"✅ [{sel_insp_id}] 내역을 불러왔습니다. [작성·미리보기·영구저장] 탭에서 확인하세요.")
