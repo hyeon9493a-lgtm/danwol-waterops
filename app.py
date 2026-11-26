@@ -1938,6 +1938,8 @@ def generate_html_to_pdf_bytes(html_str):
 
 def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, solar_data, task_text, year=2026):
     months_window = [(sel_month - 5 + i - 1) % 12 + 1 for i in range(6)]
+    prev_months_window = [((sel_month - 1) - 5 + i - 1) % 12 + 1 for i in range(6)]
+    yy = str(year)[2:]
     cand = f"공공하수도시설 대행사업 월간보고서({sel_month}월).hwpx"
     if not os.path.exists(cand): cand = '공공하수도시설 대행사업 월간보고서(10월).hwpx'
     template_bytes = b""
@@ -1954,9 +1956,12 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
                 data = in_zip.read(item.filename)
                 if item.filename.startswith('Contents/section') and item.filename.endswith('.xml'):
                     text = data.decode('utf-8', errors='ignore')
+                    text = re.sub(r'‘\d{2}년\s*\d{1,2}월\s*월간보고', f'‘{yy}년 {sel_month}월 월간보고', text)
                     text = re.sub(r'월간보고서\(\d{1,2}월\)', f'월간보고서({sel_month}월)', text)
                     text = re.sub(r'운영상황 보고\(\d{1,2}월\)', f'운영상황 보고({sel_month}월)', text)
-                    for i, m in enumerate(months_window): text = text.replace(f'<{i+1}월헤더>', f'{m}월')
+                    for i, m in enumerate(months_window):
+                        text = text.replace(f'<{i+1}월헤더>', f'{m}월')
+                        text = text.replace(f'>{prev_months_window[i]}월<', f'>{m}월<')
                     text = text.replace('{{SLUDGE_AVG}}', f"{sludge_data['avg']:.1f}")
                     text = text.replace('{{SLUDGE_MAX}}', f"{sludge_data['max']:.1f}")
                     text = text.replace('{{SLUDGE_MIN}}', f"{sludge_data['min']:.1f}")
@@ -3565,13 +3570,13 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
         <meta charset="UTF-8">
         <style>
             @page {{ size: A4 portrait; margin: 12mm; }}
-            body {{ font-family: 'Malgun Gothic', '맑은 고딕', '바탕', sans-serif; color: #000; margin: 12px; font-size: 10.5px; line-height: 1.5; }}
+            body {{ font-family: 'Malgun Gothic', '맑은 고딕', '바탕', sans-serif; color: #000; margin: 12px; font-size: 12pt; line-height: 1.6; letter-spacing: 0em; }}
             .report-page {{ max-width: 780px; margin: 0 auto 28px auto; padding: 15px; border: 1px solid #ddd; background: #fff; page-break-after: always; }}
-            h2.sec-title {{ font-size: 16px; font-weight: bold; text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-top: 10px; margin-bottom: 12px; }}
-            .box-h {{ font-size: 12px; font-weight: bold; margin-top: 10px; margin-bottom: 4px; }}
-            .item-line {{ margin-left: 10px; font-size: 11px; margin-bottom: 2px; }}
-            table.rep-tbl {{ width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 9.5px; }}
-            table.rep-tbl th, table.rep-tbl td {{ border: 1px solid #000; padding: 3px 5px; vertical-align: middle; }}
+            h2.sec-title {{ font-size: 20pt; font-weight: bold; text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-top: 10px; margin-bottom: 12px; letter-spacing: 0em; }}
+            .box-h {{ font-size: 14pt; font-weight: bold; margin-top: 10px; margin-bottom: 4px; letter-spacing: 0em; }}
+            .item-line {{ margin-left: 10px; font-size: 12pt; margin-bottom: 2px; letter-spacing: 0em; }}
+            table.rep-tbl {{ width: 100%; border-collapse: collapse; border-spacing: 0; margin-bottom: 10px; font-size: 10pt; }}
+            table.rep-tbl th, table.rep-tbl td {{ border: 1px solid #000; padding: 2px 4px; vertical-align: middle; }}
             table.rep-tbl th {{ background-color: #f2f2f2; font-weight: bold; text-align: center; }}
             .unit-right {{ text-align: right; font-size: 9.5px; margin-bottom: 2px; }}
             @media print {{
