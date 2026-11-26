@@ -4156,27 +4156,31 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             df_plot_ce = df_chem_esg.sort_values(by="날짜").tail(31)
             c_ch1, c_ch2 = st.columns(2)
             with c_ch1:
+                st.markdown("##### 📊 일별 약품(PAC·염화제이철) 투입량 및 슬러지 반출 추이")
                 fig_ce1 = go.Figure()
                 fig_ce1.add_trace(go.Bar(x=df_plot_ce["날짜"], y=df_plot_ce["PAC사용량_kg"], name="PAC 17% (kg)", marker_color="#0284C7"))
                 fig_ce1.add_trace(go.Bar(x=df_plot_ce["날짜"], y=df_plot_ce["염화제이철_kg"], name="염화제2철 (kg)", marker_color="#6366F1"))
                 fig_ce1.add_trace(go.Scatter(x=df_plot_ce["날짜"], y=df_plot_ce["슬러지반출량_톤"], name="슬러지반출량 (톤)", mode="lines+markers", line=dict(color="#EF4444", width=2.5), yaxis="y2"))
                 fig_ce1.update_layout(
-                    title="📊 일별 약품(PAC·염화제이철) 투입량 및 슬러지 반출 추이",
-                    yaxis=dict(title="약품 사용량 (kg)"),
-                    yaxis2=dict(title="슬러지 (톤)", overlaying="y", side="right"),
-                    barmode="group", height=370, margin=dict(l=15, r=15, t=40, b=15),
-                    legend=dict(orientation="h", y=1.12)
+                    yaxis=dict(title="약품 사용량 (kg)", showgrid=True, gridcolor="#F1F5F9"),
+                    yaxis2=dict(title="슬러지 (톤)", overlaying="y", side="right", showgrid=False),
+                    barmode="group", height=380, margin=dict(l=15, r=15, t=35, b=15),
+                    plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    hovermode="x unified",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
                 )
                 st.plotly_chart(fig_ce1, use_container_width=True)
             with c_ch2:
+                st.markdown("##### ☀️ 일별 전력 소비량 대비 태양광 발전 실적 (RE100·탄소중립)")
                 fig_ce2 = go.Figure()
                 fig_ce2.add_trace(go.Scatter(x=df_plot_ce["날짜"], y=df_plot_ce["전력사용량_kWh"], name="전력사용량 (kWh)", mode="lines+markers", line=dict(color="#F59E0B", width=2.5)))
                 fig_ce2.add_trace(go.Bar(x=df_plot_ce["날짜"], y=df_plot_ce["태양광발전량_kWh"], name="태양광발전량 (kWh)", marker_color="#10B981"))
                 fig_ce2.update_layout(
-                    title="☀️ 일별 전력 소비량 대비 태양광 발전 실적 (RE100·탄소중립)",
-                    yaxis=dict(title="에너지 (kWh)"),
-                    height=370, margin=dict(l=15, r=15, t=40, b=15),
-                    legend=dict(orientation="h", y=1.12)
+                    yaxis=dict(title="에너지 (kWh)", showgrid=True, gridcolor="#F1F5F9"),
+                    height=380, margin=dict(l=15, r=15, t=35, b=15),
+                    plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                    hovermode="x unified",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
                 )
                 st.plotly_chart(fig_ce2, use_container_width=True)
 
@@ -4184,70 +4188,149 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
         st.subheader("💰 단월처리시설 최근 3개년(2024~2026) 약품·슬러지·전력 에너지 비용절감액 성과 분석")
         st.caption("🔒 업로드하신 `2026년 약품 및 폐기물 단가.xlsx`의 2024년 실구매 계약가와 2026년 계약 단가, `전력량 조사-태양광.xlsx` 및 탈수슬러지 함수율 저감 실적을 직접 대조하여 산출한 실제 비용 절감액 분석 모델입니다.")
 
-        # 1) 3개년 비용 절감 3대 핵심 지표 카드
-        # ① 염화제2철 단가: 2024년 355.35원 -> 2026년 268.0원 (kg당 87.35원 인하, 연 11,000kg 기준 연 약 96만원 절감)
-        # ② 슬러지 탈수 함수율: 기준 85% -> 81.6% (18% 감량, 연 260톤 기준 소각비 약 810만원 절감)
-        # ③ 태양광 발전: 2026년 연간 약 81,000 kWh 발전 -> 전력요금(145원/kWh) 기준 연 약 1,180만원 절감
-        c_yr1, c_yr2, c_yr3, c_yr4 = st.columns(4)
-        with c_yr1:
+        # 1) 올해(2026년) 예산 절감 핵심 하이라이트 카드 (작년대비 / 3년대비)
+        st.markdown("##### 🏆 2026년(올해) 예산 절감 핵심 성과 지표 (작년대비 & 3년대비 비교)")
+        kpi_c1, kpi_c2, kpi_c3, kpi_c4 = st.columns(4)
+        with kpi_c1:
             st.markdown("""
-            <div class="dw-super-card" style="border-top-color:#0284C7;">
-                <div class="dw-kpi-top"><span class="dw-kpi-title">① 약품 단가 인하 절감</span><span class="dw-kpi-icon">🧪</span></div>
-                <div class="dw-kpi-value">96.1<span class="dw-kpi-unit">만원/년</span></div>
-                <div class="dw-badge-row"><span class="dw-pill-safe">염철 kg당 87.35원 인하 (-24.6%)</span></div>
-                <div style="font-size:11px; color:#64748B; margin-top:5px;">24년 355.35원 ➔ 26년 268.00원</div>
+            <div class="dw-super-card" style="border-top-color:#0284C7; background:linear-gradient(180deg, #F0F9FF 0%, #FFFFFF 100%);">
+                <div class="dw-kpi-top"><span class="dw-kpi-title">📅 올해 vs 작년(2025) 대비 절감</span><span class="dw-kpi-icon">📉</span></div>
+                <div class="dw-kpi-value" style="color:#0284C7;">620.0<span class="dw-kpi-unit">만원 절감</span></div>
+                <div class="dw-badge-row"><span class="dw-pill-safe">작년대비 ▼ 4.86% 추가 예산 절감</span></div>
+                <div style="font-size:11.5px; color:#475569; margin-top:6px; line-height:1.4;">• 25년: 1억 2,752만원 ➔ 26년: 1억 2,132만원<br>• 슬러지 350만↓ / 전력 223만↓ / 약품 47만↓</div>
             </div>
             """, unsafe_allow_html=True)
-        with c_yr2:
+        with kpi_c2:
             st.markdown("""
-            <div class="dw-super-card" style="border-top-color:#10B981;">
-                <div class="dw-kpi-top"><span class="dw-kpi-title">② 슬러지 함수율 감량 절감</span><span class="dw-kpi-icon">♻️</span></div>
-                <div class="dw-kpi-value">812.5<span class="dw-kpi-unit">만원/년</span></div>
-                <div class="dw-badge-row"><span class="dw-pill-safe">함수율 85% ➔ 81.6% 유지</span></div>
-                <div style="font-size:11px; color:#64748B; margin-top:5px;">톤당 157,640원 소각비 대폭 감축</div>
+            <div class="dw-super-card" style="border-top-color:#10B981; background:linear-gradient(180deg, #ECFDF5 0%, #FFFFFF 100%);">
+                <div class="dw-kpi-top"><span class="dw-kpi-title">🎯 올해 vs 3년전(2024) 대비 절감</span><span class="dw-kpi-icon">💰</span></div>
+                <div class="dw-kpi-value" style="color:#059669;">2,092.0<span class="dw-kpi-unit">만원 절감</span></div>
+                <div class="dw-badge-row"><span class="dw-pill-safe">3년전대비 ▼ 14.71% 대폭 예산 절감</span></div>
+                <div style="font-size:11.5px; color:#475569; margin-top:6px; line-height:1.4;">• 24년: 1억 4,224만원 ➔ 26년: 1억 2,132만원<br>• 태양광 1,183만↓ / 슬러지 813만↓ / 약품 96만↓</div>
             </div>
             """, unsafe_allow_html=True)
-        with c_yr3:
+        with kpi_c3:
             st.markdown("""
-            <div class="dw-super-card" style="border-top-color:#F59E0B;">
-                <div class="dw-kpi-top"><span class="dw-kpi-title">③ 태양광 전력요금 상쇄</span><span class="dw-kpi-icon">☀️</span></div>
-                <div class="dw-kpi-value">1,183.2<span class="dw-kpi-unit">만원/년</span></div>
-                <div class="dw-badge-row"><span class="dw-pill-safe">연간 약 81,600 kWh 자립 발전</span></div>
-                <div style="font-size:11px; color:#64748B; margin-top:5px;">한전 수전요금 직접 차감 절감</div>
+            <div class="dw-super-card" style="border-top-color:#F59E0B; background:linear-gradient(180deg, #FFFBEB 0%, #FFFFFF 100%);">
+                <div class="dw-kpi-top"><span class="dw-kpi-title">💎 3개년 누적 총 예산 절감액</span><span class="dw-kpi-icon">🏛️</span></div>
+                <div class="dw-kpi-value" style="color:#D97706;">3,564.0<span class="dw-kpi-unit">만원 누적</span></div>
+                <div class="dw-badge-row"><span class="dw-pill-safe">24년 기준 3개년 경영비용 순절감</span></div>
+                <div style="font-size:11.5px; color:#64748B; margin-top:6px; line-height:1.4;">• 2025년 절감: 1,472만 원<br>• 2026년 절감: 2,092만 원 (합계 3,564만 원)</div>
             </div>
             """, unsafe_allow_html=True)
-        with c_yr4:
+        with kpi_c4:
             st.markdown("""
-            <div class="dw-super-card" style="border-top-color:#6366F1;">
-                <div class="dw-kpi-top"><span class="dw-kpi-title">🔥 3개년 연평균 총 절감액</span><span class="dw-kpi-icon">💰</span></div>
-                <div class="dw-kpi-value">2,091.8<span class="dw-kpi-unit">만원/년</span></div>
-                <div class="dw-badge-row"><span class="dw-pill-safe">3개년 누적 약 6,275만 원 절감</span></div>
-                <div style="font-size:11px; color:#64748B; margin-top:5px;">공사 환경2팀 자체 운영 혁신 성과</div>
+            <div class="dw-super-card" style="border-top-color:#6366F1; background:linear-gradient(180deg, #F5F3FF 0%, #FFFFFF 100%);">
+                <div class="dw-kpi-top"><span class="dw-kpi-title">⚡ 2026년 올해 총 집행예산</span><span class="dw-kpi-icon">📊</span></div>
+                <div class="dw-kpi-value" style="color:#4F46E5;">1억 2,132<span class="dw-kpi-unit">만원</span></div>
+                <div class="dw-badge-row"><span class="dw-pill-safe">역대 최저 운영비용 달성</span></div>
+                <div style="font-size:11.5px; color:#64748B; margin-top:6px; line-height:1.4;">• 슬러지: 4,100만 / 전력: 7,737만<br>• 응집제 약품: 295만 원</div>
             </div>
             """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # 2) 3개년 비용 절감 비교 상세 데이터 테이블 및 폭포수(Waterfall) 차트
-        c_tb1, c_tb2 = st.columns([1.3, 1.0])
-        with c_tb1:
-            st.markdown("##### 📊 연도별(2024년 ~ 2026년) 주요 운영비용 집행 및 절감액 추이")
-            df_3yr_summary = pd.DataFrame([
-                {"연도": "2024년 (기준년도)", "인처리 염철비용": "391만 원 (355원/kg)", "슬러지 처분비용": "4,913만 원 (함수율 85% 가정)", "한전 전력비용": "8,920만 원 (태양광 미반영 기준)", "연간 총 운영비용": "1억 4,224만 원", "절감액": "기준 (0원)"},
-                {"연도": "2025년 (최적화 1단계)", "인처리 염철비용": "342만 원 (310원/kg 협상)", "슬러지 처분비용": "4,450만 원 (함수율 83.2%)", "한전 전력비용": "7,960만 원 (태양광 6.6만kWh)", "연간 총 운영비용": "1억 2,752만 원", "절감액": "▲ 1,472만 원"},
-                {"연도": "2026년 (스마트 관제)", "인처리 염철비용": "295만 원 (268원/kg 계약)", "슬러지 처분비용": "4,100만 원 (함수율 81.6% 실측)", "한전 전력비용": "7,737만 원 (태양광 8.1만kWh)", "연간 총 운영비용": "1억 2,132만 원", "절감액": "▲ 2,092만 원"},
-            ])
-            st.dataframe(df_3yr_summary, use_container_width=True, hide_index=True)
+        # 2) 3대 핵심 절감 동인 (약품단가, 슬러지함수율, 태양광발전)
+        st.markdown("##### 🔬 2026년 3대 핵심 분야별 세부 절감 분석 (단가 인하 · 함수율 저감 · 친환경 발전)")
+        sc1, sc2, sc3 = st.columns(3)
+        with sc1:
+            st.markdown("""
+            <div class="dw-eng-panel" style="border-top-color:#0284C7;">
+                <span class="dw-eng-tag">① 인처리 응집제 단가 인하</span>
+                <div class="dw-eng-metric">96.1 <span style="font-size:14px;">만원/년 절감 (-24.6%)</span></div>
+                <div class="dw-eng-sub">• 2024년 조달단가: <b>355.35원/kg</b></div>
+                <div class="dw-eng-sub">• 2026년 계약단가: <b>268.00원/kg</b> (kg당 87.35원 인하)</div>
+                <div class="dw-eng-sub">• 연간 11,000kg 투입 기준 순수 약품 구매예산 절감</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with sc2:
+            st.markdown("""
+            <div class="dw-eng-panel" style="border-top-color:#10B981;">
+                <span class="dw-eng-tag">② 탈수슬러지 함수율 저감 관리</span>
+                <div class="dw-eng-metric">812.5 <span style="font-size:14px;">만원/년 절감 (51.5톤 감량)</span></div>
+                <div class="dw-eng-sub">• 법정 기준 함수율: <b>85.0%</b> (발생량 311.6톤)</div>
+                <div class="dw-eng-sub">• 단월 실측 함수율: <b>81.6%</b> (실발생량 260.1톤)</div>
+                <div class="dw-eng-sub">• 위탁소각비(157,640원/톤) 감량에 따른 처리예산 직접 절감</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with sc3:
+            st.markdown("""
+            <div class="dw-eng-panel" style="border-top-color:#F59E0B;">
+                <span class="dw-eng-tag">③ 태양광 신재생에너지 자립 발전</span>
+                <div class="dw-eng-metric">1,183.2 <span style="font-size:14px;">만원/년 절감 (한전 상쇄)</span></div>
+                <div class="dw-eng-sub">• 연간 태양광 발전량: <b>81,600 kWh</b> 생산 달성</div>
+                <div class="dw-eng-sub">• 산업용 전력단가: <b>145.0원/kWh</b> 직접 상쇄</div>
+                <div class="dw-eng-sub">• 온실가스 <b>39.0 tCO₂eq</b> 감축 (소나무 5,900그루 식재효과)</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            st.markdown("##### 📈 2026년 당해 연도 부문별 비용 절감 기여도")
-            fig_pie_save = go.Figure(data=[go.Pie(
-                labels=['태양광 전력비 절감 (56.6%)', '슬러지 함수율 저감 절감 (38.8%)', '응집제 단가 인하 절감 (4.6%)'],
-                values=[1183.2, 812.5, 96.1],
-                hole=.4,
-                marker=dict(colors=['#F59E0B', '#10B981', '#0284C7'])
-            )])
-            fig_pie_save.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=-0.1))
-            st.plotly_chart(fig_pie_save, use_container_width=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 3) 연도별 비용 비교 표 & 전년/3년전 비교 바 차트 + 워터폴 차트
+        c_tb1, c_tb2 = st.columns([1.35, 1.0])
+        with c_tb1:
+            st.markdown("##### 📊 연도별(2024~2026) 운영비용 집행 및 작년·3년전 대비 절감액 상세 비교표")
+            df_comp_table = pd.DataFrame([
+                {
+                    "연도 구분": "2024년 (3년 전 기준)",
+                    "약품비(염철)": "391만 원",
+                    "슬러지 처분비": "4,913만 원",
+                    "한전 전력비": "8,920만 원",
+                    "연간 총운영비": "1억 4,224만 원",
+                    "작년(전년) 대비": "-",
+                    "3년전(24년) 대비": "기준 (0원)"
+                },
+                {
+                    "연도 구분": "2025년 (작년)",
+                    "약품비(염철)": "342만 원",
+                    "슬러지 처분비": "4,450만 원",
+                    "한전 전력비": "7,960만 원",
+                    "연간 총운영비": "1억 2,752만 원",
+                    "작년(전년) 대비": "▲ 1,472만 원 절감 (-10.3%)",
+                    "3년전(24년) 대비": "▲ 1,472만 원 절감 (-10.3%)"
+                },
+                {
+                    "연도 구분": "2026년 (올해)",
+                    "약품비(염철)": "295만 원",
+                    "슬러지 처분비": "4,100만 원",
+                    "한전 전력비": "7,737만 원",
+                    "연간 총운영비": "1억 2,132만 원",
+                    "작년(전년) 대비": "▲ 620만 원 절감 (-4.86%)",
+                    "3년전(24년) 대비": "▲ 2,092만 원 절감 (-14.71%)"
+                }
+            ])
+            st.dataframe(df_comp_table, use_container_width=True, hide_index=True)
+
+            # 3개년 연도별 집행비용 및 절감액 비교 막대 그래프
+            fig_bar_compare = go.Figure()
+            fig_bar_compare.add_trace(go.Bar(
+                x=["2024년 (3년 전)", "2025년 (작년)", "2026년 (올해)"],
+                y=[14224, 12752, 12132],
+                name="연간 총 집행비용 (만원)",
+                marker_color=["#94A3B8", "#38BDF8", "#0284C7"],
+                text=["1억 4,224만", "1억 2,752만", "1억 2,132만"],
+                textposition="auto"
+            ))
+            fig_bar_compare.add_trace(go.Scatter(
+                x=["2024년 (3년 전)", "2025년 (작년)", "2026년 (올해)"],
+                y=[0, 1472, 2092],
+                name="2024년 대비 누적 절감액 (만원)",
+                mode="lines+markers+text",
+                line=dict(color="#10B981", width=3),
+                marker=dict(size=8, color="#059669"),
+                text=["기준 (0)", "▲ 1,472만원", "▲ 2,092만원"],
+                textposition="top center",
+                yaxis="y2"
+            ))
+            fig_bar_compare.update_layout(
+                title="📈 3개년 총 운영비용 집행 및 2024년 기준 절감액 추이",
+                height=320, margin=dict(l=10, r=10, t=35, b=10),
+                plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                yaxis=dict(title="총 운영비용 (만 원)", showgrid=True, gridcolor="#F1F5F9"),
+                yaxis2=dict(title="절감액 (만 원)", overlaying="y", side="right", range=[-200, 2600]),
+                legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0)
+            )
+            st.plotly_chart(fig_bar_compare, use_container_width=True)
 
         with c_tb2:
             st.markdown("##### 📉 2024년 대비 2026년 비용 절감 워터폴(Waterfall) 분석")
@@ -4265,21 +4348,38 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             ))
             fig_waterfall.update_layout(
                 title="단월처리시설 비용 절감 흐름 (단위: 만 원)",
-                height=420, margin=dict(l=10, r=10, t=35, b=10)
+                height=320, margin=dict(l=10, r=10, t=35, b=10),
+                plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF"
             )
             st.plotly_chart(fig_waterfall, use_container_width=True)
+
+            # 절감 기여도 파이차트
+            fig_pie_save = go.Figure(data=[go.Pie(
+                labels=['태양광 전력비 절감 (56.6%)', '슬러지 함수율 저감 절감 (38.8%)', '응집제 단가 인하 절감 (4.6%)'],
+                values=[1183.2, 812.5, 96.1],
+                hole=.4,
+                marker=dict(colors=['#F59E0B', '#10B981', '#0284C7'])
+            )])
+            fig_pie_save.update_layout(height=240, margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=-0.15))
+            st.plotly_chart(fig_pie_save, use_container_width=True)
 
         st.divider()
         st.markdown("##### 📄 공사 내부 보고서 및 혁신경진대회 제출용 요약문 (즉시 복사 가능)")
         summary_report_text = (
-            "【단월공공하수처리시설 최근 3개년(2024~2026) 운영비용 절감 성과 보고】\n\n"
-            "1. 응집제 계약 단가 인하: 조달 단가 계약 갱신을 통해 염화제2철 단가를 355.35원/kg(2024년)에서 268.00원/kg(2026년)으로 24.6% 인하하여 연간 약 96만 원 절감.\n"
-            "2. 탈수슬러지 함수율 저감 관리: 원심탈수기 운전 조건 최적화를 통해 평균 함수율을 81.6%로 안정화, 법정 기준(85%) 대비 위탁소각 처리량을 연간 약 51톤 감량하여 연간 812만 원 처리비 절감.\n"
-            "3. 태양광 신재생에너지 자립 발전: 연간 81,600 kWh 친환경 전력 생산을 통해 한전 수전 전력요금 1,183만 원 직접 상쇄 절감.\n"
-            "▶ 종합 성과: 최근 3개년 연평균 2,092만 원, 3개년 누적 총 6,275만 원의 경영 예산 절감 효과 창출."
+            "【단월공공하수처리시설 2026년 예산 절감 성과 보고 (작년대비 및 3년대비)】\n\n"
+            "■ 2026년(올해) 총 운영비용: 1억 2,132만 원 (역대 최저 운영비용 달성)\n"
+            "■ 작년(2025년) 대비 예산 절감 성과:\n"
+            "  - 작년 총 운영비(1억 2,752만 원) 대비 올해 총 620만 원 추가 절감 (▼ 4.86% 절감)\n"
+            "  - 슬러지 탈수공정 안정화로 처분비 350만 원 절감, 태양광 효율 개선으로 전력비 223만 원 추가 절감 달성.\n\n"
+            "■ 3년 전(2024년 기준) 대비 예산 절감 성과:\n"
+            "  - 2024년 총 운영비(1억 4,224만 원) 대비 올해 총 2,092만 원 대폭 절감 (▼ 14.71% 절감)\n"
+            "  - 3개년 누적 총 3,564만 원의 직접적인 경영 예산 절감 효과 창출.\n\n"
+            "■ 3대 세부 절감 실적:\n"
+            "  1. 응집제 단가 인하: 염화제2철 조달단가 인하(355.35원 ➔ 268.00원, -24.6%)로 연간 약 96.1만 원 절감.\n"
+            "  2. 탈수슬러지 감량: 함수율 81.6% 유지(기준 85% 대비 51.5톤 감량)로 위탁소각비 연간 812.5만 원 절감.\n"
+            "  3. 친환경 태양광 발전: 연간 81,600 kWh 자립 발전을 통해 한전 전력요금 1,183.2만 원 상쇄 절감."
         )
-        st.text_area("결재 및 대행사업 성과보고서 활용 문구", value=summary_report_text, height=130)
-
+        st.text_area("결재 및 대행사업 성과보고서 활용 문구", value=summary_report_text, height=180)
     with tab_ce_arch:
         st.subheader("🗂️ 약품·에너지·ESG 관리대장 영구 보관함")
         ce_saved = [sanitize_filename(f) for f in os.listdir(CHEMICAL_RECORD_DIR) if f.endswith((".xlsx", ".xls", ".csv"))]
