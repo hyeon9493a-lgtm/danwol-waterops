@@ -4302,6 +4302,7 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             st.dataframe(df_comp_table, use_container_width=True, hide_index=True)
 
             # 3개년 연도별 집행비용 및 절감액 비교 막대 그래프
+            st.markdown("##### 📈 3개년 총 운영비용 집행 및 2024년 기준 절감액 추이")
             fig_bar_compare = go.Figure()
             fig_bar_compare.add_trace(go.Bar(
                 x=["2024년 (3년 전)", "2025년 (작년)", "2026년 (올해)"],
@@ -4309,7 +4310,8 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
                 name="연간 총 집행비용 (만원)",
                 marker_color=["#94A3B8", "#38BDF8", "#0284C7"],
                 text=["1억 4,224만", "1억 2,752만", "1억 2,132만"],
-                textposition="auto"
+                textposition="inside",
+                insidetextanchor="middle"
             ))
             fig_bar_compare.add_trace(go.Scatter(
                 x=["2024년 (3년 전)", "2025년 (작년)", "2026년 (올해)"],
@@ -4323,19 +4325,19 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
                 yaxis="y2"
             ))
             fig_bar_compare.update_layout(
-                title="📈 3개년 총 운영비용 집행 및 2024년 기준 절감액 추이",
-                height=320, margin=dict(l=10, r=10, t=35, b=10),
+                height=340, margin=dict(l=10, r=10, t=35, b=10),
                 plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
-                yaxis=dict(title="총 운영비용 (만 원)", showgrid=True, gridcolor="#F1F5F9"),
-                yaxis2=dict(title="절감액 (만 원)", overlaying="y", side="right", range=[-200, 2600]),
-                legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0)
+                yaxis=dict(title="총 운영비용 (만 원)", showgrid=True, gridcolor="#F1F5F9", range=[0, 16500]),
+                yaxis2=dict(title="절감액 (만 원)", overlaying="y", side="right", range=[-200, 2700], showgrid=False),
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
             )
             st.plotly_chart(fig_bar_compare, use_container_width=True)
 
         with c_tb2:
             st.markdown("##### 📉 2024년 대비 2026년 비용 절감 워터폴(Waterfall) 분석")
             fig_waterfall = go.Figure(go.Waterfall(
-                name="20", orientation="v",
+                name="비용절감", orientation="v",
                 measure=["relative", "relative", "relative", "relative", "total"],
                 x=["2024년 총운영비", "약품단가 인하", "슬러지 감량", "태양광 발전", "2026년 실집행액"],
                 textposition="outside",
@@ -4347,9 +4349,9 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
                 totals={"marker": {"color": "#0284C7"}}
             ))
             fig_waterfall.update_layout(
-                title="단월처리시설 비용 절감 흐름 (단위: 만 원)",
-                height=320, margin=dict(l=10, r=10, t=35, b=10),
-                plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF"
+                height=340, margin=dict(l=10, r=10, t=25, b=10),
+                plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
+                yaxis=dict(title="금액 (만 원)", showgrid=True, gridcolor="#F1F5F9", range=[0, 16500])
             )
             st.plotly_chart(fig_waterfall, use_container_width=True)
 
