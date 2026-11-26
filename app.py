@@ -1967,6 +1967,10 @@ def generate_hwpx_monthly_report(sel_month, hwpx_template_file, sludge_data, sol
                     text = text.replace('{{SLUDGE_MIN}}', f"{sludge_data['min']:.1f}")
                     text = text.replace('{{SOLAR_GEN}}', f"{solar_data['current_month']:.1f}")
                     if task_text: text = text.replace('{{DAILY_MAINTENANCE_TEXT}}', task_text)
+                    # 단월 본처리장 추진실적 및 추진계획 다음 장 넘김(pageBreak="1") 반영
+                    if 'section1.xml' in item.filename:
+                        text = re.sub(r'(<hp:p[^>]*)(pageBreak="0")([^>]*><hp:run[^>]*><hp:t>□\s*추진실적</hp:t>)', r'\1pageBreak="1"\3', text)
+                        text = re.sub(r'(<hp:p[^>]*)(pageBreak="0")([^>]*><hp:run[^>]*><hp:t>□\s*추진계획</hp:t>)', r'\1pageBreak="1"\3', text)
                     data = text.encode('utf-8')
                 out_zip.writestr(item, data)
             in_zip.close(); out_zip.close()
@@ -3483,42 +3487,42 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
                 {"연번": "14", "시설명": "단월마을", "추진실적": "- 반응조 오뚜기 점검 후 공정 정상화 / - 잉여슬러지 인발 / - 반응조 및 유량조정조 수위계 청소 및 점검 / - 주변 환경정비", "추진계획": "기계시설물 점검"},
                 {"연번": "15", "시설명": "당의", "추진실적": "- 잉여슬러지 인발 / - 반응조 및 유량조정조 수위계 청소 및 점검 / - 디켄터 펌프 청소 및 점검 / - 주변 환경정비", "추진계획": "기계시설물 점검"},
             ])
-            ed_small_tasks = st.data_editor(df_small_tasks_init, use_container_width=True, hide_index=True, key="ed_small_tasks")
+            ed_small_tasks = st.data_editor(df_small_tasks_init, num_rows="dynamic", use_container_width=True, hide_index=True, key="ed_small_tasks")
 
         with sub_tab3:
             st.markdown(f"#### 🛖 개인하수처리시설 운영사항 보고({sel_report_month}월)")
             st.caption("○ 대행업체명 : 양평공사 | 개인하수처리시설 11개소의 처리량·수질 현황 및 추진실적(6~11번)을 편집할 수 있습니다.")
             df_priv_wq_init = pd.DataFrame([
-                {"시설명": "석산리(섬이)", "공법": "BSTS-II 30㎥/일", "구분": "평균", "BOD": "9.8", "SS": "9.5", "㎥/주": "175", "㎥/일": "25.0", "비고": "명달1·3반, 화전2리(여촌): 개인하수폐쇄 가동정지 / 옥천리: 유량계 침수 고장"},
+                {"시설명": "석산리(섬이)", "공법": "BSTS-II 30㎥/일", "구분": "평균", "BOD": "9.8", "SS": "9.5", "㎥/주": "175", "㎥/일": "25.0", "비고": ""},
                 {"시설명": "석산리(섬이)", "공법": "BSTS-II 30㎥/일", "구분": "최대", "BOD": "9.8", "SS": "9.5", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "석산리(섬이)", "공법": "BSTS-II 30㎥/일", "구분": "최소", "BOD": "9.8", "SS": "9.5", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "석산리(섬이)", "공법": "BSTS-II 30㎥/일", "구분": "협약수질", "BOD": "10", "SS": "10", "㎥/주": "-", "㎥/일": "-", "비고": ""},
                 {"시설명": "석산리(섬이)", "공법": "BSTS-II 30㎥/일", "구분": "전월평균", "BOD": "3.5", "SS": "3.2", "㎥/주": "161", "㎥/일": "23.0", "비고": ""},
                 {"시설명": "석산리(섬이)", "공법": "BSTS-II 30㎥/일", "구분": "유입수", "BOD": "45.4", "SS": "41.7", "㎥/주": "-", "㎥/일": "-", "비고": ""},
-                {"시설명": "물레울양지", "공법": "접촉폭기법 15㎥/일", "구분": "평균", "BOD": "1.6", "SS": "2.3", "㎥/주": "유량계 미설치", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울양지", "공법": "접촉폭기법 15㎥/일", "구분": "최대", "BOD": "1.6", "SS": "2.3", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울양지", "공법": "접촉폭기법 15㎥/일", "구분": "최소", "BOD": "1.6", "SS": "2.3", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울양지", "공법": "접촉폭기법 15㎥/일", "구분": "협약수질", "BOD": "10", "SS": "10", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울양지", "공법": "접촉폭기법 15㎥/일", "구분": "전월평균", "BOD": "9.0", "SS": "0.8", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울양지", "공법": "접촉폭기법 15㎥/일", "구분": "유입수", "BOD": "237.2", "SS": "513.3", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울음지", "공법": "접촉폭기법 15㎥/일", "구분": "평균", "BOD": "8.4", "SS": "3.3", "㎥/주": "유량계 미설치", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울음지", "공법": "접촉폭기법 15㎥/일", "구분": "최대", "BOD": "8.4", "SS": "3.3", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울음지", "공법": "접촉폭기법 15㎥/일", "구분": "최소", "BOD": "8.4", "SS": "3.3", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울음지", "공법": "접촉폭기법 15㎥/일", "구분": "협약수질", "BOD": "10", "SS": "10", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울음지", "공법": "접촉폭기법 15㎥/일", "구분": "전월평균", "BOD": "9.4", "SS": "9.3", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "물레울음지", "공법": "접촉폭기법 15㎥/일", "구분": "유입수", "BOD": "60.0", "SS": "32.0", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "음지", "공법": "접촉폭기법 15㎥/일", "구분": "평균", "BOD": "8.4", "SS": "3.3", "㎥/주": "유량계 미설치", "㎥/일": "", "비고": ""},
+                {"시설명": "음지", "공법": "접촉폭기법 15㎥/일", "구분": "최대", "BOD": "8.4", "SS": "3.3", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "음지", "공법": "접촉폭기법 15㎥/일", "구분": "최소", "BOD": "8.4", "SS": "3.3", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "음지", "공법": "접촉폭기법 15㎥/일", "구분": "협약수질", "BOD": "10", "SS": "10", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "음지", "공법": "접촉폭기법 15㎥/일", "구분": "전월평균", "BOD": "9.4", "SS": "9.3", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "음지", "공법": "접촉폭기법 15㎥/일", "구분": "유입수", "BOD": "60.0", "SS": "32.0", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "양지", "공법": "접촉폭기법 15㎥/일", "구분": "평균", "BOD": "1.6", "SS": "2.3", "㎥/주": "유량계 미설치", "㎥/일": "", "비고": ""},
+                {"시설명": "양지", "공법": "접촉폭기법 15㎥/일", "구분": "최대", "BOD": "1.6", "SS": "2.3", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "양지", "공법": "접촉폭기법 15㎥/일", "구분": "최소", "BOD": "1.6", "SS": "2.3", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "양지", "공법": "접촉폭기법 15㎥/일", "구분": "협약수질", "BOD": "10", "SS": "10", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "양지", "공법": "접촉폭기법 15㎥/일", "구분": "전월평균", "BOD": "9.0", "SS": "0.8", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "양지", "공법": "접촉폭기법 15㎥/일", "구분": "유입수", "BOD": "237.2", "SS": "513.3", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "평균", "BOD": "8.4", "SS": "0.5", "㎥/주": "유량계 미설치", "㎥/일": "", "비고": ""},
+                {"시설명": "복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "최대", "BOD": "8.4", "SS": "0.5", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "최소", "BOD": "8.4", "SS": "0.5", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "협약수질", "BOD": "10", "SS": "10", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "전월평균", "BOD": "3.0", "SS": "3.2", "㎥/주": "", "㎥/일": "", "비고": ""},
+                {"시설명": "복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "유입수", "BOD": "267.7", "SS": "1425.0", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "돌고개", "공법": "접촉폭기법 15㎥/일", "구분": "평균", "BOD": "2.3", "SS": "9.2", "㎥/주": "유량계 미설치", "㎥/일": "", "비고": ""},
                 {"시설명": "돌고개", "공법": "접촉폭기법 15㎥/일", "구분": "최대", "BOD": "2.3", "SS": "9.2", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "돌고개", "공법": "접촉폭기법 15㎥/일", "구분": "최소", "BOD": "2.3", "SS": "9.2", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "돌고개", "공법": "접촉폭기법 15㎥/일", "구분": "협약수질", "BOD": "10", "SS": "10", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "돌고개", "공법": "접촉폭기법 15㎥/일", "구분": "전월평균", "BOD": "3.6", "SS": "3.4", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "돌고개", "공법": "접촉폭기법 15㎥/일", "구분": "유입수", "BOD": "69.5", "SS": "172.5", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "석산리복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "평균", "BOD": "8.4", "SS": "0.5", "㎥/주": "유량계 미설치", "㎥/일": "", "비고": ""},
-                {"시설명": "석산리복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "최대", "BOD": "8.4", "SS": "0.5", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "석산리복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "최소", "BOD": "8.4", "SS": "0.5", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "석산리복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "협약수질", "BOD": "10", "SS": "10", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "석산리복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "전월평균", "BOD": "3.0", "SS": "3.2", "㎥/주": "", "㎥/일": "", "비고": ""},
-                {"시설명": "석산리복지회관", "공법": "접촉폭기법 10㎥/일", "구분": "유입수", "BOD": "267.7", "SS": "1425.0", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "인이피", "공법": "접촉폭기법 10㎥/일", "구분": "평균", "BOD": "1.4", "SS": "0.9", "㎥/주": "유량계 미설치", "㎥/일": "", "비고": ""},
                 {"시설명": "인이피", "공법": "접촉폭기법 10㎥/일", "구분": "최대", "BOD": "1.4", "SS": "0.9", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "인이피", "공법": "접촉폭기법 10㎥/일", "구분": "최소", "BOD": "1.4", "SS": "0.9", "㎥/주": "", "㎥/일": "", "비고": ""},
@@ -3526,18 +3530,18 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
                 {"시설명": "인이피", "공법": "접촉폭기법 10㎥/일", "구분": "전월평균", "BOD": "3.6", "SS": "3.8", "㎥/주": "", "㎥/일": "", "비고": ""},
                 {"시설명": "인이피", "공법": "접촉폭기법 10㎥/일", "구분": "유입수", "BOD": "4.4", "SS": "1.0", "㎥/주": "", "㎥/일": "", "비고": ""},
             ])
-            ed_priv_wq = st.data_editor(df_priv_wq_init, use_container_width=True, hide_index=True, height=420, key="ed_priv_wq")
+            ed_priv_wq = st.data_editor(df_priv_wq_init, num_rows="dynamic", use_container_width=True, hide_index=True, height=420, key="ed_priv_wq")
 
-            st.markdown("##### ○ 개인하수처리시설 시설별 추진실적 및 추진계획 (6~11번)")
+            st.markdown("##### ○ 개인하수처리시설 시설별 추진실적 및 추진계획 (6~11번 — 직접 수정 가능)")
             df_priv_tasks_init = pd.DataFrame([
                 {"연번": "6", "시설명": "석산리(섬이)", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
-                {"연번": "7", "시설명": "물레울양지", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
-                {"연번": "8", "시설명": "물레울음지", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
-                {"연번": "9", "시설명": "돌고개", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
-                {"연번": "10", "시설명": "석산리복지회관", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
+                {"연번": "7", "시설명": "음지", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
+                {"연번": "8", "시설명": "양지", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
+                {"연번": "9", "시설명": "복지회관", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
+                {"연번": "10", "시설명": "돌고개", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
                 {"연번": "11", "시설명": "인이피", "추진실적": "시설물 점검 및 환경정비 / 송풍기 점검", "추진계획": "처리장 브로워 가동상태 점검"},
             ])
-            ed_priv_tasks = st.data_editor(df_priv_tasks_init, use_container_width=True, hide_index=True, key="ed_priv_tasks")
+            ed_priv_tasks = st.data_editor(df_priv_tasks_init, num_rows="dynamic", use_container_width=True, hide_index=True, key="ed_priv_tasks")
 
         def df_to_html_rows(df_in, cols):
             html_out = ""
@@ -3592,14 +3596,27 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
                 </button>
             </div>
 
-            <div class="report-page" style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:920px; text-align:center;">
-                <div style="width:88%; padding:60px 30px; border:3px double #000;">
-                    <div style="font-size:28px; font-weight:bold; letter-spacing:2px; margin-bottom:18px;">공공하수처리시설 대행사업</div>
-                    <div style="font-size:20px; font-weight:bold; margin-bottom:50px;">- ‘{str(sel_report_year)[2:]}년 {sel_report_month}월 월간보고 -</div>
-                    <div style="font-size:20px; font-weight:bold; letter-spacing:4px;">양평공사 [환경사업본부]</div>
+            <!-- 1. 표지 (첫번째 사진 원본 완벽 재현: 외곽선 없이 깔끔한 중앙 배치) -->
+            <div class="report-page" style="min-height:980px; display:flex; flex-direction:column; justify-content:space-between; align-items:center; text-align:center; padding: 180px 20px 140px 20px; box-sizing:border-box;">
+                <div style="width:100%;">
+                    <div style="font-size:34pt; font-weight:bold; letter-spacing:4px; color:#000; line-height:1.4; margin-bottom:30px;">
+                        공공하수처리시설 &nbsp;대행사업
+                    </div>
+                    <div style="font-size:20pt; font-weight:normal; letter-spacing:1px; color:#000;">
+                        - &lsquo;{str(sel_report_year)[2:]}년 {sel_report_month}월 월간보고 -
+                    </div>
+                </div>
+                <div style="width:100%;">
+                    <div style="font-size:30pt; font-weight:bold; letter-spacing:3px; color:#000; margin-bottom:12px;">
+                        양평공사
+                    </div>
+                    <div style="font-size:22pt; font-weight:bold; letter-spacing:2px; color:#000;">
+                        [환경사업본부]
+                    </div>
                 </div>
             </div>
 
+            <!-- 2. 단월공공하수처리시설 운영사항 보고 (개요, 유입량, 방류량, 수질, 슬러지, 태양광) -->
             <div class="report-page">
                 <h2 class="sec-title">단월공공하수처리시설 운영사항 보고({sel_report_month}월)</h2>
                 <div class="box-h">□ 개요</div>
@@ -3643,17 +3660,38 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
                     <tr><th>구분</th>{m_headers_html}<th>평균</th></tr>
                     {solar_rows_html}
                 </table>
+            </div>
 
-                <div class="box-h">□ 추진실적</div>
-                <div class="item-line"><b>○ 전기설비</b><br>{perf_elec_html}</div>
-                <div class="item-line" style="margin-top:4px;"><b>○ 기계설비</b><br>{perf_mech_html}</div>
-                <div class="item-line" style="margin-top:4px;"><b>○ 기타</b><br>{perf_etc_html}</div>
+            <!-- 3. 단월공공하수처리시설 추진실적 (전기설비, 기계설비, 기타 전용 단독 페이지) -->
+            <div class="report-page">
+                <h2 class="sec-title">단월공공하수처리시설 운영사항 보고({sel_report_month}월)</h2>
+                <div class="box-h" style="font-size:15pt; margin-top:14px; margin-bottom:12px;">□ 추진실적</div>
+                <div class="item-line" style="font-size:12.5pt; line-height:1.75; margin-bottom:18px;">
+                    <b style="font-size:13pt; color:#0369A1;">○ 전기설비</b><br>
+                    <div style="margin-left:14px; margin-top:4px;">{perf_elec_html}</div>
+                </div>
+                <div class="item-line" style="font-size:12.5pt; line-height:1.75; margin-bottom:18px;">
+                    <b style="font-size:13pt; color:#0369A1;">○ 기계설비</b><br>
+                    <div style="margin-left:14px; margin-top:4px;">{perf_mech_html}</div>
+                </div>
+                <div class="item-line" style="font-size:12.5pt; line-height:1.75; margin-bottom:18px;">
+                    <b style="font-size:13pt; color:#0369A1;">○ 기타</b><br>
+                    <div style="margin-left:14px; margin-top:4px;">{perf_etc_html}</div>
+                </div>
+            </div>
 
-                <div class="box-h">□ 추진계획</div>
-                <div class="item-line">{plan_html}</div>
+            <!-- 4. 단월공공하수처리시설 추진계획 및 수범사례 전용 단독 페이지 -->
+            <div class="report-page">
+                <h2 class="sec-title">단월공공하수처리시설 운영사항 보고({sel_report_month}월)</h2>
+                <div class="box-h" style="font-size:15pt; margin-top:14px; margin-bottom:12px;">□ 추진계획</div>
+                <div class="item-line" style="font-size:12.5pt; line-height:1.75; margin-left:14px; margin-bottom:30px;">
+                    {plan_html}
+                </div>
 
-                <div class="box-h">□ 수범사례</div>
-                <div class="item-line">{best_html}</div>
+                <div class="box-h" style="font-size:15pt; margin-top:14px; margin-bottom:12px;">□ 수범사례</div>
+                <div class="item-line" style="font-size:12.5pt; line-height:1.75; margin-left:14px;">
+                    {best_html if best_html.strip() else "해당사항 없음"}
+                </div>
             </div>
 
             <div class="report-page">
