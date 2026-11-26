@@ -315,6 +315,8 @@ TMS_ACCUM_DB = "danwol_tms_master.csv"
 PROCESS_CONTROL_DB = "danwol_process_control_master.csv"
 CHEMICAL_ENERGY_DB = "danwol_chemical_energy_master.csv"
 CHEMICAL_INVENTORY_DB = "danwol_chemical_inventory.csv"
+KHAS_PURCHASE_MASTER_DB = "danwol_khas_chemical_purchase_master.csv"
+KHAS_USAGE_MASTER_DB = "danwol_khas_chemical_usage_master.csv"
 AUTH_DB_FILE = "user_auth_db.json"
 SYSTEM_CONFIG_FILE = "system_config.json"
 
