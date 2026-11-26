@@ -3587,13 +3587,15 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
                 </button>
             </div>
 
-            <div class="report-page">
-                <div style="text-align:center; padding:18px 10px; border:2px double #000; margin-bottom:15px;">
-                    <div style="font-size:20px; font-weight:bold;">공공하수처리시설 대행사업</div>
-                    <div style="font-size:14px; font-weight:bold; margin-top:4px;">- ‘{str(sel_report_year)[2:]}년 {sel_report_month}월 월간보고 -</div>
-                    <div style="font-size:13px; font-weight:bold; margin-top:10px;">양평공사 [환경사업본부]</div>
+            <div class="report-page" style="display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:920px; text-align:center;">
+                <div style="width:88%; padding:60px 30px; border:3px double #000;">
+                    <div style="font-size:28px; font-weight:bold; letter-spacing:2px; margin-bottom:18px;">공공하수처리시설 대행사업</div>
+                    <div style="font-size:20px; font-weight:bold; margin-bottom:50px;">- ‘{str(sel_report_year)[2:]}년 {sel_report_month}월 월간보고 -</div>
+                    <div style="font-size:20px; font-weight:bold; letter-spacing:4px;">양평공사 [환경사업본부]</div>
                 </div>
+            </div>
 
+            <div class="report-page">
                 <h2 class="sec-title">단월공공하수처리시설 운영사항 보고({sel_report_month}월)</h2>
                 <div class="box-h">□ 개요</div>
                 <div class="item-line">○ 시 &nbsp;설 &nbsp;명 : {ov_name}</div>
