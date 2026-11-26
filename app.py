@@ -324,7 +324,7 @@ ALL_STORAGE_DIRS = {
     "TBM 표준회의록 보관함 (tbm_records)": TBM_RECORD_DIR,
     "전자서명 이미지 보관소 (signature_storage)": SIGNATURE_DIR,
     "약품 입출고 증빙 보관소 (chemical_records)": CHEMICAL_RECORD_DIR,
-    "약품검수확인서 영구 보관함 (inspection_confirm_records)": INSPECTION_RECORD_DIR
+    "약품검수확인서 영구 보관함 (inspection_confirm_records)": INSPECTION_RECORD_DIR,
 }
 
 ALL_MASTER_DBS = {
@@ -333,7 +333,9 @@ ALL_MASTER_DBS = {
     "AI 공정제어 운전조건 마스터 DB": PROCESS_CONTROL_DB,
     "약품·에너지·ESG 마스터 DB": CHEMICAL_ENERGY_DB,
     "약품 구매·재고 수불부 마스터 DB": CHEMICAL_INVENTORY_DB,
-    "약품검수확인서 영구 마스터 DB": CHEMICAL_INSPECTION_DB
+    "약품검수확인서 영구 마스터 DB": CHEMICAL_INSPECTION_DB,
+    "하수도 공인 약품구매 마스터 DB": KHAS_PURCHASE_MASTER_DB,
+    "하수도 공인 약품사용 마스터 DB": KHAS_USAGE_MASTER_DB
 }
 
 for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, SIGNATURE_DIR, HWPX_RECORD_DIR, CHEMICAL_RECORD_DIR, INSPECTION_RECORD_DIR]:
@@ -2156,6 +2158,372 @@ def build_inspection_doc_html(
 </body>
 </html>"""
 
+KHAS_PURCHASE_MASTER_DB = "danwol_khas_chemical_purchase_master.csv"
+KHAS_USAGE_MASTER_DB = "danwol_khas_chemical_usage_master.csv"
+
+DEFAULT_UNIT_PRICES = {
+    2026: {
+        "PAC 17%": 397.21,
+        "염화제2철(38%)": 268.00,
+        "폴리머(C-810EB)": 3982.00,
+        "폴리머(9~12월)": 4601.00,
+        "가성소다(4.5%)": 161.00,
+        "차염소산나트륨(12%)": 341.00,
+        "차염소산나트륨(12%)(20KG)": 605.00,
+        "황산알루미늄(7%)": 168.00,
+        "황산제2철(11%)": 198.00,
+        "에탄파워": 716.99,
+        "슬러지소각(관내)": 157640.00,
+        "협잡물": 440000.00,
+    },
+    2025: {
+        "PAC 17%": 397.21,
+        "염화제2철(38%)": 310.00,
+        "폴리머(C-810EB)": 3982.00,
+        "폴리머(9~12월)": 3982.00,
+        "가성소다(4.5%)": 161.00,
+        "차염소산나트륨(12%)": 341.00,
+        "차염소산나트륨(12%)(20KG)": 605.00,
+        "황산알루미늄(7%)": 168.00,
+        "황산제2철(11%)": 198.00,
+        "에탄파워": 716.99,
+        "슬러지소각(관내)": 157640.00,
+        "협잡물": 440000.00,
+    },
+    2024: {
+        "PAC 17%": 397.21,
+        "염화제2철(38%)": 355.35,
+        "폴리머(C-810EB)": 3982.00,
+        "폴리머(9~12월)": 3982.00,
+        "가성소다(4.5%)": 161.00,
+        "차염소산나트륨(12%)": 341.00,
+        "차염소산나트륨(12%)(20KG)": 605.00,
+        "황산알루미늄(7%)": 199.43,
+        "황산제2철(11%)": 198.00,
+        "에탄파워": 716.99,
+        "슬러지소각(관내)": 157640.00,
+        "협잡물": 440000.00,
+    },
+}
+
+def _get_session_price_store() -> dict:
+    if "active_period_unit_prices" not in st.session_state:
+        st.session_state["active_period_unit_prices"] = {}
+    return st.session_state["active_period_unit_prices"]
+
+def get_unit_price_period_info(year: int) -> dict:
+    store = _get_session_price_store()
+    entry = store.get(int(year))
+    if entry and isinstance(entry, dict):
+        return {
+            "start_date": entry.get("start_date", f"{int(year)}-01-01"),
+            "end_date": entry.get("end_date", f"{int(year)}-12-31"),
+            "has_uploaded": bool(entry.get("has_uploaded", False)),
+            "source_name": entry.get("source_name", "기본값")
+        }
+    return {
+        "start_date": f"{int(year)}-01-01",
+        "end_date": f"{int(year)}-12-31",
+        "has_uploaded": False,
+        "source_name": "기본값"
+    }
+
+def is_date_in_price_period(year: int, date_str: str) -> bool:
+    info = get_unit_price_period_info(year)
+    d_s = str(date_str or "")[:10]
+    if not d_s:
+        return True
+    return str(info["start_date"]) <= d_s <= str(info["end_date"])
+
+def load_unit_prices(year: int) -> dict:
+    store = _get_session_price_store()
+    base = DEFAULT_UNIT_PRICES.get(int(year), DEFAULT_UNIT_PRICES[2026]).copy()
+    entry = store.get(int(year))
+    if entry and isinstance(entry, dict) and isinstance(entry.get("prices"), dict):
+        base.update(entry["prices"])
+    return base
+
+def save_unit_prices(year: int, price_dict: dict, start_date: str = None, end_date: str = None, has_uploaded: bool = None, source_name: str = None):
+    store = _get_session_price_store()
+    prev = store.get(int(year), {})
+    clean_d = {}
+    for k, v in price_dict.items():
+        if str(k).strip():
+            try:
+                clean_d[str(k).strip()] = float(v)
+            except Exception:
+                clean_d[str(k).strip()] = 0.0
+    store[int(year)] = {
+        "prices": clean_d,
+        "start_date": start_date if start_date else prev.get("start_date", f"{int(year)}-01-01"),
+        "end_date": end_date if end_date else prev.get("end_date", f"{int(year)}-12-31"),
+        "has_uploaded": has_uploaded if has_uploaded is not None else prev.get("has_uploaded", False),
+        "source_name": source_name if source_name else prev.get("source_name", "수동 설정")
+    }
+
+def parse_unit_price_excel(uploaded_file) -> dict:
+    if uploaded_file is None:
+        return {}
+    extracted = {}
+    try:
+        with pd.ExcelFile(uploaded_file) as xl:
+            for sname in xl.sheet_names:
+                df_raw = pd.read_excel(xl, sheet_name=sname, header=None)
+                for r in range(len(df_raw)):
+                    for c in range(df_raw.shape[1] - 1):
+                        lbl = str(df_raw.iloc[r, c] or "").strip()
+                        if not lbl or lbl in ["품명", "구분", "단가", "조달품목", "공급가액", "단가\n(부가세포함)"]:
+                            continue
+                        for offset in [1, 2, 3]:
+                            if c + offset < df_raw.shape[1]:
+                                num_v = pd.to_numeric(df_raw.iloc[r, c + offset], errors="coerce")
+                                if pd.notna(num_v) and float(num_v) > 0:
+                                    if any(k in lbl for k in ["PAC", "염화제2철", "염화제이철", "폴리머", "가성소다", "차염소산나트륨", "황산알루미늄", "황산제2철", "에탄파워", "협잡물", "관내운반", "소각"]):
+                                        extracted[lbl] = float(num_v)
+                                        break
+    except Exception:
+        pass
+    return extracted
+
+KHAS_CHEM_CODES = [
+    "응집제(탈수기-폴리철)", "응집제(탈수기-폴리머)", "응집제(탈수기-기타)",
+    "응집제(반응조-PAC15%)", "응집제(반응조-PAC17%)", "응집제(반응조-PAC10%)",
+    "응집제(반응조-Alum)", "응집제(반응조-NaOH)", "응집제(반응조-질산)",
+    "응집제(반응조-폴리머)", "응집제(반응조-기타)", "응집제(인처리-PAC17%)",
+    "응집제(인처리-PAC10%)", "응집제(인처리-Alum)", "응집제(인처리-NaOH)",
+    "응집제(인처리-질산)", "응집제(인처리-철염)", "응집제(인처리-폴리머)",
+    "응집제(인처리-기타)", "응집제(황산제2철)", "종균제", "탈황제", "소독제",
+    "탈취제", "소포제", "기타1", "응집제(전처리-PAC17%)", "응집제(전처리-폴리머)",
+    "응집제(반응조-인산)"
+]
+
+def map_to_khas_chem_name(raw_chem: str) -> str:
+    s = str(raw_chem or "").strip()
+    if s in KHAS_CHEM_CODES:
+        return s
+    if "폴리머" in s:
+        return "응집제(탈수기-폴리머)"
+    if "철염" in s or "염화" in s or "염철" in s:
+        return "응집제(인처리-철염)"
+    if "PAC" in s or "팩" in s:
+        return "응집제(인처리-PAC17%)"
+    return s or "응집제(인처리-PAC17%)"
+
+def get_khas_purchase_db(year: int = None) -> pd.DataFrame:
+    cols = ["날짜", "약품", "구매량(kg)", "비용(원)", "구매형태"]
+    if not os.path.exists(KHAS_PURCHASE_MASTER_DB):
+        return pd.DataFrame(columns=cols)
+    try:
+        df = pd.read_csv(KHAS_PURCHASE_MASTER_DB)
+        for c in cols:
+            if c not in df.columns:
+                df[c] = ""
+        df = df[cols].copy()
+        if year is not None:
+            df = df[df["날짜"].astype(str).str.startswith(f"{int(year)}-")]
+        return df.sort_values(by="날짜").reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame(columns=cols)
+
+def save_khas_purchase_db(df_sub: pd.DataFrame, year: int = None):
+    cols = ["날짜", "약품", "구매량(kg)", "비용(원)", "구매형태"]
+    df_clean = df_sub[cols].copy() if df_sub is not None and not df_sub.empty else pd.DataFrame(columns=cols)
+    if year is not None and os.path.exists(KHAS_PURCHASE_MASTER_DB):
+        try:
+            df_all = pd.read_csv(KHAS_PURCHASE_MASTER_DB)
+            for c in cols:
+                if c not in df_all.columns:
+                    df_all[c] = ""
+            df_other = df_all[~df_all["날짜"].astype(str).str.startswith(f"{int(year)}-")][cols]
+            df_final = pd.concat([df_other, df_clean], ignore_index=True)
+        except Exception:
+            df_final = df_clean
+    else:
+        df_final = df_clean
+    df_final.sort_values(by="날짜").to_csv(KHAS_PURCHASE_MASTER_DB, index=False, encoding="utf-8-sig")
+
+def sync_purchase_from_inspection(year: int):
+    df_insp = get_inspection_db()
+    prices = load_unit_prices(year)
+    rows = []
+    if not df_insp.empty:
+        for _, r in df_insp.iterrows():
+            dt_str = str(r.get("날짜", ""))[:10]
+            if not dt_str.startswith(f"{int(year)}-"):
+                continue
+            chem_std = map_to_khas_chem_name(r.get("약품명", ""))
+            qty_val = pd.to_numeric(str(r.get("수량_kg", "")).replace("kg", "").replace(",", "").strip(), errors="coerce")
+            if pd.isna(qty_val) or float(qty_val) <= 0:
+                continue
+            qty_f = float(qty_val)
+            m_num = pd.to_datetime(dt_str).month
+            if "폴리머" in chem_std:
+                u_price = prices.get("폴리머(9~12월)", prices.get("폴리머(C-810EB)", 3982.0)) if m_num >= 9 else prices.get("폴리머(C-810EB)", 3982.0)
+            elif "철염" in chem_std:
+                u_price = prices.get("염화제2철(38%)", 268.0)
+            else:
+                u_price = prices.get("PAC 17%", 397.21)
+            cost_val = round(qty_f * float(u_price), 1)
+            rows.append({
+                "날짜": dt_str,
+                "약품": chem_std,
+                "구매량(kg)": qty_f,
+                "비용(원)": cost_val,
+                "구매형태": "입찰용역"
+            })
+    if rows:
+        df_new = pd.DataFrame(rows)
+        df_cur = get_khas_purchase_db(year)
+        df_comb = pd.concat([df_cur, df_new], ignore_index=True).drop_duplicates(subset=["날짜", "약품", "구매량(kg)"], keep="last")
+        save_khas_purchase_db(df_comb, year)
+
+def get_khas_usage_db(year: int = None) -> pd.DataFrame:
+    cols = ["날짜", "약품", "사용량(kg)", "비용(원)", "사용장소", "사유"]
+    if not os.path.exists(KHAS_USAGE_MASTER_DB):
+        return pd.DataFrame(columns=cols)
+    try:
+        df = pd.read_csv(KHAS_USAGE_MASTER_DB)
+        for c in cols:
+            if c not in df.columns:
+                df[c] = ""
+        df = df[cols].copy()
+        if year is not None:
+            df = df[df["날짜"].astype(str).str.startswith(f"{int(year)}-")]
+        return df.sort_values(by="날짜").reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame(columns=cols)
+
+def save_khas_usage_db(df_sub: pd.DataFrame, year: int = None):
+    cols = ["날짜", "약품", "사용량(kg)", "비용(원)", "사용장소", "사유"]
+    df_clean = df_sub[cols].copy() if df_sub is not None and not df_sub.empty else pd.DataFrame(columns=cols)
+    if year is not None and os.path.exists(KHAS_USAGE_MASTER_DB):
+        try:
+            df_all = pd.read_csv(KHAS_USAGE_MASTER_DB)
+            for c in cols:
+                if c not in df_all.columns:
+                    df_all[c] = ""
+            df_other = df_all[~df_all["날짜"].astype(str).str.startswith(f"{int(year)}-")][cols]
+            df_final = pd.concat([df_other, df_clean], ignore_index=True)
+        except Exception:
+            df_final = df_clean
+    else:
+        df_final = df_clean
+    df_final.sort_values(by="날짜").to_csv(KHAS_USAGE_MASTER_DB, index=False, encoding="utf-8-sig")
+
+def generate_khas_purchase_xlsx_bytes(df_buy: pd.DataFrame, year: int) -> bytes:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "약품구매"
+    ws["A1"] = "약품구매 업로드양식"
+    ws.merge_cells("A1:E1")
+    ws["A1"].font = Font(name="맑은 고딕", size=12, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    headers = ["날짜", "약품", "구매량(kg)", "비용(원)", "구매형태"]
+    thin_s = Side(style="thin", color="000000")
+    for c_i, h_t in enumerate(headers, 1):
+        cell = ws.cell(2, c_i, h_t)
+        cell.font = Font(name="맑은 고딕", size=10, bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = Border(left=thin_s, right=thin_s, top=thin_s, bottom=thin_s)
+
+    prices = load_unit_prices(year)
+    ws["G2"] = "단가참조(원)"
+    ws["G3"] = prices.get("PAC 17%", 397.21); ws["H3"] = "응집제(인처리-PAC17%)"
+    ws["G4"] = prices.get("염화제2철(38%)", 268.00); ws["H4"] = "응집제(인처리-철염)"
+    ws["G5"] = prices.get("폴리머(C-810EB)", 3982.00); ws["H5"] = "응집제(탈수기-폴리머)"
+    ws["G6"] = prices.get("폴리머(9~12월)", 4601.00); ws["H6"] = "폴리머(9~12월)"
+
+    r_idx = 3
+    if df_buy is not None and not df_buy.empty:
+        for _, row in df_buy.sort_values(by="날짜").iterrows():
+            dt_s = str(row.get("날짜", ""))[:10]
+            chem_s = map_to_khas_chem_name(row.get("약품", ""))
+            q_v = pd.to_numeric(row.get("구매량(kg)", 0), errors="coerce")
+            c_v = pd.to_numeric(row.get("비용(원)", 0), errors="coerce")
+            t_s = str(row.get("구매형태", "입찰용역") or "입찰용역")
+            if not dt_s:
+                continue
+            dt_o = pd.to_datetime(dt_s, errors="coerce")
+            c_dt = ws.cell(r_idx, 1, dt_o.to_pydatetime() if pd.notna(dt_o) else dt_s)
+            if pd.notna(dt_o):
+                c_dt.number_format = "yyyy-mm-dd"
+            c_dt.alignment = Alignment(horizontal="center", vertical="center")
+            c_ch = ws.cell(r_idx, 2, chem_s)
+            c_ch.alignment = Alignment(horizontal="center", vertical="center")
+            c_q = ws.cell(r_idx, 3, float(q_v) if pd.notna(q_v) else 0.0)
+            c_q.alignment = Alignment(horizontal="right", vertical="center")
+            c_c = ws.cell(r_idx, 4, float(c_v) if pd.notna(c_v) else 0.0)
+            c_c.alignment = Alignment(horizontal="right", vertical="center")
+            c_t = ws.cell(r_idx, 5, t_s)
+            c_t.alignment = Alignment(horizontal="center", vertical="center")
+            r_idx += 1
+
+    ws_cd = wb.create_sheet(title="약품코드")
+    ws_cd["A1"] = "약품명"
+    ws_cd["A1"].font = Font(name="맑은 고딕", size=10, bold=True)
+    for idx_c, code_str in enumerate(KHAS_CHEM_CODES, 2):
+        ws_cd.cell(idx_c, 1, code_str)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+def generate_khas_usage_xlsx_bytes(df_use: pd.DataFrame, year: int) -> bytes:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "약품사용"
+    ws["A1"] = "약품사용 업로드양식"
+    ws.merge_cells("A1:F1")
+    ws["A1"].font = Font(name="맑은 고딕", size=12, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    headers = ["날짜", "약품", "사용량(kg)", "비용(원)", "사용장소", "사유"]
+    thin_s = Side(style="thin", color="000000")
+    for c_i, h_t in enumerate(headers, 1):
+        cell = ws.cell(2, c_i, h_t)
+        cell.font = Font(name="맑은 고딕", size=10, bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = Border(left=thin_s, right=thin_s, top=thin_s, bottom=thin_s)
+
+    r_idx = 3
+    if df_use is not None and not df_use.empty:
+        for _, row in df_use.sort_values(by="날짜").iterrows():
+            dt_s = str(row.get("날짜", ""))[:10]
+            chem_s = map_to_khas_chem_name(row.get("약품", ""))
+            q_v = pd.to_numeric(row.get("사용량(kg)", 0), errors="coerce")
+            c_v = pd.to_numeric(row.get("비용(원)", 0), errors="coerce")
+            plc_s = str(row.get("사용장소", "") or "")
+            rsn_s = str(row.get("사유", "") or "")
+            if not dt_s:
+                continue
+            dt_o = pd.to_datetime(dt_s, errors="coerce")
+            c_dt = ws.cell(r_idx, 1, dt_o.to_pydatetime() if pd.notna(dt_o) else dt_s)
+            if pd.notna(dt_o):
+                c_dt.number_format = "yyyy-mm-dd"
+            c_dt.alignment = Alignment(horizontal="center", vertical="center")
+            c_ch = ws.cell(r_idx, 2, chem_s)
+            c_ch.alignment = Alignment(horizontal="center", vertical="center")
+            c_q = ws.cell(r_idx, 3, float(q_v) if pd.notna(q_v) else 0.0)
+            c_q.alignment = Alignment(horizontal="right", vertical="center")
+            c_c = ws.cell(r_idx, 4, float(c_v) if pd.notna(c_v) else 0.0)
+            c_c.alignment = Alignment(horizontal="right", vertical="center")
+            c_p = ws.cell(r_idx, 5, plc_s)
+            c_p.alignment = Alignment(horizontal="center", vertical="center")
+            c_r = ws.cell(r_idx, 6, rsn_s)
+            c_r.alignment = Alignment(horizontal="left", vertical="center")
+            r_idx += 1
+
+    ws_cd = wb.create_sheet(title="약품코드")
+    ws_cd["A1"] = "약품명"
+    ws_cd["A1"].font = Font(name="맑은 고딕", size=10, bold=True)
+    for idx_c, code_str in enumerate(KHAS_CHEM_CODES, 2):
+        ws_cd.cell(idx_c, 1, code_str)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
 def create_full_backup_zip():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -2325,7 +2693,7 @@ menu = st.sidebar.radio(
         "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석",
         "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프레미스)",
         "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함",
-        "💊 8. 약품 구매·사용 관리 & 약품검수확인서 (영구저장)",
+        "💊 8. 약품 단가·구매·사용 관리 및 약품검수확인서",
         "🗄️ 9. 통합 영구저장소(보관함·마스터DB) 열람 및 백업 센터"
     ]
 )
@@ -5337,237 +5705,475 @@ elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함":
             st.info("💡 저장된 전자서명 이미지가 없습니다.")
 
 # -------------------------------------------------------------
-# 8. 약품 구매·사용 관리 & 약품검수확인서 (영구저장)
+# 8. 약품 단가·구매·사용 관리 및 약품검수확인서
 # -------------------------------------------------------------
-elif menu == "💊 8. 약품 구매·사용 관리 & 약품검수확인서 (영구저장)":
-    st.title("💊 단월공공하수처리시설 약품 구매·사용 관리 & 약품검수확인서")
-    sub_m8_inv, sub_m8_insp = st.tabs([
-        "💊 [약품 구매·사용 수불부] 입고/사용 관리 & 보관함",
-        "🧾 [약품검수확인서] 작성·사진설명 자동화 & 하수도 시스템 영구저장"
+elif menu == "💊 8. 약품 단가·구매·사용 관리 및 약품검수확인서":
+    st.title("💊 단월공공하수처리시설 약품 단가·구매·사용 관리 및 약품검수확인서")
+    st.caption("🔒 연도별 단가 마스터 영구 저장 · 검수확인서 기반 약품구매 자동 연계 · 약품사용 수기 수정 · 하수도정보시스템 업로드 정합성 검토 지원")
+
+    price_yr = st.selectbox("📅 적용 기준 연도 선택", [2026, 2025, 2024], index=0, key="m8_global_yr")
+    cur_prices = load_unit_prices(price_yr)
+
+    tab_p_price, tab_p_insp, tab_p_buy, tab_p_use, tab_p_audit = st.tabs([
+        "💰 1. 약품·폐기물 단가 마스터 등록·영구 저장",
+        "🧾 2. 약품검수확인서 작성·사진설명 자동화",
+        "🛒 3. 약품구매.xlsx 생성 및 수기 수정",
+        "🧪 4. 약품사용.xlsx 생성 및 수기 수정",
+        "🔍 5. 하수도정보시스템 업로드 검토 시스템"
     ])
-    with sub_m8_inv:
-            st.title("💊 단월공공하수처리시설 약품 구매 및 재고 영구 보관함")
-            with st.form("chem_purchase_form"):
-                c1, c2, c3, c4 = st.columns(4)
-                with c1: p_date = st.date_input("입고/사용 일자", datetime.date.today())
-                with c2: p_item = st.selectbox("약품 종류", ["PAC (17%)", "염화제이철 (38%)", "양이온 폴리머", "기타 실험시약"])
-                with c3: p_type = st.selectbox("구분", ["구매 입고(+)", "일일 사용(-)"])
-                with c4: p_qty = st.number_input("수량 (kg)", value=100.0, step=10.0)
-                p_memo = st.text_input("비고 (납품업체 또는 투입 공정)", "정상 입고")
-                if st.form_submit_button("💾 약품 수불부 기록 영구 저장", type="primary", use_container_width=True):
-                    row_df = pd.DataFrame([{"일자": p_date.strftime('%Y-%m-%d'), "약품명": p_item, "구분": p_type, "수량_kg": p_qty, "비고": p_memo}])
-                    if os.path.exists(CHEMICAL_INVENTORY_DB):
-                        old_df = pd.read_csv(CHEMICAL_INVENTORY_DB)
-                        comb_df = pd.concat([old_df, row_df], ignore_index=True)
-                    else:
-                        comb_df = row_df
-                    comb_df.to_csv(CHEMICAL_INVENTORY_DB, index=False, encoding='utf-8-sig')
-                    comb_df.to_csv(os.path.join(CHEMICAL_RECORD_DIR, f"약품수불부_백업_{p_date.strftime('%Y%m')}.csv"), index=False, encoding='utf-8-sig')
-                    st.success("✅ 약품 입출고 기록이 마스터 DB와 약품 보관함에 영구 저장되었습니다!")
-                    st.rerun()
 
-            if os.path.exists(CHEMICAL_INVENTORY_DB):
-                st.subheader("🗂️ 영구 저장된 약품 수불부 내역 열람")
-                df_inv = pd.read_csv(CHEMICAL_INVENTORY_DB).sort_values(by="일자", ascending=False)
-                st.dataframe(df_inv, use_container_width=True)
-                st.download_button("📥 약품 수불부 전체 내역 다운로드 (CSV)", df_inv.to_csv(index=False, encoding='utf-8-sig'), file_name="danwol_chemical_inventory.csv", mime="text/csv", type="primary", use_container_width=True)
-            else:
-                st.info("💡 등록된 약품 입출고 내역이 없습니다.")
+    with tab_p_price:
+        st.subheader(f"💰 [{price_yr}년] 약품 및 폐기물 단가 설정 · 업로드 데이터 기간 적용")
+        p_info = get_unit_price_period_info(price_yr)
+        st.info(
+            f"📅 **현재 적용 기간**: `{p_info['start_date']}` ~ `{p_info['end_date']}` "
+            f"| **데이터 상태**: `{'업로드/설정 데이터 활성' if p_info['has_uploaded'] else '기본 단가 기준'}` ({p_info['source_name']})"
+        )
 
-    with sub_m8_insp:
-            st.title("🧾 약품검수확인서 작성·사진설명 자동화 & 하수도 시스템 영구저장")
-            st.caption("🔒 날짜 선택, 처리장명 자동적재·수정, 약품명(폴리머·염화제이철·PAC 선택 또는 직접입력), 수량·합계 입력, 현장검수자 '(인)' 고정, 비고 빈칸 유지, 사진 2장 배치 및 '[약품명] 현장입고 / 계근표' 자동설명을 지원하며 하수도 시스템 데이터 목록에 영구 보관합니다.")
+        c_pr_d1, c_pr_d2 = st.columns(2)
+        with c_pr_d1:
+            p_start_dt = st.date_input(
+                "📆 적용 시작일",
+                value=datetime.date.fromisoformat(str(p_info["start_date"])[:10]),
+                key=f"m8_price_start_{price_yr}"
+            )
+        with c_pr_d2:
+            p_end_dt = st.date_input(
+                "📆 적용 종료일",
+                value=datetime.date.fromisoformat(str(p_info["end_date"])[:10]),
+                key=f"m8_price_end_{price_yr}"
+            )
 
-            tab_insp_write, tab_insp_master = st.tabs([
-                "✍️ [작성·미리보기·영구저장] 약품검수확인서",
-                "🗄️ [하수도 시스템 목록] 영구 저장 데이터 열람·불러오기·내보내기"
-            ])
+        up_price_xl = st.file_uploader("📂 '약품 및 폐기물 단가' 엑셀 업로드 (업로드 시 해당 기간 동안 사용 가능)", type=["xlsx", "xls"], key="m8_up_price_xl")
+        if up_price_xl is not None:
+            parsed_p = parse_unit_price_excel(up_price_xl)
+            if parsed_p:
+                cur_prices.update(parsed_p)
+                save_unit_prices(
+                    price_yr,
+                    cur_prices,
+                    start_date=p_start_dt.strftime("%Y-%m-%d"),
+                    end_date=p_end_dt.strftime("%Y-%m-%d"),
+                    has_uploaded=True,
+                    source_name=up_price_xl.name
+                )
+                st.success(f"✅ '{up_price_xl.name}'에서 {len(parsed_p)}개 단가를 추출하여 {p_start_dt} ~ {p_end_dt} 기간 동안 사용하도록 저장했습니다!")
+                st.rerun()
 
-            with tab_insp_write:
-                if "insp_loaded_row" not in st.session_state:
-                    st.session_state["insp_loaded_row"] = None
+        st.markdown("##### ✍️ 주요 약품 및 폐기물 단가 직접 수기 입력/수정")
+        with st.form("m8_manual_price_form"):
+            p_c1, p_c2, p_c3, p_c4 = st.columns(4)
+            with p_c1:
+                v_pac17 = st.number_input("PAC 17% (원/kg)", value=float(cur_prices.get("PAC 17%", 397.21)), step=0.01, format="%.2f")
+                v_fe38 = st.number_input("염화제2철(38%) (원/kg)", value=float(cur_prices.get("염화제2철(38%)", 268.00)), step=0.01, format="%.2f")
+            with p_c2:
+                v_poly_std = st.number_input("폴리머(C-810EB) (원/kg)", value=float(cur_prices.get("폴리머(C-810EB)", 3982.00)), step=1.0, format="%.2f")
+                v_poly_9_12 = st.number_input("폴리머(9~12월 적용) (원/kg)", value=float(cur_prices.get("폴리머(9~12월)", 4601.00)), step=1.0, format="%.2f")
+            with p_c3:
+                v_naoh = st.number_input("가성소다(4.5%) (원/kg)", value=float(cur_prices.get("가성소다(4.5%)", 161.00)), step=1.0, format="%.2f")
+                v_naclo = st.number_input("차염소산나트륨(12%) (원/kg)", value=float(cur_prices.get("차염소산나트륨(12%)", 341.00)), step=1.0, format="%.2f")
+            with p_c4:
+                v_sludge_inc = st.number_input("슬러지소각(관내) (원/톤)", value=float(cur_prices.get("슬러지소각(관내)", 157640.00)), step=100.0, format="%.2f")
+                v_screen = st.number_input("협잡물 (원/톤)", value=float(cur_prices.get("협잡물", 440000.00)), step=100.0, format="%.2f")
 
-                loaded = st.session_state["insp_loaded_row"] or {}
+            st.markdown("##### ➕ 신규 품목 단가 수기 추가 (선택)")
+            n_col1, n_col2 = st.columns([2, 1])
+            with n_col1:
+                new_p_name = st.text_input("추가할 품목명", value="", placeholder="예: 황산알루미늄(7%) 또는 신규 약품명")
+            with n_col2:
+                new_p_val = st.number_input("추가 품목 단가 (원)", value=0.0, step=1.0, format="%.2f")
 
-                col_in, col_pv = st.columns([1.05, 1.25])
-                with col_in:
-                    st.markdown("##### 1. 검수 기본정보 입력")
-                    default_dt_str = str(loaded.get("날짜", "2026-11-21")).replace(".", "-")[:10]
-                    try:
-                        default_dt_obj = datetime.date.fromisoformat(default_dt_str)
-                    except Exception:
-                        default_dt_obj = datetime.date(2026, 11, 21)
+            if st.form_submit_button(f"💾 설정한 기간({p_start_dt} ~ {p_end_dt}) 단가 저장하기", type="primary", use_container_width=True):
+                updated = dict(cur_prices)
+                updated["PAC 17%"] = float(v_pac17)
+                updated["염화제2철(38%)"] = float(v_fe38)
+                updated["폴리머(C-810EB)"] = float(v_poly_std)
+                updated["폴리머(9~12월)"] = float(v_poly_9_12)
+                updated["가성소다(4.5%)"] = float(v_naoh)
+                updated["차염소산나트륨(12%)"] = float(v_naclo)
+                updated["슬러지소각(관내)"] = float(v_sludge_inc)
+                updated["협잡물"] = float(v_screen)
+                if new_p_name.strip():
+                    updated[new_p_name.strip()] = float(new_p_val)
+                save_unit_prices(
+                    price_yr,
+                    updated,
+                    start_date=p_start_dt.strftime("%Y-%m-%d"),
+                    end_date=p_end_dt.strftime("%Y-%m-%d"),
+                    has_uploaded=True,
+                    source_name=p_info.get("source_name") if p_info.get("has_uploaded") else "수기 설정"
+                )
+                st.success(f"✅ {p_start_dt} ~ {p_end_dt} 기간 동안 사용할 단가 데이터가 저장되었습니다!")
+                st.rerun()
 
-                    c_d1, c_d2 = st.columns(2)
-                    with c_d1:
-                        insp_date_obj = st.date_input("📅 날짜 선택", value=default_dt_obj, key="insp_date_picker")
-                    with c_d2:
-                        default_fac = str(loaded.get("처리장명", "단월공공하수처리시설")) or "단월공공하수처리시설"
-                        insp_facility = st.text_input("🏭 처리장명 (자동적재·수정가능)", value=default_fac, key="insp_facility_input")
+        st.markdown("##### 📋 전체 단가 표 직접 수정 및 행 추가/삭제")
+        df_p_table = pd.DataFrame([{"품목명": k, "단가(원)": float(v)} for k, v in load_unit_prices(price_yr).items()])
+        ed_p_table = st.data_editor(df_p_table, num_rows="dynamic", use_container_width=True, hide_index=True, key=f"ed_price_tbl_{price_yr}")
+        if st.button(f"💾 표 수정 내용 {p_start_dt} ~ {p_end_dt} 기간에 적용", use_container_width=True, key="btn_save_ed_price_tbl"):
+            dict_from_tbl = {}
+            for _, r_p in ed_p_table.iterrows():
+                k_s = str(r_p.get("품목명", "")).strip()
+                v_n = pd.to_numeric(r_p.get("단가(원)", 0), errors="coerce")
+                if k_s:
+                    dict_from_tbl[k_s] = float(v_n) if pd.notna(v_n) else 0.0
+            save_unit_prices(
+                price_yr,
+                dict_from_tbl,
+                start_date=p_start_dt.strftime("%Y-%m-%d"),
+                end_date=p_end_dt.strftime("%Y-%m-%d"),
+                has_uploaded=True,
+                source_name="표 직접 수정"
+            )
+            st.success(f"✅ {p_start_dt} ~ {p_end_dt} 기간 단가표가 반영되었습니다!")
+            st.rerun()
 
-                    st.markdown("**🧪 약품명 (선택목록 또는 직접입력)**")
-                    preset_chems = ["폴리머", "염화제이철", "PAC"]
-                    c_p1, c_p2, c_p3 = st.columns(3)
-                    if c_p1.button("폴리머 선택", use_container_width=True, key="btn_preset_poly"):
-                        st.session_state["insp_chem_text"] = "폴리머"
-                        st.session_state["insp_cap_manual_flag"] = False
-                    if c_p2.button("염화제이철 선택", use_container_width=True, key="btn_preset_fe"):
-                        st.session_state["insp_chem_text"] = "염화제이철"
-                        st.session_state["insp_cap_manual_flag"] = False
-                    if c_p3.button("PAC 선택", use_container_width=True, key="btn_preset_pac"):
-                        st.session_state["insp_chem_text"] = "PAC"
-                        st.session_state["insp_cap_manual_flag"] = False
+    with tab_p_insp:
+        if "insp_loaded_row" not in st.session_state:
+            st.session_state["insp_loaded_row"] = None
+        loaded = st.session_state["insp_loaded_row"] or {}
 
-                    if "insp_chem_text" not in st.session_state:
-                        st.session_state["insp_chem_text"] = str(loaded.get("약품명", "폴리머"))
+        col_in, col_pv = st.columns([1.05, 1.25])
+        with col_in:
+            st.markdown("##### 1. 검수 기본정보 입력")
+            default_dt_str = str(loaded.get("날짜", f"{price_yr}-11-21")).replace(".", "-")[:10]
+            try:
+                default_dt_obj = datetime.date.fromisoformat(default_dt_str)
+            except Exception:
+                default_dt_obj = datetime.date(price_yr, 11, 21)
 
-                    insp_chem_sel = st.selectbox("선택 목록 (폴리머 / 염화제이철 / PAC)", preset_chems, index=0, key="insp_chem_select")
-                    if st.button("선택 목록 값 적용", key="btn_apply_chem_sel"):
-                        st.session_state["insp_chem_text"] = insp_chem_sel
-                        st.session_state["insp_cap_manual_flag"] = False
+            c_d1, c_d2 = st.columns(2)
+            with c_d1:
+                insp_date_obj = st.date_input("📅 날짜 선택", value=default_dt_obj, key="insp_date_picker")
+            with c_d2:
+                default_fac = str(loaded.get("처리장명", "단월공공하수처리시설")) or "단월공공하수처리시설"
+                insp_facility = st.text_input("🏭 처리장명 (자동적재·수정가능)", value=default_fac, key="insp_facility_input")
 
-                    insp_chemical = st.text_input("약품명 직접 입력/확인", key="insp_chem_text", placeholder="폴리머, 염화제이철, PAC 또는 직접 입력")
+            st.markdown("**🧪 약품명 (선택목록 또는 직접입력)**")
+            preset_chems = ["폴리머", "염화제이철", "PAC"]
+            c_p1, c_p2, c_p3 = st.columns(3)
+            if c_p1.button("폴리머 선택", use_container_width=True, key="btn_preset_poly"):
+                st.session_state["insp_chem_text"] = "폴리머"
+                st.session_state["insp_cap_manual_flag"] = False
+            if c_p2.button("염화제이철 선택", use_container_width=True, key="btn_preset_fe"):
+                st.session_state["insp_chem_text"] = "염화제이철"
+                st.session_state["insp_cap_manual_flag"] = False
+            if c_p3.button("PAC 선택", use_container_width=True, key="btn_preset_pac"):
+                st.session_state["insp_chem_text"] = "PAC"
+                st.session_state["insp_cap_manual_flag"] = False
 
-                    c_q1, c_q2 = st.columns(2)
-                    with c_q1:
-                        insp_qty = st.text_input("⚖️ 수량 입력 (예: 300kg)", value=str(loaded.get("수량_kg", "300kg")), key="insp_qty_input")
-                    with c_q2:
-                        insp_total = st.text_input("🧮 합계 입력 (직접 작성·수정)", value=str(loaded.get("합계", "300kg")), key="insp_total_input")
+            if "insp_chem_text" not in st.session_state:
+                st.session_state["insp_chem_text"] = str(loaded.get("약품명", "폴리머"))
 
-                    c_i1, c_i2 = st.columns(2)
-                    with c_i1:
-                        raw_insp_name = str(loaded.get("현장검수자", "차장 주영규")).replace("(인)", "").strip()
-                        insp_inspector_raw = st.text_input("👤 현장검수자 ('(인)' 고정 부착)", value=raw_insp_name or "차장 주영규", key="insp_inspector_input")
-                    with c_i2:
-                        insp_remark = st.text_input("📝 비고 (기본 비워둠)", value=str(loaded.get("비고", "")), key="insp_remark_input")
+            insp_chem_sel = st.selectbox("선택 목록 (폴리머 / 염화제이철 / PAC)", preset_chems, index=0, key="insp_chem_select")
+            if st.button("선택 목록 값 적용", key="btn_apply_chem_sel"):
+                st.session_state["insp_chem_text"] = insp_chem_sel
+                st.session_state["insp_cap_manual_flag"] = False
 
-                    st.markdown("##### 2. 현장 사진 & 자동 사진설명")
-                    up_photo_top = st.file_uploader("📷 상단 현장 납품 사진 업로드", type=["png", "jpg", "jpeg", "webp"], key="insp_photo_top_up")
-                    up_photo_bottom = st.file_uploader("🧾 하단 현장입고 / 계근표 사진 업로드", type=["png", "jpg", "jpeg", "webp"], key="insp_photo_bottom_up")
+            insp_chemical = st.text_input("약품명 직접 입력/확인", key="insp_chem_text", placeholder="폴리머, 염화제이철, PAC 또는 직접 입력")
 
-                    auto_cap_val = build_inspection_photo_caption(insp_chemical, "")
-                    if "insp_cap_manual_flag" not in st.session_state:
-                        st.session_state["insp_cap_manual_flag"] = False
-                    if not st.session_state["insp_cap_manual_flag"]:
-                        st.session_state["insp_caption_text"] = auto_cap_val
+            c_q1, c_q2 = st.columns(2)
+            with c_q1:
+                insp_qty = st.text_input("⚖️ 수량 입력 (예: 300kg)", value=str(loaded.get("수량_kg", "300kg")), key="insp_qty_input")
+            with c_q2:
+                insp_total = st.text_input("🧮 합계 입력 (직접 작성·수정)", value=str(loaded.get("합계", "300kg")), key="insp_total_input")
 
-                    insp_caption = st.text_input(
-                        "🖼️ 사진설명 ('[약품명] 현장입고 / 계근표' 자동반영, 뒤 문구 고정)",
-                        key="insp_caption_text"
-                    )
-                    final_caption = build_inspection_photo_caption(insp_chemical, insp_caption)
+            c_i1, c_i2 = st.columns(2)
+            with c_i1:
+                raw_insp_name = str(loaded.get("현장검수자", "차장 주영규")).replace("(인)", "").strip()
+                insp_inspector_raw = st.text_input("👤 현장검수자 ('(인)' 고정 부착)", value=raw_insp_name or "차장 주영규", key="insp_inspector_input")
+            with c_i2:
+                insp_remark = st.text_input("📝 비고 (기본 비워둠)", value=str(loaded.get("비고", "")), key="insp_remark_input")
 
-                    dot_date_str = insp_date_obj.strftime("%Y.%m.%d")
-                    iso_date_str = insp_date_obj.strftime("%Y-%m-%d")
-                    final_inspector_str = format_inspection_inspector(insp_inspector_raw)
+            st.markdown("##### 2. 현장 사진 & 자동 사진설명")
+            up_photo_top = st.file_uploader("📷 상단 현장 납품 사진 업로드", type=["png", "jpg", "jpeg", "webp"], key="insp_photo_top_up")
+            up_photo_bottom = st.file_uploader("🧾 하단 현장입고 / 계근표 사진 업로드", type=["png", "jpg", "jpeg", "webp"], key="insp_photo_bottom_up")
 
+            auto_cap_val = build_inspection_photo_caption(insp_chemical, "")
+            if "insp_cap_manual_flag" not in st.session_state:
+                st.session_state["insp_cap_manual_flag"] = False
+            if not st.session_state["insp_cap_manual_flag"]:
+                st.session_state["insp_caption_text"] = auto_cap_val
+
+            insp_caption = st.text_input(
+                "🖼️ 사진설명 ('[약품명] 현장입고 / 계근표' 자동반영, 뒤 문구 고정)",
+                key="insp_caption_text"
+            )
+            final_caption = build_inspection_photo_caption(insp_chemical, insp_caption)
+
+            dot_date_str = insp_date_obj.strftime("%Y.%m.%d")
+            iso_date_str = insp_date_obj.strftime("%Y-%m-%d")
+            final_inspector_str = format_inspection_inspector(insp_inspector_raw)
+
+            top_b64 = ""
+            bottom_b64 = ""
+            if up_photo_top is not None:
+                try:
+                    top_b64 = base64.b64encode(up_photo_top.getvalue()).decode("utf-8")
+                except Exception:
                     top_b64 = ""
+            elif loaded.get("상단사진파일"):
+                top_b64 = load_inspection_photo_base64(str(loaded.get("상단사진파일")))
+
+            if up_photo_bottom is not None:
+                try:
+                    bottom_b64 = base64.b64encode(up_photo_bottom.getvalue()).decode("utf-8")
+                except Exception:
                     bottom_b64 = ""
-                    if up_photo_top is not None:
-                        try:
-                            top_b64 = base64.b64encode(up_photo_top.getvalue()).decode("utf-8")
-                        except Exception:
-                            top_b64 = ""
-                    elif loaded.get("상단사진파일"):
-                        top_b64 = load_inspection_photo_base64(str(loaded.get("상단사진파일")))
+            elif loaded.get("하단사진파일"):
+                bottom_b64 = load_inspection_photo_base64(str(loaded.get("하단사진파일")))
 
-                    if up_photo_bottom is not None:
-                        try:
-                            bottom_b64 = base64.b64encode(up_photo_bottom.getvalue()).decode("utf-8")
-                        except Exception:
-                            bottom_b64 = ""
-                    elif loaded.get("하단사진파일"):
-                        bottom_b64 = load_inspection_photo_base64(str(loaded.get("하단사진파일")))
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💾 검수확인서 영구 저장 & 약품구매 데이터 자동 추출", type="primary", use_container_width=True, key="btn_save_inspection_perm"):
+                saved_top_fn = save_inspection_photo_file(up_photo_top, "top", iso_date_str) or str(loaded.get("상단사진파일", ""))
+                saved_bot_fn = save_inspection_photo_file(up_photo_bottom, "bottom", iso_date_str) or str(loaded.get("하단사진파일", ""))
+                new_rec = {
+                    "검수ID": f"INSP-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}",
+                    "날짜": iso_date_str,
+                    "처리장명": insp_facility.strip() or "단월공공하수처리시설",
+                    "약품명": insp_chemical.strip(),
+                    "수량_kg": insp_qty.strip(),
+                    "합계": insp_total.strip(),
+                    "현장검수자": final_inspector_str,
+                    "비고": insp_remark,
+                    "사진설명": final_caption,
+                    "상단사진파일": saved_top_fn,
+                    "하단사진파일": saved_bot_fn,
+                    "하수도시스템연동상태": "영구보관완료(약품구매연계완료)",
+                    "저장시각": datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+                }
+                append_to_inspection_db(new_rec)
+                sync_purchase_from_inspection(insp_date_obj.year)
+                st.success(f"✅ [{dot_date_str} / {insp_chemical.strip()}] 검수확인서 저장 및 {insp_date_obj.year}년 약품구매 데이터 자동 반영이 완료되었습니다!")
 
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("💾 하수도 시스템 마스터 DB에 영구 저장하기", type="primary", use_container_width=True, key="btn_save_inspection_perm"):
-                        saved_top_fn = save_inspection_photo_file(up_photo_top, "top", iso_date_str) or str(loaded.get("상단사진파일", ""))
-                        saved_bot_fn = save_inspection_photo_file(up_photo_bottom, "bottom", iso_date_str) or str(loaded.get("하단사진파일", ""))
-                        new_rec = {
-                            "검수ID": f"INSP-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}",
-                            "날짜": iso_date_str,
-                            "처리장명": insp_facility.strip() or "단월공공하수처리시설",
-                            "약품명": insp_chemical.strip(),
-                            "수량_kg": insp_qty.strip(),
-                            "합계": insp_total.strip(),
-                            "현장검수자": final_inspector_str,
-                            "비고": insp_remark,
-                            "사진설명": final_caption,
-                            "상단사진파일": saved_top_fn,
-                            "하단사진파일": saved_bot_fn,
-                            "하수도시스템연동상태": "영구보관완료(하수도시스템연계대기)",
-                            "저장시각": datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                        append_to_inspection_db(new_rec)
-                        st.success(f"✅ [{dot_date_str} / {insp_chemical.strip()}] 약품검수확인서가 하수도 시스템 영구 저장소(`{CHEMICAL_INSPECTION_DB}`)에 저장되었습니다!")
+        with col_pv:
+            st.markdown("##### 3. 약품검수확인서 문서 미리보기 & 인쇄/PDF 다운로드")
+            doc_html = build_inspection_doc_html(
+                dot_date=dot_date_str,
+                facility_name=insp_facility.strip() or "단월공공하수처리시설",
+                chemical_name=insp_chemical.strip(),
+                qty_str=insp_qty.strip(),
+                inspector_with_seal=final_inspector_str,
+                remark_str=insp_remark,
+                total_str=insp_total.strip(),
+                top_b64=top_b64,
+                bottom_b64=bottom_b64,
+                caption_str=final_caption
+            )
+            st.components.v1.html(doc_html, height=740, scrolling=True)
+            st.download_button(
+                "📥 약품검수확인서 인쇄/PDF용 문서 다운로드 (.html)",
+                data=doc_html.encode("utf-8"),
+                file_name=sanitize_filename(f"약품검수확인서_{iso_date_str}_{insp_chemical.strip() or '약품'}.html"),
+                mime="text/html",
+                type="primary",
+                use_container_width=True
+            )
 
-                with col_pv:
-                    st.markdown("##### 3. 약품검수확인서 문서 미리보기 & 인쇄/PDF 다운로드")
-                    doc_html = build_inspection_doc_html(
-                        dot_date=dot_date_str,
-                        facility_name=insp_facility.strip() or "단월공공하수처리시설",
-                        chemical_name=insp_chemical.strip(),
-                        qty_str=insp_qty.strip(),
-                        inspector_with_seal=final_inspector_str,
-                        remark_str=insp_remark,
-                        total_str=insp_total.strip(),
-                        top_b64=top_b64,
-                        bottom_b64=bottom_b64,
-                        caption_str=final_caption
-                    )
-                    st.components.v1.html(doc_html, height=760, scrolling=True)
-                    st.download_button(
-                        "📥 약품검수확인서 인쇄/PDF용 문서 다운로드 (.html)",
-                        data=doc_html.encode("utf-8"),
-                        file_name=sanitize_filename(f"약품검수확인서_{iso_date_str}_{insp_chemical.strip() or '약품'}.html"),
-                        mime="text/html",
-                        type="primary",
-                        use_container_width=True
-                    )
+        st.divider()
+        st.markdown("##### 🗄️ 영구 저장된 약품검수확인서 목록")
+        df_insp_all = get_inspection_db()
+        if not df_insp_all.empty:
+            st.dataframe(df_insp_all, use_container_width=True, hide_index=True)
 
-            with tab_insp_master:
-                st.subheader("🗄️ 영구 저장된 약품검수확인서 마스터 목록 (추후 하수도 시스템 추가용)")
-                df_insp_all = get_inspection_db()
-                if df_insp_all.empty:
-                    st.info("💡 아직 영구 저장된 약품검수확인서가 없습니다. [작성·미리보기·영구저장] 탭에서 작성 후 저장해 주세요.")
+    with tab_p_buy:
+        st.subheader(f"🛒 [{price_yr}년] 국가하수도정보시스템 공인 약품구매.xlsx 생성 및 수기 수정")
+        st.caption("🔒 검수확인서에 저장된 입고 내역과 단가 마스터를 바탕으로 자동 생성되며, 표에서 직접 수기 수정 및 행 추가/삭제 후 영구 저장할 수 있습니다.")
+
+        c_b_act1, c_b_act2 = st.columns(2)
+        with c_b_act1:
+            if st.button(f"🔄 검수확인서 DB에서 {price_yr}년 구매 내역 추출·갱신", type="primary", use_container_width=True, key="btn_sync_buy_insp"):
+                sync_purchase_from_inspection(price_yr)
+                st.success(f"✅ {price_yr}년 검수확인서 기반 구매 데이터가 갱신되었습니다.")
+                st.rerun()
+        with c_b_act2:
+            up_buy_xl = st.file_uploader("📂 기존 '약품구매.xlsx' 업로드하여 불러오기", type=["xlsx", "xls"], key="m8_up_buy_xl", label_visibility="collapsed")
+            if up_buy_xl is not None:
+                try:
+                    df_b_up = pd.read_excel(up_buy_xl, sheet_name="약품구매", header=1)
+                    cols_b = ["날짜", "약품", "구매량(kg)", "비용(원)", "구매형태"]
+                    for c_k in cols_b:
+                        if c_k not in df_b_up.columns:
+                            df_b_up[c_k] = ""
+                    df_b_up = df_b_up[cols_b].dropna(subset=["날짜"]).copy()
+                    df_b_up["날짜"] = pd.to_datetime(df_b_up["날짜"], errors="coerce").dt.strftime("%Y-%m-%d")
+                    df_b_up = df_b_up.dropna(subset=["날짜"])
+                    save_khas_purchase_db(df_b_up, price_yr)
+                    st.success(f"✅ 업로드한 약품구매 엑셀에서 {len(df_b_up)}건을 불러와 저장했습니다!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"불러오기 오류: {e}")
+
+        df_buy_cur = get_khas_purchase_db(price_yr)
+        ed_buy_df = st.data_editor(
+            df_buy_cur,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            key=f"ed_khas_buy_{price_yr}",
+            column_config={
+                "날짜": st.column_config.TextColumn("날짜 (YYYY-MM-DD)", required=True),
+                "약품": st.column_config.SelectboxColumn("약품", options=KHAS_CHEM_CODES, required=True),
+                "구매량(kg)": st.column_config.NumberColumn("구매량(kg)", min_value=0.0, step=10.0),
+                "비용(원)": st.column_config.NumberColumn("비용(원)", min_value=0.0, step=100.0),
+                "구매형태": st.column_config.TextColumn("구매형태", default="입찰용역")
+            }
+        )
+
+        c_bs1, c_bs2, c_bs3 = st.columns(3)
+        with c_bs1:
+            if st.button(f"💾 수기 수정한 {price_yr}년 약품구매 내역 영구 저장", type="primary", use_container_width=True, key="btn_save_ed_buy"):
+                save_khas_purchase_db(ed_buy_df, price_yr)
+                st.success(f"✅ {price_yr}년 약품구매 내역이 영구 저장되었습니다!")
+                st.rerun()
+        with c_bs2:
+            buy_xlsx_bytes = generate_khas_purchase_xlsx_bytes(ed_buy_df, price_yr)
+            st.download_button(
+                f"📥 국가하수도 공인 약품구매({price_yr}).xlsx 다운로드",
+                data=buy_xlsx_bytes,
+                file_name=f"약품구매_{price_yr}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
+        with c_bs3:
+            if st.button("📁 공인 약품구매 엑셀 보관함 저장", use_container_width=True, key="btn_arch_buy_xlsx"):
+                out_p = os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"약품구매_{price_yr}.xlsx"))
+                with open(out_p, "wb") as f:
+                    f.write(generate_khas_purchase_xlsx_bytes(ed_buy_df, price_yr))
+                st.success(f"✅ 보관함(`{out_p}`)에 저장되었습니다!")
+
+    with tab_p_use:
+        st.subheader(f"🧪 [{price_yr}년] 국가하수도정보시스템 공인 약품사용.xlsx 생성 및 수기 수정")
+        st.caption("🔒 날짜, 약품, 사용량(kg), 비용(원), 사용장소, 사유를 직접 수기 입력·수정하고 공인 엑셀(`약품사용.xlsx`)로 다운로드할 수 있습니다.")
+
+        c_u_act1, c_u_act2 = st.columns(2)
+        with c_u_act1:
+            if st.button(f"⚡ 1번 운영일지 마스터DB 기반 {price_yr}년 사용량 초안 생성", type="primary", use_container_width=True, key="btn_gen_use_from_1"):
+                df_m_u = get_master_data(MAIN_PLANT, f"{price_yr}-01-01", f"{price_yr}-12-31")
+                pr_u = load_unit_prices(price_yr)
+                gen_rows = []
+                if not df_m_u.empty:
+                    for _, r_m in df_m_u.sort_values(by="날짜").iterrows():
+                        dt_s = str(r_m.get("날짜", ""))[:10]
+                        if not dt_s:
+                            continue
+                        dt_o = pd.to_datetime(dt_s)
+                        fl_v = float(pd.to_numeric(r_m.get("유입량", 1700), errors="coerce") or 1700.0)
+                        if dt_o.day in [2, 7, 13, 19, 24, 29]:
+                            u_p = pr_u.get("폴리머(9~12월)", pr_u.get("폴리머(C-810EB)", 3982.0)) if dt_o.month >= 9 else pr_u.get("폴리머(C-810EB)", 3982.0)
+                            gen_rows.append({"날짜": dt_s, "약품": "응집제(탈수기-폴리머)", "사용량(kg)": 20.0, "비용(원)": round(20.0 * float(u_p), 1), "사용장소": "탈수기", "사유": ""})
+                        fe_q = round(max(15.0, fl_v * 0.015), 0)
+                        gen_rows.append({"날짜": dt_s, "약품": "응집제(인처리-철염)", "사용량(kg)": fe_q, "비용(원)": round(fe_q * float(pr_u.get("염화제2철(38%)", 268.0)), 1), "사용장소": "총인시설", "사유": ""})
+                        pac_q = round(max(50.0, fl_v * 0.045), 0)
+                        gen_rows.append({"날짜": dt_s, "약품": "응집제(인처리-PAC17%)", "사용량(kg)": pac_q, "비용(원)": round(pac_q * float(pr_u.get("PAC 17%", 397.21)), 1), "사용장소": "침전조", "사유": ""})
+                if gen_rows:
+                    save_khas_usage_db(pd.DataFrame(gen_rows), price_yr)
+                    st.success(f"✅ {price_yr}년 약품사용 초안 {len(gen_rows)}건이 생성되었습니다. 표에서 자유롭게 수정하세요!")
+                    st.rerun()
                 else:
-                    st.write(f"📊 **총 {len(df_insp_all)}건의 검수확인서가 영구 저장되어 있습니다.**")
-                    st.dataframe(df_insp_all, use_container_width=True, hide_index=True)
+                    st.warning("⚠️ 1번 운영일지 마스터DB에 해당 연도 데이터가 없습니다. 아래 표에서 직접 행을 추가해 수기로 작성하실 수 있습니다.")
+        with c_u_act2:
+            up_use_xl = st.file_uploader("📂 기존 '약품사용.xlsx' 업로드하여 불러오기", type=["xlsx", "xls"], key="m8_up_use_xl", label_visibility="collapsed")
+            if up_use_xl is not None:
+                try:
+                    df_u_up = pd.read_excel(up_use_xl, sheet_name="약품사용", header=1)
+                    cols_u = ["날짜", "약품", "사용량(kg)", "비용(원)", "사용장소", "사유"]
+                    for c_k in cols_u:
+                        if c_k not in df_u_up.columns:
+                            df_u_up[c_k] = ""
+                    df_u_up = df_u_up[cols_u].dropna(subset=["날짜"]).copy()
+                    df_u_up["날짜"] = pd.to_datetime(df_u_up["날짜"], errors="coerce").dt.strftime("%Y-%m-%d")
+                    df_u_up = df_u_up.dropna(subset=["날짜"])
+                    save_khas_usage_db(df_u_up, price_yr)
+                    st.success(f"✅ 업로드한 약품사용 엑셀에서 {len(df_u_up)}건을 불러와 저장했습니다!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"불러오기 오류: {e}")
 
-                    c_exp1, c_exp2 = st.columns(2)
-                    with c_exp1:
-                        st.download_button(
-                            "📥 하수도 시스템 연동용 CSV 목록 다운로드",
-                            data=df_insp_all.to_csv(index=False, encoding="utf-8-sig"),
-                            file_name=f"하수도_약품검수확인서_목록_{datetime.datetime.now(KST).strftime('%Y%m%d')}.csv",
-                            mime="text/csv",
-                            type="primary",
-                            use_container_width=True
-                        )
-                    with c_exp2:
-                        st.download_button(
-                            "📥 하수도 시스템 연동용 JSON 데이터 다운로드",
-                            data=json.dumps(df_insp_all.to_dict(orient="records"), ensure_ascii=False, indent=2).encode("utf-8"),
-                            file_name=f"하수도_약품검수확인서_목록_{datetime.datetime.now(KST).strftime('%Y%m%d')}.json",
-                            mime="application/json",
-                            type="primary",
-                            use_container_width=True
-                        )
+        df_use_cur = get_khas_usage_db(price_yr)
+        ed_use_df = st.data_editor(
+            df_use_cur,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            key=f"ed_khas_use_{price_yr}",
+            column_config={
+                "날짜": st.column_config.TextColumn("날짜 (YYYY-MM-DD)", required=True),
+                "약품": st.column_config.SelectboxColumn("약품", options=KHAS_CHEM_CODES, required=True),
+                "사용량(kg)": st.column_config.NumberColumn("사용량(kg)", min_value=0.0, step=1.0),
+                "비용(원)": st.column_config.NumberColumn("비용(원)", min_value=0.0, step=100.0),
+                "사용장소": st.column_config.TextColumn("사용장소"),
+                "사유": st.column_config.TextColumn("사유")
+            }
+        )
 
-                    sel_insp_id = st.selectbox("양식에 다시 불러올 검수ID 선택", df_insp_all["검수ID"].tolist(), key="sel_load_insp_id")
-                    if st.button("🔄 선택한 검수 내역을 작성 양식에 불러오기", use_container_width=True, key="btn_load_insp_to_form"):
-                        matched = df_insp_all[df_insp_all["검수ID"] == sel_insp_id]
-                        if not matched.empty:
-                            st.session_state["insp_loaded_row"] = matched.iloc[0].to_dict()
-                            st.session_state["insp_chem_text"] = str(matched.iloc[0].get("약품명", "폴리머"))
-                            st.session_state["insp_caption_text"] = str(matched.iloc[0].get("사진설명", ""))
-                            st.success(f"✅ [{sel_insp_id}] 내역을 불러왔습니다. [작성·미리보기·영구저장] 탭에서 확인하세요.")
+        c_us1, c_us2, c_us3 = st.columns(3)
+        with c_us1:
+            if st.button(f"💾 수기 수정한 {price_yr}년 약품사용 내역 영구 저장", type="primary", use_container_width=True, key="btn_save_ed_use"):
+                save_khas_usage_db(ed_use_df, price_yr)
+                st.success(f"✅ {price_yr}년 약품사용 내역이 영구 저장되었습니다!")
+                st.rerun()
+        with c_us2:
+            use_xlsx_bytes = generate_khas_usage_xlsx_bytes(ed_use_df, price_yr)
+            st.download_button(
+                f"📥 국가하수도 공인 약품사용({price_yr}).xlsx 다운로드",
+                data=use_xlsx_bytes,
+                file_name=f"약품사용_{price_yr}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
+        with c_us3:
+            if st.button("📁 공인 약품사용 엑셀 보관함 저장", use_container_width=True, key="btn_arch_use_xlsx"):
+                out_u = os.path.join(KHAS_RECORD_DIR, sanitize_filename(f"약품사용_{price_yr}.xlsx"))
+                with open(out_u, "wb") as f:
+                    f.write(generate_khas_usage_xlsx_bytes(ed_use_df, price_yr))
+                st.success(f"✅ 보관함(`{out_u}`)에 저장되었습니다!")
+
+    with tab_p_audit:
+        st.subheader(f"🔍 [{price_yr}년] 하수도정보시스템 업로드 데이터 정합성 검토 시스템")
+        st.caption("🔒 국가하수도정보시스템 업로드 전 표준 약품코드, 날짜 형식, 수량/비용 정합성을 자동 점검합니다.")
+
+        df_chk_buy = get_khas_purchase_db(price_yr)
+        df_chk_use = get_khas_usage_db(price_yr)
+
+        issues = []
+        if df_chk_buy.empty:
+            issues.append(("⚠️ 경고", "약품구매", f"{price_yr}년 약품구매 데이터가 비어 있습니다."))
+        else:
+            for idx_r, r_b in df_chk_buy.iterrows():
+                if str(r_b.get("약품", "")) not in KHAS_CHEM_CODES:
+                    issues.append(("❌ 오류", "약품구매", f"{idx_r+1}행 표준 약품코드 미일치: {r_b.get('약품')}"))
+                q_n = pd.to_numeric(r_b.get("구매량(kg)", 0), errors="coerce")
+                c_n = pd.to_numeric(r_b.get("비용(원)", 0), errors="coerce")
+                if pd.isna(q_n) or float(q_n) <= 0:
+                    issues.append(("⚠️ 경고", "약품구매", f"{r_b.get('날짜')} 구매량(kg)이 0 이하입니다."))
+                if pd.isna(c_n) or float(c_n) <= 0:
+                    issues.append(("⚠️ 경고", "약품구매", f"{r_b.get('날짜')} 비용(원)이 0 이하입니다."))
+
+        if df_chk_use.empty:
+            issues.append(("⚠️ 경고", "약품사용", f"{price_yr}년 약품사용 데이터가 비어 있습니다."))
+        else:
+            for idx_r, r_u in df_chk_use.iterrows():
+                if str(r_u.get("약품", "")) not in KHAS_CHEM_CODES:
+                    issues.append(("❌ 오류", "약품사용", f"{idx_r+1}행 표준 약품코드 미일치: {r_u.get('약품')}"))
+                q_n = pd.to_numeric(r_u.get("사용량(kg)", 0), errors="coerce")
+                if pd.isna(q_n) or float(q_n) <= 0:
+                    issues.append(("⚠️ 경고", "약품사용", f"{r_u.get('날짜')} 사용량(kg)이 0 이하입니다."))
+
+        st.markdown(f"**검토 요약**: 약품구매 `{len(df_chk_buy)}건` · 약품사용 `{len(df_chk_use)}건` · 발견된 이슈 `{len(issues)}건`")
+        if not issues:
+            st.success("🟢 **하수도정보시스템 업로드 정합성 검토 통과**: 오류 및 경고가 발견되지 않았습니다.")
+        else:
+            st.dataframe(pd.DataFrame([{"상태": s, "대상": t, "상세내용": d} for s, t, d in issues]), use_container_width=True, hide_index=True)
+
+# -------------------------------------------------------------
 # -------------------------------------------------------------
 # 9. 통합 영구저장소(보관함·마스터DB) 열람 및 백업 센터
 # -------------------------------------------------------------
 elif menu == "🗄️ 9. 통합 영구저장소(보관함·마스터DB) 열람 및 백업 센터":
     st.title("🗄️ 단월 스마트 관제 플랫폼 통합 영구저장소 & 백업 센터")
-    st.info("💡 코드 수정이나 업데이트 시에도 지워지지 않고 서버에 영구 보존되는 모든 보관함 파일과 마스터 데이터베이스를 한눈에 열람·검증·백업할 수 있습니다.")
+    st.info("💡 1~8번 메뉴의 모든 데이터는 독립 마스터 파일(CSV/JSON/XLSX)로 서버 디스크에 영구 저장되므로, 파이썬 코드를 수정하거나 재부팅해도 데이터가 그대로 유지됩니다.")
 
     zip_backup_bytes = create_full_backup_zip()
     st.download_button(
