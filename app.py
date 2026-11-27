@@ -4306,11 +4306,11 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                         annotation_text=f"시설용량 ({max_cap_val:,} ㎥/일)", annotation_position="top right"
                     )
                     fig_fl.update_layout(
-                        height=360, margin=dict(l=10, r=10, t=30, b=10),
+                        height=385, margin=dict(l=10, r=15, t=30, b=36),
                         plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
                         hovermode="x unified",
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-                        xaxis=dict(title="", showgrid=True, gridcolor="#F1F5F9", tickangle=0),
+                        xaxis=dict(title="", showgrid=True, gridcolor="#F1F5F9", tickangle=-45, tickfont=dict(size=10.5), dtick=2 if len(df_p_chart) > 15 else 1),
                         yaxis=dict(title="유량 (㎥/일)", showgrid=True, gridcolor="#F1F5F9")
                     )
                     st.plotly_chart(fig_fl, use_container_width=True)
@@ -4332,12 +4332,12 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                             marker=dict(size=7, color="#DB2777", line=dict(width=1.5, color="white"))
                         ), secondary_y=True)
                     fig_np.update_layout(
-                        height=360, margin=dict(l=10, r=10, t=30, b=10),
+                        height=385, margin=dict(l=10, r=15, t=30, b=36),
                         plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
                         hovermode="x unified",
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
                     )
-                    fig_np.update_xaxes(showgrid=True, gridcolor="#F1F5F9")
+                    fig_np.update_xaxes(showgrid=True, gridcolor="#F1F5F9", tickangle=-45, tickfont=dict(size=10.5), dtick=2 if len(df_p_chart) > 15 else 1)
                     fig_np.update_yaxes(title_text="방류 T-N (mg/L)", range=[0, 15], showgrid=True, gridcolor="#F1F5F9", secondary_y=False)
                     fig_np.update_yaxes(title_text="방류 T-P (mg/L)", range=[0, 0.15], showgrid=False, secondary_y=True)
                     st.plotly_chart(fig_np, use_container_width=True)
@@ -4357,11 +4357,11 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
                                 marker=dict(size=6)
                             ))
                     fig_org.update_layout(
-                        height=360, margin=dict(l=10, r=10, t=30, b=10),
+                        height=385, margin=dict(l=10, r=15, t=30, b=36),
                         plot_bgcolor="#FFFFFF", paper_bgcolor="#FFFFFF",
                         hovermode="x unified",
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-                        xaxis=dict(showgrid=True, gridcolor="#F1F5F9"),
+                        xaxis=dict(showgrid=True, gridcolor="#F1F5F9", tickangle=-45, tickfont=dict(size=10.5), dtick=2 if len(df_p_chart) > 15 else 1),
                         yaxis=dict(title="농도 (mg/L)", showgrid=True, gridcolor="#F1F5F9")
                     )
                     st.plotly_chart(fig_org, use_container_width=True)
