@@ -3721,7 +3721,7 @@ elif menu == "📊 2. 공공하수도시설 월간보고서 (HWPX) AI 자동편�
                 <h2 class="sec-title">개인하수처리시설 운영사항 보고({sel_report_month}월)</h2>
                 <div class="box-h">□ 개요</div>
                 <div class="item-line">○ 대행업체명 : {ov_agency}</div>
-                <div class="item-line" style="font-weight:bold; margin-bottom:4px;">○ 처리량 및 수질 현황 (명달1반·명달3반·화전2리·화전2리(여촌): 개인하수폐쇄 가동정지 / 옥천리: 유량계 침수 고장)</div>
+                <div class="item-line" style="font-weight:bold; margin-bottom:4px;">○ 처리량 및 수질 현황</div>
                 <table class="rep-tbl">
                     <tr>
                         <th rowspan="2">시설명</th><th rowspan="2">처리공법</th><th rowspan="2">구분</th>
