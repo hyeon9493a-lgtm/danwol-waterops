@@ -4993,31 +4993,318 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
         else:
             st.info("💡 아직 보관함에 저장된 약품·에너지 파일이 없습니다.")
 elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프레미스)":
-    st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미 (온프레미스 오프라인 모드)")
-    st.info("🔒 **보안 인증 완료**: 본 챗봇은 외부 상용 API(Gemini 등)를 전혀 호출하지 않으며, 단월하수처리장 내부 서버에 탑재된 **로컬 오프라인 규칙·지식 기반 엔진**으로만 작동하여 데이터 외부 유출이 100% 차단됩니다.")
+    st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미 (사용자 학습 전용 오프라인 모드)")
+    st.info("🔒 **사용자 학습 전용 · 온프레미스 보안**: 외부 API를 호출하지 않으며, **학습시킨 데이터만** 자동으로 저장하고, 과거 사례(예: 3년 전 유사 사건)도 자동 분석하여 함께 추천해 드립니다. (학습·수정·삭제는 **최고관리자** 전용)")
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "assistant", "content": "안녕하세요! 단월공공하수처리시설(KNR+IPR) 및 소규모 6개소 자율운전 제어 도우미입니다. 공정 제어, T-P/T-N 수질 대처, 송풍기 및 약품 제어에 대해 질문해 주세요."}]
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
-    
-    prompt = st.chat_input("질문을 입력하세요 (예: T-P가 높을 때 대응법, C/N비 관리 기준 등)")
-    if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-        
-        q_lower = prompt.lower()
-        if any(k in q_lower for k in ["인린", "총인", "tp", "염화제이철", "pac", "응집제"]):
-            ans = "🛡️ **[온프레미스 지식 엔진 답변] 총인(T-P) 저감 및 IPR 공정 제어 지침**\n\n1. **약품 주입 제어**: 종침전지 및 총인처리시설의 염화제이철 및 PAC 주입율은 방류수질 기준(0.2 mg/L) 대비 안전마진을 고려하여 **0.065 ~ 0.08 mg/L** 이하로 유지되도록 자동 연동됩니다.\n2. **수질 급변 시**: 유입 인원이 급증하거나 인근 축산계 유입 등으로 T-P가 상승할 경우, 응집제 정량펌프 주입 주기를 15% 상향 조정하고 응집 폴리머 상태를 정밀 점검하십시오."
-        elif any(k in q_lower for k in ["질소", "tn", "탈질", "송풍기", "do", "용존산소"]):
-            ans = "🛡️ **[온프레미스 지식 엔진 답변] 질소(T-N) 및 송풍기 제어 지침**\n\n1. **C/N비 관리**: 생물반응조 유입 BOD/T-N 비가 **4.0 이상** 유지되어야 안정적인 탈질이 이루어집니다.\n2. **호기조 DO 제어**: 호기조 용존산소(DO)는 **1.8 ~ 2.2 mg/L**를 유지하도록 AI 송풍기 변속(Inverter) 제어가 실시간 수행됩니다."
-        elif any(k in q_lower for k in ["소규모", "산음", "삼가리", "진목", "몰운", "당의"]):
-            ans = "🛡️ **[온프레미스 지식 엔진 답변] 소규모 6개소 연계 관제 지침**\n\n소규모 처리시설(산음, 삼가리, 진목, 몰운, 단월마을, 당의)은 **7일 주기 자동 순환 점검** 및 원격 수중포기·SBR 공정 모니터링이 본장 관제 시스템과 실시간 연동되어 있습니다."
+    is_super_admin = (
+        st.session_state.get("user_role") == "admin"
+        and st.session_state.get("user_name") == "최고관리자"
+    )
+
+    KB_FILE = "danwol_offline_knowledge_base.csv"
+    KB_COLS = ["지식ID", "카테고리", "핵심키워드", "질문예시", "학습답변_SOP", "등록일시"]
+
+    def _normalize_date_str(raw_d):
+        s = str(raw_d or "").strip()
+        if not s:
+            return ""
+        m = re.search(r"(20[1-3]\d)[-/.년\s]+(\d{1,2})[-/.월\s]+(\d{1,2})", s)
+        if m:
+            return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
+        dt_p = pd.to_datetime(s, errors="coerce")
+        if pd.notna(dt_p):
+            return dt_p.strftime("%Y-%m-%d")
+        return s[:10]
+
+    def _extract_year_int(raw_d):
+        nd = _normalize_date_str(raw_d)
+        m_y = re.match(r"^(20[1-3]\d)", nd)
+        return int(m_y.group(1)) if m_y else None
+
+    def load_offline_kb():
+        if "user_learned_kb_rows" in st.session_state and isinstance(st.session_state["user_learned_kb_rows"], list):
+            if os.path.exists(KB_FILE):
+                try:
+                    df_disk = pd.read_csv(KB_FILE)
+                    for c in KB_COLS:
+                        if c not in df_disk.columns:
+                            df_disk[c] = ""
+                    return df_disk[KB_COLS].drop_duplicates(subset=["지식ID"], keep="last").reset_index(drop=True)
+                except Exception:
+                    pass
+            df_mem = pd.DataFrame(st.session_state["user_learned_kb_rows"])
+            for c in KB_COLS:
+                if c not in df_mem.columns:
+                    df_mem[c] = ""
+            return df_mem[KB_COLS].drop_duplicates(subset=["지식ID"], keep="last").reset_index(drop=True) if not df_mem.empty else pd.DataFrame(columns=KB_COLS)
+
+        if os.path.exists(KB_FILE):
+            try:
+                df_k = pd.read_csv(KB_FILE)
+                for c in KB_COLS:
+                    if c not in df_k.columns:
+                        df_k[c] = ""
+                df_clean = df_k[KB_COLS].drop_duplicates(subset=["지식ID"], keep="last").reset_index(drop=True)
+                st.session_state["user_learned_kb_rows"] = df_clean.to_dict("records")
+                return df_clean
+            except Exception:
+                pass
+        st.session_state["user_learned_kb_rows"] = []
+        return pd.DataFrame(columns=KB_COLS)
+
+    def save_offline_kb(df_k):
+        df_clean = df_k[KB_COLS].copy() if df_k is not None and not df_k.empty else pd.DataFrame(columns=KB_COLS)
+        df_clean = df_clean.drop_duplicates(subset=["지식ID"], keep="last").reset_index(drop=True)
+        st.session_state["user_learned_kb_rows"] = df_clean.to_dict("records")
+        df_clean.to_csv(KB_FILE, index=False, encoding="utf-8-sig")
+
+    def _score_row_against_query(query_text, row_dict):
+        q_norm = str(query_text).lower().strip()
+        if not q_norm:
+            return 0
+        q_tokens = [t for t in re.findall(r"[가-힣a-zA-Z0-9]+", q_norm) if len(t) >= 2]
+        kw_str = str(row_dict.get("핵심키워드", "")).lower()
+        q_str = str(row_dict.get("질문예시", "")).lower()
+        ans_str = str(row_dict.get("학습답변_SOP", "")).lower()
+        cat_str = str(row_dict.get("카테고리", "")).lower()
+
+        score = 0
+        for kw in [k.strip() for k in kw_str.split(",") if k.strip()]:
+            if kw in q_norm or q_norm in kw:
+                score += 6
+        for tok in q_tokens:
+            if tok in kw_str:
+                score += 4
+            elif tok in q_str:
+                score += 3
+            elif tok in ans_str:
+                score += 2
+            elif tok in cat_str:
+                score += 1
+        return score
+
+    def analyze_and_recommend_from_kb(query_text, df_k):
+        if df_k is None or df_k.empty:
+            return []
+        cur_yr = datetime.datetime.now(KST).year
+        scored = []
+        for _, r in df_k.iterrows():
+            r_dict = r.to_dict()
+            sc = _score_row_against_query(query_text, r_dict)
+            if sc >= 2:
+                ev_date = _normalize_date_str(r_dict.get("사건발생일", ""))
+                if not ev_date:
+                    m_txt = re.search(r"(20[1-3]\d)[-/.년\s]+(\d{1,2})[-/.월\s]+(\d{1,2})", str(r_dict.get("학습답변_SOP", "")))
+                    if m_txt:
+                        ev_date = f"{int(m_txt.group(1)):04d}-{int(m_txt.group(2)):02d}-{int(m_txt.group(3)):02d}"
+                    else:
+                        ev_date = _normalize_date_str(r_dict.get("등록일시", ""))
+                ev_yr = _extract_year_int(ev_date)
+                years_ago = (cur_yr - ev_yr) if ev_yr else None
+                r_dict["_score"] = sc
+                r_dict["_ev_date"] = ev_date
+                r_dict["_years_ago"] = years_ago
+                scored.append(r_dict)
+
+        scored.sort(key=lambda x: (x["_score"], -(x["_years_ago"] if x["_years_ago"] is not None else 0)), reverse=True)
+        return scored
+
+    df_kb_cur = load_offline_kb()
+
+    tab_chat_main, tab_kb_teach, tab_kb_manage = st.tabs([
+        "💬 1. 오프라인 공정 Q&A & 과거 유사사례 추천",
+        "🎓 2. 현장 노하우·SOP·문서 직접 학습시키기 (최고관리자 전용)",
+        "📚 3. 학습된 지식 DB 열람·수정·백업 (최고관리자 전용)"
+    ])
+
+    with tab_chat_main:
+        st.caption(f"💡 현재 영구 학습된 현장 지식 항목: **{len(df_kb_cur)}건** (학습된 지식과 과거 유사사례(예: 3년 전 기록)를 자동 분석하여 답변 및 추천합니다.)")
+        if "messages" not in st.session_state:
+            st.session_state.messages = [{
+                "role": "assistant",
+                "content": "안녕하세요! 단월공공하수처리시설(KNR+IPR) 및 소규모 6개소 자율운전 제어 도우미입니다. 학습된 현장 노하우·SOP와 과거 유사 사례(예: 3년 전 사건)를 바탕으로 답변 및 대응방안을 안내해 드립니다."
+            }]
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        prompt = st.chat_input("질문을 입력하세요 (예: T-P가 높을 때 대응법, 3년 전 유사 설비 조치법 등)")
+        if prompt:
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            hits = analyze_and_recommend_from_kb(prompt, df_kb_cur)
+            if hits:
+                top_hit = hits[0]
+                top_ago_str = f" (약 {top_hit['_years_ago']}년 전 · {top_hit['_ev_date']})" if top_hit.get("_years_ago") is not None and top_hit["_years_ago"] >= 1 else (f" ({top_hit['_ev_date']})" if top_hit.get("_ev_date") else "")
+                ans_parts = [
+                    f"🎓 **[온프레미스 학습 지식 답변 · {top_hit.get('카테고리', '현장노하우')}{top_ago_str}]**\n\n"
+                    f"{top_hit.get('학습답변_SOP', '')}\n\n"
+                    f"*(매칭 키워드: `{top_hit.get('핵심키워드', '-')}` | 로컬 지식DB `{top_hit.get('지식ID', '')}` 기반)*"
+                ]
+
+                old_cases = [h for h in hits if h.get("_years_ago") is not None and h["_years_ago"] >= 2]
+                if old_cases:
+                    rec_lines = ["\n\n---\n🔎 **과거 유사 사건 자동 분석 및 추천 대응방안**"]
+                    for oc in old_cases[:3]:
+                        y_diff = oc["_years_ago"]
+                        d_lbl = oc["_ev_date"] or "연도 미상"
+                        q_lbl = oc.get("질문예시", "")
+                        sop_lbl = oc.get("학습답변_SOP", "")
+                        rec_lines.append(
+                            f"• **[{y_diff}년 전 유사 사례 · {d_lbl}]** {q_lbl}\n"
+                            f"  ➔ **추천 조치**: {sop_lbl}"
+                        )
+                    ans_parts.append("\n".join(rec_lines))
+                elif len(hits) > 1:
+                    extra_lines = ["\n\n---\n📌 **함께 참고할 관련 내 학습 기록**"]
+                    for eh in hits[1:3]:
+                        d_lbl = f" ({eh['_ev_date']})" if eh.get("_ev_date") else ""
+                        extra_lines.append(f"• **[{eh.get('카테고리', '학습')}{d_lbl}]** {eh.get('학습답변_SOP', '')}")
+                    ans_parts.append("\n".join(extra_lines))
+
+                ans = "".join(ans_parts)
+            elif df_kb_cur.empty:
+                ans = (
+                    "📭 **아직 학습된 데이터가 없습니다.**\n\n"
+                    "회원님께서 직접 학습시킨 데이터만 알려드리도록 설정되어 있습니다. "
+                    "**최고관리자** 계정으로 로그인한 뒤 **[2. 현장 노하우·SOP·문서 직접 학습시키기]** 탭에서 내용을 등록해 주세요."
+                )
+            else:
+                ans = (
+                    f"🔍 **({prompt})에 일치하는 내 학습 데이터가 아직 없습니다.**\n\n"
+                    "임의 답변을 생성하지 않으며, 등록된 내 학습 데이터 중에서만 안내합니다. "
+                    "**최고관리자** 권한으로 **[2. 현장 노하우·SOP·문서 직접 학습시키기]** 탭에서 해당 내용을 추가해 주세요."
+                )
+
+            with st.chat_message("assistant"):
+                st.markdown(ans)
+            st.session_state.messages.append({"role": "assistant", "content": ans})
+
+    with tab_kb_teach:
+        if not is_super_admin:
+            st.warning("🔒 **최고관리자 전용 기능**: AI 교육(1:1 현장 노하우·SOP 입력 및 문서 일괄 학습)은 **오직 최고관리자**만 수행할 수 있습니다. 현재 접속 계정에서는 열람 및 질의만 가능합니다.")
         else:
-            ans = f"🛡️ **[온프레미스 보안 답변]** 입력하신 질문(*\"{prompt}\"*)에 대해 단월 하수처리 표준운영기준(SOP)을 대조한 결과입니다.\n\n• 본 시스템은 외부 인터넷 및 클라우드 API를 사용하지 않는 **로컬 온프레미스(오프라인) 환경**으로 가동 중입니다.\n• 수질 기준 준수를 위해 생물반응조 슬러지(MLSS) 농도 3,000~4,500 mg/L 유지 및 일일 유입·방류량을 점검하시기 바랍니다."
+            st.subheader("🎓 1:1 현장 노하우·SOP·과거사례 직접 입력 학습 (최고관리자 전용)")
+            st.caption("자주 묻는 질문, 설비 트러블슈팅 방법, 과거 유사사례(예: 3년 전 기록)를 입력하면 `danwol_offline_knowledge_base.csv`에 영구 저장되어 다음 질문부터 즉시 반영됩니다.")
+            with st.form("offline_kb_teach_form"):
+                kc1, kc2, kc3 = st.columns([1.1, 1.5, 1.1])
+                with kc1:
+                    kb_cat = st.selectbox("분류 카테고리", ["KNR 생물반응조", "IPR 총인처리·메디아", "약품·탈수·슬러지", "송풍기·펌프·전기설비", "소규모·개인하수", "과거 유사사례(3년전 등)", "법령·안전·기타"])
+                with kc2:
+                    kb_kw = st.text_input("핵심 키워드 (쉼표로 구분)", placeholder="예: 메디아, 차압, 역세척, 워시박스")
+                with kc3:
+                    kb_ev_date = st.date_input("사건/기록 발생일 (3년 전 등)", value=datetime.date(2023, 11, 27), key="kb_ev_date_in")
+                kb_q = st.text_input("대표 질문 예시 / 사건명", placeholder="예: IPR 메디아 여과 차압이 높을 때 어떻게 조치해?")
+                kb_a = st.text_area("학습시킬 답변 / 현장 조치 SOP / 추천 대응방안", height=130, placeholder="예: 1. 역세척(Backwash) 주기 단축 및 공기압축기 압력 확인\n2. 워시박스·에어렌서·에어벤트 배관 막힘 점검\n3. 차압 35 kPa 이상 지속 시 메디아 오염 상태 정밀 점검")
+                if st.form_submit_button("💾 이 내용으로 AI 학습시키기 (영구 저장)", type="primary", use_container_width=True):
+                    if kb_kw.strip() and kb_a.strip():
+                        new_kid = f"KB-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
+                        now_str = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+                        ev_s = kb_ev_date.strftime("%Y-%m-%d")
+                        full_ans = f"[발생일: {ev_s}] {kb_a.strip()}" if ev_s not in kb_a else kb_a.strip()
+                        df_new_k = pd.DataFrame([{
+                            "지식ID": new_kid,
+                            "카테고리": kb_cat,
+                            "핵심키워드": f"{kb_kw.strip()}, {ev_s[:4]}년",
+                            "질문예시": kb_q.strip() if kb_q.strip() else kb_kw.strip(),
+                            "학습답변_SOP": full_ans,
+                            "등록일시": now_str
+                        }])
+                        df_updated_k = pd.concat([df_kb_cur, df_new_k], ignore_index=True)
+                        save_offline_kb(df_updated_k)
+                        st.success(f"✅ 학습 완료! (`{kb_kw.strip()}` 키워드로 저장되었으며, 챗봇 탭에서 바로 질문할 수 있습니다.)")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ 핵심 키워드와 학습시킬 답변 내용을 모두 입력해 주세요.")
 
-        with st.chat_message("assistant"): st.markdown(ans)
-        st.session_state.messages.append({"role": "assistant", "content": ans})
+            st.divider()
+            st.subheader("📄 2: TXT / MD / CSV / XLSX 문서 업로드로 일괄 학습 (최고관리자 전용)")
+            kb_files = st.file_uploader("현장 매뉴얼·점검기준·Q&A 문서 선택 (.txt, .md, .csv, .xlsx)", type=["txt", "md", "csv", "xlsx"], accept_multiple_files=True, key="kb_doc_uploader")
+            if kb_files and st.button("📥 업로드 문서 내용 지식 DB에 학습 반영", type="primary", use_container_width=True):
+                added_cnt = 0
+                now_str = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+                rows_to_add = []
+                for kf in kb_files:
+                    fname_k = getattr(kf, "name", "doc")
+                    try:
+                        if fname_k.lower().endswith((".txt", ".md")):
+                            raw_txt = (kf.getvalue() if hasattr(kf, "getvalue") else kf.read()).decode("utf-8", errors="ignore")
+                            chunks = [c.strip() for c in re.split(r"\n\s*\n", raw_txt) if len(c.strip()) >= 5]
+                            for ch in chunks[:100]:
+                                first_line = ch.splitlines()[0][:30]
+                                rows_to_add.append({
+                                    "지식ID": f"DOC-{uuid.uuid4().hex[:8]}",
+                                    "카테고리": "문서학습",
+                                    "핵심키워드": f"{fname_k}, {first_line}",
+                                    "질문예시": first_line,
+                                    "학습답변_SOP": ch,
+                                    "등록일시": now_str
+                                })
+                                added_cnt += 1
+                        elif fname_k.lower().endswith(".csv"):
+                            df_up_k = pd.read_csv(kf)
+                            for _, r in df_up_k.iterrows():
+                                ans_v = str(r.get("학습답변_SOP", r.get("답변", r.get("내용", "")))).strip()
+                                if ans_v:
+                                    kw_v = str(r.get("핵심키워드", r.get("키워드", fname_k))).strip()
+                                    q_v = str(r.get("질문예시", r.get("질문", kw_v))).strip()
+                                    rows_to_add.append({
+                                        "지식ID": f"CSV-{uuid.uuid4().hex[:8]}",
+                                        "카테고리": str(r.get("카테고리", "문서학습")),
+                                        "핵심키워드": kw_v,
+                                        "질문예시": q_v,
+                                        "학습답변_SOP": ans_v,
+                                        "등록일시": now_str
+                                    })
+                                    added_cnt += 1
+                        elif fname_k.lower().endswith(".xlsx"):
+                            df_up_x = pd.read_excel(kf)
+                            for _, r in df_up_x.iterrows():
+                                joined_v = " | ".join([f"{col}: {val}" for col, val in r.items() if pd.notna(val) and str(val).strip()])
+                                if joined_v:
+                                    rows_to_add.append({
+                                        "지식ID": f"XLS-{uuid.uuid4().hex[:8]}",
+                                        "카테고리": "문서학습",
+                                        "핵심키워드": f"{fname_k}, {str(r.iloc[0])[:20]}",
+                                        "질문예시": f"{fname_k} - {str(r.iloc[0])[:25]}",
+                                        "학습답변_SOP": joined_v,
+                                        "등록일시": now_str
+                                    })
+                                    added_cnt += 1
+                    except Exception:
+                        pass
+                if rows_to_add:
+                    save_offline_kb(pd.concat([df_kb_cur, pd.DataFrame(rows_to_add)], ignore_index=True))
+                    st.success(f"✅ 문서에서 총 {added_cnt}건의 지식을 학습 DB에 반영했습니다!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ 문서에서 학습할 텍스트/행을 추출하지 못했습니다.")
+
+    with tab_kb_manage:
+        if not is_super_admin:
+            st.warning("🔒 **최고관리자 전용 기능**: 학습된 지식 DB의 열람·수정·삭제·백업은 **오직 최고관리자**만 수행할 수 있습니다.")
+        else:
+            st.subheader("📚 영구 저장된 오프라인 학습 지식 DB 열람·수정·백업 (최고관리자 전용)")
+            if not df_kb_cur.empty:
+                ed_kb = st.data_editor(df_kb_cur, num_rows="dynamic", use_container_width=True, hide_index=True, key="ed_offline_kb_tbl")
+                c_kb1, c_kb2 = st.columns(2)
+                with c_kb1:
+                    if st.button("💾 수정·삭제 내역 저장", type="primary", use_container_width=True):
+                        save_offline_kb(ed_kb)
+                        st.success("✅ 지식 DB가 업데이트되었습니다!")
+                        st.rerun()
+                with c_kb2:
+                    st.download_button(
+                        "📥 학습 지식 DB 백업 다운로드 (CSV)",
+                        data=ed_kb.to_csv(index=False, encoding="utf-8-sig"),
+                        file_name="danwol_offline_knowledge_base.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+            else:
+                st.info("💡 아직 직접 학습시킨 항목이 없습니다. [2. 현장 노하우·SOP·문서 직접 학습시키기] 탭에서 추가해 보세요.")
 
 # -------------------------------------------------------------
 # 7. TBM 표준회의록 AI 자동작성/출력 & 실행 체크리스트 (신규 추가)
