@@ -2553,6 +2553,49 @@ def create_full_backup_zip():
                 zf.write(db_file, arcname=os.path.join("master_databases", db_file))
     return buf.getvalue()
 
+
+LOGIN_NOTIF_DB = "danwol_login_notifications.csv"
+
+def record_login_notification(user_name, user_role, status_label="로그인 성공"):
+    """사용자 로그인 시 관리자 알림 큐(CSV)에 기록"""
+    now_kst = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+    row_df = pd.DataFrame([{
+        "접속시각_KST": now_kst,
+        "사용자명": str(user_name),
+        "권한": str(user_role),
+        "상태": str(status_label),
+        "확인여부": "미확인"
+    }])
+    if os.path.exists(LOGIN_NOTIF_DB):
+        try:
+            old_df = pd.read_csv(LOGIN_NOTIF_DB)
+            comb_df = pd.concat([old_df, row_df], ignore_index=True)
+        except Exception:
+            comb_df = row_df
+    else:
+        comb_df = row_df
+    comb_df.to_csv(LOGIN_NOTIF_DB, index=False, encoding="utf-8-sig")
+
+def get_unread_login_notifications():
+    if not os.path.exists(LOGIN_NOTIF_DB):
+        return pd.DataFrame()
+    try:
+        df_n = pd.read_csv(LOGIN_NOTIF_DB)
+        if df_n.empty:
+            return pd.DataFrame()
+        return df_n[df_n["확인여부"] == "미확인"].copy()
+    except Exception:
+        return pd.DataFrame()
+
+def mark_all_login_notifications_read():
+    if os.path.exists(LOGIN_NOTIF_DB):
+        try:
+            df_n = pd.read_csv(LOGIN_NOTIF_DB)
+            df_n["확인여부"] = "확인완료"
+            df_n.to_csv(LOGIN_NOTIF_DB, index=False, encoding="utf-8-sig")
+        except Exception:
+            pass
+
 def render_maintenance_screen(cfg, is_logged_in_user=False):
     current_time_str = datetime.datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
     st.markdown(f"""
@@ -2588,14 +2631,14 @@ def render_maintenance_screen(cfg, is_logged_in_user=False):
                     admin_pw_m = st.text_input("관리자 마스터 비밀번호", type="password", key="m_admin_pw")
                     if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True, key="btn_m_admin_login"):
                         if hash_pw(admin_pw_m) == ADMIN_PW_HASH:
-                            st.session_state.logged_in = True; st.session_state.user_role = "admin"; st.session_state.user_name = "최고관리자"
+                            st.session_state.logged_in = True; st.session_state.user_role = "admin"; st.session_state.user_name = "최고관리자"; record_login_notification("최고관리자", "admin", "로그인 성공")
                             st.rerun()
                         else: st.error("관리자 비밀번호가 일치하지 않습니다.")
                 else:
                     passcode_m = st.text_input("승인 접속 코드", type="password", value="DANWOL-2026!", key="m_user_code")
                     if st.button("🚀 운영요원 접속", type="primary", use_container_width=True, key="btn_m_user_login"):
                         if hash_pw(passcode_m) in WHITELIST_HASHES:
-                            st.session_state.logged_in = True; st.session_state.user_role = "admin"; st.session_state.user_name = "인증 운영요원"
+                            st.session_state.logged_in = True; st.session_state.user_role = "admin"; st.session_state.user_name = "인증 운영요원"; record_login_notification("인증 운영요원", "admin", "운영요원 접속")
                             st.rerun()
                         else: st.error("유효하지 않은 승인 코드입니다.")
 
@@ -2629,14 +2672,14 @@ def check_login_system():
                 admin_pw = st.text_input("관리자 마스터 비밀번호", type="password", key="admin_pw_input")
                 if st.button("🚀 관리자 모드로 접속", type="primary", use_container_width=True):
                     if hash_pw(admin_pw) == ADMIN_PW_HASH:
-                        st.session_state.logged_in = True; st.session_state.user_role = "admin"; st.session_state.user_name = "최고관리자"
+                        st.session_state.logged_in = True; st.session_state.user_role = "admin"; st.session_state.user_name = "최고관리자"; record_login_notification("최고관리자", "admin", "로그인 성공")
                         st.rerun()
                     else: st.error("관리자 비밀번호가 일치하지 않습니다.")
             else:
                 passcode = st.text_input("부여받은 승인 접속 코드", type="password", key="passcode_input", value="DANWOL-2026!")
                 if st.button("🚀 접속하기", type="primary", use_container_width=True):
                     if hash_pw(passcode) in WHITELIST_HASHES:
-                        st.session_state.logged_in = True; st.session_state.user_role = "user"; st.session_state.user_name = "인증 사용자"
+                        st.session_state.logged_in = True; st.session_state.user_role = "user"; st.session_state.user_name = "인증 사용자"; record_login_notification("인증 사용자", "user", "일반 사용자 접속")
                         st.rerun()
                     else: st.error("유효하지 않은 승인 접속 코드입니다.")
         with tab_request:
@@ -2690,6 +2733,16 @@ st.markdown("""
     <div class="badge-online">SYSTEM ONLINE</div>
 </div>
 """, unsafe_allow_html=True)
+
+if st.session_state.get("user_role") == "admin":
+    _df_unread_n = get_unread_login_notifications()
+    if not _df_unread_n.empty:
+        with st.expander(f"🔔 신규 사용자 로그인 알림 ({len(_df_unread_n)}건) — 클릭하여 확인", expanded=True):
+            for _, _nr in _df_unread_n.iterrows():
+                st.info(f"🕒 **{_nr.get('접속시각_KST','')}** | 사용자: **{_nr.get('사용자명','')}** (`{_nr.get('권한','')}`) — {_nr.get('상태','')}")
+            if st.button("✅ 로그인 알림 모두 확인 처리", key="btn_ack_login_notif"):
+                mark_all_login_notifications_read()
+                st.rerun()
 
 st.sidebar.title("💧 단월 스마트 관제")
 st.sidebar.markdown(f"👤 **접속자**: {st.session_state.get('user_name', '사용자')} ({st.session_state.get('user_role')})")
@@ -5005,6 +5058,33 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
     KB_FILE = "danwol_offline_knowledge_base.csv"
     KB_COLS = ["지식ID", "카테고리", "핵심키워드", "질문예시", "학습답변_SOP", "등록일시"]
     MEDIA_COLS = ["기록ID", "발생일", "시설명", "설비명", "구분", "제목_증상", "조치_점검메모", "연계키워드", "파일명", "파일유형", "용량_MB", "등록일시"]
+    KB_SNAPSHOT_DIR = os.path.join(TBM_RECORD_DIR, "kb_snapshots")
+    if not os.path.exists(KB_SNAPSHOT_DIR):
+        os.makedirs(KB_SNAPSHOT_DIR)
+
+    SITE_KEYWORDS = [
+        "단월공공하수", "단월 본장", "단월본장", "본장", "knr", "ipr", "총인처리",
+        "산음", "삼가리", "진목", "보룡리", "몰운", "단월마을", "당의",
+        "석산리", "음지", "양지", "복지회관", "인이피", "돌고개", "개인하수"
+    ]
+    EQUIP_KEYWORDS = [
+        "공기압축기", "#a", "#b", "메디아", "여재", "워시박스", "에어렌서", "에어벤트", "에어리프트",
+        "pac", "염화제이철", "염화제2철", "철염", "폴리머", "원심탈수기", "탈수기", "케익호퍼",
+        "송풍기", "블로워", "인버터", "펌프", "중계펌프", "교반기", "디켄터", "오뚜기", "차압", "역세척",
+        "mlss", "do", "sv30", "bod", "toc", "ss", "t-n", "t-p", "tn", "tp", "tms", "uv", "방류조"
+    ]
+
+    def _save_kb_snapshot(df_snap, reason="snapshot"):
+        try:
+            if df_snap is not None and not df_snap.empty:
+                ts_s = datetime.datetime.now(KST).strftime("%Y%m%d_%H%M%S")
+                safe_r = re.sub(r"[^a-zA-Z0-9가-힣_-]", "", str(reason))[:20] or "snap"
+                p_out = os.path.join(KB_SNAPSHOT_DIR, sanitize_filename(f"kb_{safe_r}_{ts_s}.csv"))
+                df_snap[KB_COLS].to_csv(p_out, index=False, encoding="utf-8-sig")
+                return p_out
+        except Exception:
+            pass
+        return ""
 
     def _normalize_date_str(raw_d):
         s = str(raw_d or "").strip()
@@ -5023,6 +5103,24 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         m_y = re.match(r"^(20[1-3]\d)", nd)
         return int(m_y.group(1)) if m_y else None
 
+    def _extract_event_date_from_record(r_dict):
+        # 1순위: 명시적 사건발생일 컬럼 또는 SOP 내 "*기록일: YYYY-MM-DD*"
+        direct_ev = _normalize_date_str(r_dict.get("사건발생일", ""))
+        if direct_ev:
+            return direct_ev
+        sop_txt = str(r_dict.get("학습답변_SOP", ""))
+        m_rec = re.search(r"기록일\s*:\s*(20[1-3]\d[-/.년\s]+\d{1,2}[-/.월\s]+\d{1,2})", sop_txt)
+        if m_rec:
+            return _normalize_date_str(m_rec.group(1))
+        m_ev_tag = re.search(r"\[발생일\s*:\s*([^\]]+)\]", sop_txt)
+        if m_ev_tag:
+            nd_tag = _normalize_date_str(m_ev_tag.group(1))
+            if nd_tag:
+                return nd_tag
+        m_any = re.search(r"(20[1-3]\d)[-/.년\s]+(\d{1,2})[-/.월\s]+(\d{1,2})", sop_txt)
+        if m_any:
+            return f"{int(m_any.group(1)):04d}-{int(m_any.group(2)):02d}-{int(m_any.group(3)):02d}"
+        return _normalize_date_str(r_dict.get("등록일시", ""))
 
     def build_friendly_night_guide(query, matched_sop, is_newcomer=False):
         """인사발령·신입사원 및 야간근무자를 위한 친절하고 상세한 현장 안내 가이드"""
@@ -5046,6 +5144,10 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         )
         return greeting + safety_rule + q_line + body + closing
 
+    def _is_already_sop(text_val):
+        s = str(text_val or "").strip()
+        return ("**[핵심 요약]**" in s) and ("**[현장 조치 절차]**" in s)
+
     def _refine_to_sop_text(raw_text, category="현장노하우", ev_date="", title_hint=""):
         """원본 메모·문서 텍스트를 복붙 수준이 아닌 구조화된 현장 조치 SOP로 다듬는 함수"""
         cleaned = re.sub(r"\[발생일:\s*[^\]]+\]", " ", str(raw_text or ""))
@@ -5054,7 +5156,6 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         if not cleaned:
             return ""
 
-        # 문장/줄 단위로 분리하고 노이즈·중복 정리
         raw_pieces = []
         for line in cleaned.splitlines():
             line_s = line.strip()
@@ -5077,14 +5178,12 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                 seen_norm.add(key_n)
                 unique_steps.append(piece)
 
-        # 핵심 원인/상황 요약과 단계별 현장 조치로 다듬기
         summary_line = unique_steps[0]
         if len(summary_line) > 95:
             summary_line = summary_line[:92].rstrip() + "..."
 
         step_lines = []
         for idx_s, stp in enumerate(unique_steps[:6], start=1):
-            # 동사/명사 끝맺음 다듬기
             stp_fmt = stp
             if not re.search(r"(함|됨|임|다|요|음|시|확인|점검|조치|교체|세척|유지|조정|측정|기록|관리)$", stp_fmt):
                 stp_fmt = f"{stp_fmt} 확인 및 조치"
@@ -5273,13 +5372,29 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         q_norm = str(query_text).lower().strip()
         if not q_norm:
             return 0
-        q_tokens = [t for t in re.findall(r"[가-힣a-zA-Z0-9]+", q_norm) if len(t) >= 2]
+        q_tokens = [t for t in re.findall(r"[가-힣a-zA-Z0-9#]+", q_norm) if len(t) >= 2]
         kw_str = str(row_dict.get("핵심키워드", "")).lower()
         q_str = str(row_dict.get("질문예시", "")).lower()
         ans_str = str(row_dict.get("학습답변_SOP", "")).lower()
         cat_str = str(row_dict.get("카테고리", "")).lower()
+        full_blob = f"{kw_str} {q_str} {ans_str} {cat_str}"
 
         score = 0
+        # 1) 시설·설비 키워드 일치 가중치 (오매칭/동명이인 설비 혼동 방지)
+        q_sites = [s for s in SITE_KEYWORDS if s in q_norm]
+        q_equips = [e for e in EQUIP_KEYWORDS if e in q_norm]
+        for s_k in q_sites:
+            if s_k in full_blob:
+                score += 8
+            else:
+                score -= 2
+        for e_k in q_equips:
+            if e_k in full_blob:
+                score += 7
+            else:
+                score -= 1
+
+        # 2) 등록 키워드 및 토큰 매칭
         for kw in [k.strip() for k in kw_str.split(",") if k.strip()]:
             if kw in q_norm or q_norm in kw:
                 score += 6
@@ -5303,13 +5418,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
             r_dict = r.to_dict()
             sc = _score_row_against_query(query_text, r_dict)
             if sc >= 2:
-                ev_date = _normalize_date_str(r_dict.get("사건발생일", ""))
-                if not ev_date:
-                    m_txt = re.search(r"(20[1-3]\d)[-/.년\s]+(\d{1,2})[-/.월\s]+(\d{1,2})", str(r_dict.get("학습답변_SOP", "")))
-                    if m_txt:
-                        ev_date = f"{int(m_txt.group(1)):04d}-{int(m_txt.group(2)):02d}-{int(m_txt.group(3)):02d}"
-                    else:
-                        ev_date = _normalize_date_str(r_dict.get("등록일시", ""))
+                ev_date = _extract_event_date_from_record(r_dict)
                 ev_yr = _extract_year_int(ev_date)
                 years_ago = (cur_yr - ev_yr) if ev_yr else None
                 r_dict["_score"] = sc
@@ -5324,7 +5433,9 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         if df_m is None or df_m.empty:
             return []
         q_norm = str(query_text).lower().strip()
-        q_tokens = [t for t in re.findall(r"[가-힣a-zA-Z0-9]+", q_norm) if len(t) >= 2]
+        q_tokens = [t for t in re.findall(r"[가-힣a-zA-Z0-9#]+", q_norm) if len(t) >= 2]
+        q_sites = [s for s in SITE_KEYWORDS if s in q_norm]
+        q_equips = [e for e in EQUIP_KEYWORDS if e in q_norm]
         matched = []
         for _, r in df_m.iterrows():
             blob = " ".join([
@@ -5332,6 +5443,8 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                 str(r.get("제목_증상", "")), str(r.get("조치_점검메모", "")), str(r.get("연계키워드", ""))
             ]).lower()
             sc = sum(2 for tok in q_tokens if tok in blob)
+            sc += sum(5 for s_k in q_sites if s_k in blob)
+            sc += sum(5 for e_k in q_equips if e_k in blob)
             if sc >= 2:
                 m_d = r.to_dict()
                 m_d["_m_score"] = sc
@@ -5345,7 +5458,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
     tab_chat_main, tab_kb_teach, tab_media_vault, tab_kb_manage = st.tabs([
         "💬 1. 오프라인 공정 Q&A & 과거 유사사례 추천",
         "🎓 2. 현장 노하우·다양한 문서 학습시키기 (최고관리자 전용)",
-        "📸 3. 고장 사진·점검 영상 기록 보관함",
+        "📸 3. 고장 사진·점검 영상 기록 보관함 (최고관리자 전용)",
         "📚 4. 학습된 지식 DB 열람·수정·백업 (최고관리자 전용)"
     ])
 
@@ -5367,7 +5480,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                 st.markdown(prompt)
 
             hits = analyze_and_recommend_from_kb(prompt, df_kb_cur)
-            media_hits = find_matching_media(prompt, df_media_cur)
+            media_hits = find_matching_media(prompt, df_media_cur) if is_super_admin else []
 
             if hits:
                 top_hit = hits[0]
@@ -5508,12 +5621,12 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                     st.warning("⚠️ 선택한 문서에서 추출 가능한 텍스트가 없습니다. (스캔 이미지 PDF거나 빈 파일인지 확인해 주세요.)")
 
     with tab_media_vault:
-        st.subheader("📸 고장 사진 · 점검 영상 기록 보관함 (최고관리자 전용)")
-        st.caption("고장 사진과 점검 영상은 `media_records` 폴더에 안전하게 보관하며, **최고관리자**만 조회·재생·업로드·삭제할 수 있습니다.")
-
         if not is_super_admin:
-            st.warning("🔒 **최고관리자 전용 기능**: 고장 사진·점검 영상 기록 보관함 조회 및 관리는 **오직 최고관리자**만 수행할 수 있습니다.")
+            st.warning("🔒 **최고관리자 전용 기능**: 고장 사진·점검 영상 기록 보관함 조회·업로드·삭제는 **오직 최고관리자**만 수행할 수 있습니다.")
         else:
+            st.subheader("📸 고장 사진 · 점검 영상 기록 보관함 (최고관리자 전용)")
+            st.caption("고장 사진과 점검 영상은 `media_records` 폴더에 안전하게 보관하며, **최고관리자**만 조회·재생·업로드·삭제할 수 있습니다.")
+
             with st.form("media_vault_upload_form"):
                 mv1, mv2, mv3, mv4 = st.columns([1.0, 1.2, 1.3, 1.0])
                 with mv1:
@@ -5580,59 +5693,68 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                     else:
                         st.warning("⚠️ 저장할 사진 또는 영상 파일을 먼저 선택해 주세요.")
 
-        st.divider()
-        st.markdown("##### 🔍 보관된 고장 사진 · 점검 영상 조회 및 재생")
-        df_m_list = load_media_records()
-        if not df_m_list.empty:
-            fc1, fc2, fc3 = st.columns([1.2, 1.2, 1.6])
-            with fc1:
-                flt_fac = st.selectbox("시설 필터", ["전체"] + sorted(df_m_list["시설명"].dropna().unique().tolist()), key="mv_flt_fac")
-            with fc2:
-                flt_type = st.selectbox("유형 필터", ["전체", "고장/현장 사진", "점검 영상", "기타 미디어"], key="mv_flt_type")
-            with fc3:
-                flt_kw = st.text_input("설비·증상·키워드 검색", placeholder="예: 펌프, 압축기, 누수", key="mv_flt_kw")
+            st.divider()
+            st.markdown("##### 🔍 보관된 고장 사진 · 점검 영상 조회 및 재생")
+            df_m_list = load_media_records()
+            if not df_m_list.empty:
+                fc1, fc2, fc3 = st.columns([1.2, 1.2, 1.6])
+                with fc1:
+                    flt_fac = st.selectbox("시설 필터", ["전체"] + sorted(df_m_list["시설명"].dropna().unique().tolist()), key="mv_flt_fac")
+                with fc2:
+                    flt_type = st.selectbox("유형 필터", ["전체", "고장/현장 사진", "점검 영상", "기타 미디어"], key="mv_flt_type")
+                with fc3:
+                    flt_kw = st.text_input("설비·증상·키워드 검색", placeholder="예: 펌프, 압축기, 누수", key="mv_flt_kw")
 
-            df_m_show = df_m_list.copy()
-            if flt_fac != "전체":
-                df_m_show = df_m_show[df_m_show["시설명"] == flt_fac]
-            if flt_type != "전체":
-                df_m_show = df_m_show[df_m_show["파일유형"] == flt_type]
-            if flt_kw.strip():
-                kw_l = flt_kw.strip().lower()
-                mask_s = df_m_show.apply(lambda row: kw_l in " ".join([str(v) for v in row.values]).lower(), axis=1)
-                df_m_show = df_m_show[mask_s]
+                df_m_show = df_m_list.copy()
+                if flt_fac != "전체":
+                    df_m_show = df_m_show[df_m_show["시설명"] == flt_fac]
+                if flt_type != "전체":
+                    df_m_show = df_m_show[df_m_show["파일유형"] == flt_type]
+                if flt_kw.strip():
+                    kw_l = flt_kw.strip().lower()
+                    mask_s = df_m_show.apply(lambda row: kw_l in " ".join([str(v) for v in row.values]).lower(), axis=1)
+                    df_m_show = df_m_show[mask_s]
 
-            st.dataframe(df_m_show[["기록ID", "발생일", "시설명", "설비명", "구분", "제목_증상", "파일유형", "용량_MB", "파일명"]], use_container_width=True, hide_index=True)
+                st.dataframe(df_m_show[["기록ID", "발생일", "시설명", "설비명", "구분", "제목_증상", "파일유형", "용량_MB", "파일명"]], use_container_width=True, hide_index=True)
 
-            if not df_m_show.empty:
-                sel_m_fn = st.selectbox("미리보기/재생할 파일 선택", df_m_show["파일명"].tolist(), key="mv_sel_preview")
-                sel_m_path = os.path.join(MEDIA_RECORD_DIR, sanitize_filename(sel_m_fn))
-                sel_row_info = df_m_show[df_m_show["파일명"] == sel_m_fn].iloc[0]
-                st.markdown(f"**📌 [{sel_row_info.get('발생일','')} | {sel_row_info.get('시설명','')} · {sel_row_info.get('설비명','')}] {sel_row_info.get('제목_증상','')}**")
-                if sel_row_info.get("조치_점검메모"):
-                    st.markdown(str(sel_row_info["조치_점검메모"]))
+                if not df_m_show.empty:
+                    sel_m_fn = st.selectbox("미리보기/재생할 파일 선택", df_m_show["파일명"].tolist(), key="mv_sel_preview")
+                    sel_m_path = os.path.join(MEDIA_RECORD_DIR, sanitize_filename(sel_m_fn))
+                    sel_row_info = df_m_show[df_m_show["파일명"] == sel_m_fn].iloc[0]
+                    st.markdown(f"**📌 [{sel_row_info.get('발생일','')} | {sel_row_info.get('시설명','')} · {sel_row_info.get('설비명','')}] {sel_row_info.get('제목_증상','')}**")
+                    if sel_row_info.get("조치_점검메모"):
+                        st.markdown(str(sel_row_info["조치_점검메모"]))
 
-                if os.path.exists(sel_m_path):
-                    low_fn = sel_m_fn.lower()
-                    if low_fn.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
-                        st.image(sel_m_path, caption=sel_m_fn, use_container_width=True)
-                    elif low_fn.endswith((".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v")):
-                        st.video(sel_m_path)
-                    with open(sel_m_path, "rb") as f_dl:
-                        st.download_button("📥 원본 사진/영상 다운로드", f_dl.read(), file_name=sel_m_fn, use_container_width=True, key="mv_dl_btn")
+                    if os.path.exists(sel_m_path):
+                        low_fn = sel_m_fn.lower()
+                        if low_fn.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
+                            st.image(sel_m_path, caption=sel_m_fn, use_container_width=True)
+                        elif low_fn.endswith((".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v")):
+                            st.video(sel_m_path)
+                        with open(sel_m_path, "rb") as f_dl:
+                            st.download_button("📥 원본 사진/영상 다운로드", f_dl.read(), file_name=sel_m_fn, use_container_width=True, key="mv_dl_btn")
 
-                    if is_super_admin and st.button("🗑️ 선택 사진/영상 기록 삭제", key="mv_del_btn"):
-                        try:
-                            os.remove(sel_m_path)
-                        except Exception:
-                            pass
-                        df_rem = pd.read_csv(MEDIA_INDEX_DB)
-                        df_rem = df_rem[df_rem["파일명"] != sel_m_fn]
-                        df_rem.to_csv(MEDIA_INDEX_DB, index=False, encoding="utf-8-sig")
-                        st.success("✅ 기록이 삭제되었습니다.")
-                        st.rerun()
-        else:
-            st.info("💡 아직 보관된 고장 사진 또는 점검 영상이 없습니다.")
+                        st.markdown("---")
+                        confirm_med_del = st.checkbox("선택한 사진/영상 기록 및 원본 파일 삭제에 동의합니다 (최고관리자 재확인)", key="mv_del_confirm_chk")
+                        if st.button("🗑️ 선택 사진/영상 기록 삭제", key="mv_del_btn", disabled=not confirm_med_del):
+                            try:
+                                if os.path.exists(sel_m_path):
+                                    os.remove(sel_m_path)
+                            except Exception:
+                                pass
+                            if os.path.exists(MEDIA_INDEX_DB):
+                                try:
+                                    df_rem = pd.read_csv(MEDIA_INDEX_DB)
+                                    clean_target = sanitize_filename(sel_m_fn)
+                                    if "파일명" in df_rem.columns:
+                                        df_rem = df_rem[df_rem["파일명"].astype(str).apply(sanitize_filename) != clean_target]
+                                    df_rem.to_csv(MEDIA_INDEX_DB, index=False, encoding="utf-8-sig")
+                                except Exception:
+                                    pass
+                            st.success("✅ 기록이 삭제되었습니다.")
+                            st.rerun()
+            else:
+                st.info("💡 아직 보관된 고장 사진 또는 점검 영상이 없습니다.")
 
     with tab_kb_manage:
         if not is_super_admin:
@@ -5641,24 +5763,34 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
             st.subheader("📚 영구 저장된 오프라인 학습 지식 DB 열람·수정·백업 (최고관리자 전용)")
             if not df_kb_cur.empty:
                 ed_kb = st.data_editor(df_kb_cur, num_rows="dynamic", use_container_width=True, hide_index=True, key="ed_offline_kb_tbl")
+                skip_existing_sop = st.checkbox("이미 SOP 형식(`**[핵심 요약]**` 포함)인 항목은 건너뛰기 (원본/기존 SOP 보존)", value=True, key="kb_skip_sop_chk")
                 c_kb1, c_kb2, c_kb3 = st.columns(3)
                 with c_kb1:
                     if st.button("💾 수정·삭제 내역 저장", type="primary", use_container_width=True):
+                        _save_kb_snapshot(df_kb_cur, reason="before_save")
                         save_offline_kb(ed_kb)
-                        st.success("✅ 지식 DB가 업데이트되었습니다!")
+                        st.success("✅ 스냅샷 백업 후 지식 DB가 업데이트되었습니다!")
                         st.rerun()
                 with c_kb2:
                     if st.button("✨ 전체 항목 SOP 형태로 일괄 다듬기", use_container_width=True):
+                        _save_kb_snapshot(ed_kb, reason="before_refine_all")
                         df_ref = ed_kb.copy()
+                        refined_cnt = 0
+                        skipped_cnt = 0
                         for idx_r in df_ref.index:
+                            cur_sop_val = df_ref.at[idx_r, "학습답변_SOP"]
+                            if skip_existing_sop and _is_already_sop(cur_sop_val):
+                                skipped_cnt += 1
+                                continue
                             df_ref.at[idx_r, "학습답변_SOP"] = _refine_to_sop_text(
-                                df_ref.at[idx_r, "학습답변_SOP"],
+                                cur_sop_val,
                                 category=df_ref.at[idx_r, "카테고리"],
-                                ev_date=_normalize_date_str(df_ref.at[idx_r, "등록일시"]),
+                                ev_date=_extract_event_date_from_record(df_ref.loc[idx_r].to_dict()),
                                 title_hint=df_ref.at[idx_r, "질문예시"]
                             )
+                            refined_cnt += 1
                         save_offline_kb(df_ref)
-                        st.success("✅ 기존 학습 항목도 모두 SOP 형태로 다듬었습니다!")
+                        st.success(f"✅ 정제 전 백업 저장 완료! ({refined_cnt}건 SOP 정제, {skipped_cnt}건 기존 SOP 유지)")
                         st.rerun()
                 with c_kb3:
                     st.download_button(
@@ -5669,23 +5801,27 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                         use_container_width=True
                     )
                 st.markdown("---")
-                st.markdown("##### 🗑️ 학습된 DB 개별 항목 즉시 삭제 (최고관리자 전용)")
+                st.markdown("##### 🗑️ 학습된 DB 개별 항목 즉시 삭제 (최고관리자 전용 · 삭제 전 자동 스냅샷 백업)")
                 del_choices = [
                     f"{r['지식ID']} | [{r['카테고리']}] {r['질문예시']}"
                     for _, r in df_kb_cur.iterrows()
                 ]
                 if del_choices:
-                    dc1, dc2 = st.columns([3.5, 1])
+                    dc1, dc2, dc3 = st.columns([2.8, 1.1, 1.0])
                     with dc1:
                         sel_del_kb = st.selectbox("삭제할 학습 지식 선택", del_choices, key="kb_del_item_sel")
                     with dc2:
                         st.write("")
+                        confirm_kb_del = st.checkbox("삭제 확인", key="kb_del_confirm_chk")
+                    with dc3:
                         st.write("")
-                        if st.button("🗑️ 선택 항목 삭제", type="secondary", use_container_width=True, key="kb_del_item_btn"):
+                        st.write("")
+                        if st.button("🗑️ 선택 항목 삭제", type="secondary", use_container_width=True, key="kb_del_item_btn", disabled=not confirm_kb_del):
+                            _save_kb_snapshot(df_kb_cur, reason="before_item_delete")
                             del_kid = sel_del_kb.split(" | ")[0].strip()
                             df_after_del = df_kb_cur[df_kb_cur["지식ID"] != del_kid].reset_index(drop=True)
                             save_offline_kb(df_after_del)
-                            st.success(f"✅ `{del_kid}` 항목이 학습된 DB에서 삭제되었습니다!")
+                            st.success(f"✅ 스냅샷 백업 후 `{del_kid}` 항목이 학습된 DB에서 삭제되었습니다!")
                             st.rerun()
             else:
                 st.info("💡 아직 직접 학습시킨 항목이 없습니다. [2. 현장 노하우·다양한 문서 학습시키기] 탭에서 추가해 보세요.")
