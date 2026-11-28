@@ -5090,13 +5090,27 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                 stp_fmt = f"{stp_fmt} 확인 및 조치"
             step_lines.append(f"{idx_s}. {stp_fmt}")
 
+        def _safe_str(val):
+            if val is None:
+                return ""
+            try:
+                if pd.isna(val):
+                    return ""
+            except Exception:
+                pass
+            return str(val).strip()
+
+        t_h = _safe_str(title_hint)
+        cat_s = _safe_str(category)
+        ev_s = _safe_str(ev_date)
+
         meta_bits = []
-        if title_hint:
-            meta_bits.append(f"대상: {title_hint.strip()}")
-        if category:
-            meta_bits.append(f"분류: {category.strip()}")
-        if ev_date:
-            meta_bits.append(f"기록일: {ev_date.strip()}")
+        if t_h:
+            meta_bits.append(f"대상: {t_h}")
+        if cat_s:
+            meta_bits.append(f"분류: {cat_s}")
+        if ev_s:
+            meta_bits.append(f"기록일: {ev_s}")
         meta_header = " | ".join(meta_bits)
 
         sop_out = (
@@ -5494,11 +5508,11 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                     st.warning("⚠️ 선택한 문서에서 추출 가능한 텍스트가 없습니다. (스캔 이미지 PDF거나 빈 파일인지 확인해 주세요.)")
 
     with tab_media_vault:
-        st.subheader("📸 고장 사진 · 점검 영상 기록 보관함 (현장 증빙 및 이력 관리)")
-        st.caption("고장 사진과 점검 영상은 `media_records` 폴더에 안전하게 보관하고, 날짜·시설·설비·증상·조치 메모와 함께 검색·재생·열람할 수 있습니다.")
+        st.subheader("📸 고장 사진 · 점검 영상 기록 보관함 (최고관리자 전용)")
+        st.caption("고장 사진과 점검 영상은 `media_records` 폴더에 안전하게 보관하며, **최고관리자**만 조회·재생·업로드·삭제할 수 있습니다.")
 
         if not is_super_admin:
-            st.info("ℹ️ 사진·영상 업로드는 **최고관리자** 권한이 필요하며, 보관된 기록 열람 및 영상 재생은 가능합니다.")
+            st.warning("🔒 **최고관리자 전용 기능**: 고장 사진·점검 영상 기록 보관함 조회 및 관리는 **오직 최고관리자**만 수행할 수 있습니다.")
         else:
             with st.form("media_vault_upload_form"):
                 mv1, mv2, mv3, mv4 = st.columns([1.0, 1.2, 1.3, 1.0])
