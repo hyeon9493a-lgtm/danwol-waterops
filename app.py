@@ -5668,6 +5668,25 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                         mime="text/csv",
                         use_container_width=True
                     )
+                st.markdown("---")
+                st.markdown("##### 🗑️ 학습된 DB 개별 항목 즉시 삭제 (최고관리자 전용)")
+                del_choices = [
+                    f"{r['지식ID']} | [{r['카테고리']}] {r['질문예시']}"
+                    for _, r in df_kb_cur.iterrows()
+                ]
+                if del_choices:
+                    dc1, dc2 = st.columns([3.5, 1])
+                    with dc1:
+                        sel_del_kb = st.selectbox("삭제할 학습 지식 선택", del_choices, key="kb_del_item_sel")
+                    with dc2:
+                        st.write("")
+                        st.write("")
+                        if st.button("🗑️ 선택 항목 삭제", type="secondary", use_container_width=True, key="kb_del_item_btn"):
+                            del_kid = sel_del_kb.split(" | ")[0].strip()
+                            df_after_del = df_kb_cur[df_kb_cur["지식ID"] != del_kid].reset_index(drop=True)
+                            save_offline_kb(df_after_del)
+                            st.success(f"✅ `{del_kid}` 항목이 학습된 DB에서 삭제되었습니다!")
+                            st.rerun()
             else:
                 st.info("💡 아직 직접 학습시킨 항목이 없습니다. [2. 현장 노하우·다양한 문서 학습시키기] 탭에서 추가해 보세요.")
 
