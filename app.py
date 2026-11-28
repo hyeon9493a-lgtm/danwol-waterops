@@ -309,7 +309,9 @@ SIGNATURE_DIR = "signature_storage"
 HWPX_RECORD_DIR = "hwpx_records"
 CHEMICAL_RECORD_DIR = "chemical_records"
 INSPECTION_RECORD_DIR = "inspection_confirm_records"
+MEDIA_RECORD_DIR = "media_records"
 CHEMICAL_INSPECTION_DB = "danwol_chemical_inspection_master.csv"
+MEDIA_INDEX_DB = "danwol_media_records.csv"
 MASTER_ACCUM_DB = "danwol_accumulated_master.csv"
 TMS_ACCUM_DB = "danwol_tms_master.csv"
 PROCESS_CONTROL_DB = "danwol_process_control_master.csv"
@@ -327,6 +329,7 @@ ALL_STORAGE_DIRS = {
     "전자서명 이미지 보관소 (signature_storage)": SIGNATURE_DIR,
     "약품 입출고 증빙 보관소 (chemical_records)": CHEMICAL_RECORD_DIR,
     "약품검수확인서 영구 보관함 (inspection_confirm_records)": INSPECTION_RECORD_DIR,
+    "고장사진·점검영상 보관소 (media_records)": MEDIA_RECORD_DIR,
 }
 
 ALL_MASTER_DBS = {
@@ -337,10 +340,11 @@ ALL_MASTER_DBS = {
     "약품 구매·재고 수불부 마스터 DB": CHEMICAL_INVENTORY_DB,
     "약품검수확인서 영구 마스터 DB": CHEMICAL_INSPECTION_DB,
     "하수도 공인 약품구매 마스터 DB": KHAS_PURCHASE_MASTER_DB,
-    "하수도 공인 약품사용 마스터 DB": KHAS_USAGE_MASTER_DB
+    "하수도 공인 약품사용 마스터 DB": KHAS_USAGE_MASTER_DB,
+    "고장사진·점검영상 기록 인덱스 DB": MEDIA_INDEX_DB
 }
 
-for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, SIGNATURE_DIR, HWPX_RECORD_DIR, CHEMICAL_RECORD_DIR, INSPECTION_RECORD_DIR]:
+for p in [KHAS_RECORD_DIR, TBM_RECORD_DIR, SIGNATURE_DIR, HWPX_RECORD_DIR, CHEMICAL_RECORD_DIR, INSPECTION_RECORD_DIR, MEDIA_RECORD_DIR]:
     if not os.path.exists(p): os.makedirs(p)
 
 def sanitize_filename(filename):
@@ -4553,9 +4557,6 @@ elif menu == "⚙️ 4. AI 최적 운전조건 제안 & KNR+IPR 공정 정밀진
             st.info("💡 아직 저장된 공정 제어 데이터가 없습니다.")
 
 # -------------------------------------------------------------
-# 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석 (엑셀/CSV 업로드 + 수동입력 + ESG 탄소·경제성 대시보드 + 영구보관함)
-# -------------------------------------------------------------
-# -------------------------------------------------------------
 # 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석 (현장 5종 엑셀 완전 자동 적재 + 최근 3개년 비용절감액 성과 분석)
 # -------------------------------------------------------------
 elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제성 분석":
@@ -4994,7 +4995,7 @@ elif menu == "🧪 5. 약품·에너지 사용량 데이터 적재 & ESG 경제�
             st.info("💡 아직 보관함에 저장된 약품·에너지 파일이 없습니다.")
 elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프레미스)":
     st.title("🤖 단월 하수처리시설 AI 지능형 공정 도우미 (사용자 학습 전용 오프라인 모드)")
-    st.info("🔒 **사용자 학습 전용 · 온프레미스 보안**: 외부 API를 호출하지 않으며, **학습시킨 데이터만** 자동으로 저장하고, 과거 사례(예: 3년 전 유사 사건)도 자동 분석하여 함께 추천해 드립니다. (학습·수정·삭제는 **최고관리자** 전용)")
+    st.info("🔒 **사용자 학습 전용 · 온프레미스 보안**: 외부 API를 호출하지 않으며, 학습된 지식을 **현장 조치 SOP 형태로 정제**하여 안내합니다. 그림·동영상은 **고장 사진·점검 영상 기록 보관함**에 별도로 안전하게 보관·조회할 수 있습니다. (학습·수정·삭제는 **최고관리자** 전용)")
 
     is_super_admin = (
         st.session_state.get("user_role") == "admin"
@@ -5003,6 +5004,7 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
 
     KB_FILE = "danwol_offline_knowledge_base.csv"
     KB_COLS = ["지식ID", "카테고리", "핵심키워드", "질문예시", "학습답변_SOP", "등록일시"]
+    MEDIA_COLS = ["기록ID", "발생일", "시설명", "설비명", "구분", "제목_증상", "조치_점검메모", "연계키워드", "파일명", "파일유형", "용량_MB", "등록일시"]
 
     def _normalize_date_str(raw_d):
         s = str(raw_d or "").strip()
@@ -5021,23 +5023,158 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         m_y = re.match(r"^(20[1-3]\d)", nd)
         return int(m_y.group(1)) if m_y else None
 
-    def load_offline_kb():
-        if "user_learned_kb_rows" in st.session_state and isinstance(st.session_state["user_learned_kb_rows"], list):
-            if os.path.exists(KB_FILE):
-                try:
-                    df_disk = pd.read_csv(KB_FILE)
-                    for c in KB_COLS:
-                        if c not in df_disk.columns:
-                            df_disk[c] = ""
-                    return df_disk[KB_COLS].drop_duplicates(subset=["지식ID"], keep="last").reset_index(drop=True)
-                except Exception:
-                    pass
-            df_mem = pd.DataFrame(st.session_state["user_learned_kb_rows"])
-            for c in KB_COLS:
-                if c not in df_mem.columns:
-                    df_mem[c] = ""
-            return df_mem[KB_COLS].drop_duplicates(subset=["지식ID"], keep="last").reset_index(drop=True) if not df_mem.empty else pd.DataFrame(columns=KB_COLS)
 
+    def build_friendly_night_guide(query, matched_sop, is_newcomer=False):
+        """인사발령·신입사원 및 야간근무자를 위한 친절하고 상세한 현장 안내 가이드"""
+        role_badge = "신규 전입·신입 근무자 및 야간 당직" if is_newcomer else "야간 당직 및 신규 근무자"
+        greeting = (
+            f"🌙 **[단월 스마트 공정 {role_badge} 친절 가이드]**\n\n"
+            "야간에 시설 관리하시느라 고생이 많으십니다! "
+            "처음 보시거나 낯선 경보·수치가 떠도 당황하지 마시고, 아래 순서대로 차근차근 확인해 주세요.\n\n"
+        )
+        safety_rule = (
+            "> ⚠️ **야간 안전 수칙 필독**\n"
+            "> • 수조 상부, 집수정, 슬러지 저류조 등 위험 구역 점검 시에는 반드시 비상 손전등과 무전기, 가스검지기(필요 시)를 지참하고 단독 무리 접근을 피해 주세요.\n"
+            "> • 회전체(송풍기, 펌프, 교반기, 탈수기) 확인 시에는 무리하게 손을 대지 마시고, 이상 소음·진동·발열·냄새 위주로 1차 확인합니다.\n\n"
+        )
+        q_line = f"💬 **문의하신 내용**: `{query}`\n\n" if query else ""
+        body = f"📋 **쉬운 현장 확인 및 조치 절차 (SOP)**\n{matched_sop}\n\n"
+        closing = (
+            "💡 **야간 당직 팁 & 비상 보고**\n"
+            "• 제어반 경보(Alarm)가 해제되지 않거나 방류수질·유량·차압 이상이 지속될 경우, 혼자 무리하게 조작하지 마시고 운영일지에 기록한 뒤 선임 근무자 또는 담당 주임님께 연락해 주세요.\n"
+            "• 설비 위치나 계측기 화면 읽는 법이 헷갈리시면 언제든 편하게 다시 물어보세요. 오늘도 안전 근무 응원합니다!"
+        )
+        return greeting + safety_rule + q_line + body + closing
+
+    def _refine_to_sop_text(raw_text, category="현장노하우", ev_date="", title_hint=""):
+        """원본 메모·문서 텍스트를 복붙 수준이 아닌 구조화된 현장 조치 SOP로 다듬는 함수"""
+        cleaned = re.sub(r"\[발생일:\s*[^\]]+\]", " ", str(raw_text or ""))
+        cleaned = re.sub(r"\r\n?", "\n", cleaned)
+        cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
+        if not cleaned:
+            return ""
+
+        # 문장/줄 단위로 분리하고 노이즈·중복 정리
+        raw_pieces = []
+        for line in cleaned.splitlines():
+            line_s = line.strip()
+            if not line_s:
+                continue
+            parts = re.split(r"(?<=[.!?다요음함임.])\s+|\s*/\s*|\s*;\s*", line_s)
+            for p in parts:
+                p_clean = re.sub(r"^[\-•*▪▶0-9.)]+\s*", "", p).strip()
+                if len(p_clean) >= 2:
+                    raw_pieces.append(p_clean)
+
+        if not raw_pieces:
+            raw_pieces = [cleaned]
+
+        unique_steps = []
+        seen_norm = set()
+        for piece in raw_pieces:
+            key_n = re.sub(r"[^가-힣a-zA-Z0-9]", "", piece).lower()
+            if key_n and key_n not in seen_norm:
+                seen_norm.add(key_n)
+                unique_steps.append(piece)
+
+        # 핵심 원인/상황 요약과 단계별 현장 조치로 다듬기
+        summary_line = unique_steps[0]
+        if len(summary_line) > 95:
+            summary_line = summary_line[:92].rstrip() + "..."
+
+        step_lines = []
+        for idx_s, stp in enumerate(unique_steps[:6], start=1):
+            # 동사/명사 끝맺음 다듬기
+            stp_fmt = stp
+            if not re.search(r"(함|됨|임|다|요|음|시|확인|점검|조치|교체|세척|유지|조정|측정|기록|관리)$", stp_fmt):
+                stp_fmt = f"{stp_fmt} 확인 및 조치"
+            step_lines.append(f"{idx_s}. {stp_fmt}")
+
+        meta_bits = []
+        if title_hint:
+            meta_bits.append(f"대상: {title_hint.strip()}")
+        if category:
+            meta_bits.append(f"분류: {category.strip()}")
+        if ev_date:
+            meta_bits.append(f"기록일: {ev_date.strip()}")
+        meta_header = " | ".join(meta_bits)
+
+        sop_out = (
+            f"**[핵심 요약]** {summary_line}\n"
+            + (f"*{meta_header}*\n\n" if meta_header else "\n")
+            + "**[현장 조치 절차]**\n"
+            + "\n".join(step_lines)
+        )
+        return sop_out.strip()
+
+    def _extract_text_from_misc_doc(uploaded_file):
+        """TXT, MD, CSV, XLSX, DOCX, PDF, HWPX 문서에서 본문 텍스트를 오프라인으로 추출"""
+        fname = getattr(uploaded_file, "name", "document")
+        ext = os.path.splitext(fname)[1].lower()
+        raw_bytes = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
+        if not raw_bytes:
+            return []
+
+        chunks = []
+        try:
+            if ext in {".txt", ".md"}:
+                txt = raw_bytes.decode("utf-8", errors="ignore")
+                for c in re.split(r"\n\s*\n", txt):
+                    if len(c.strip()) >= 5:
+                        chunks.append(c.strip())
+            elif ext == ".csv":
+                df_c = pd.read_csv(io.BytesIO(raw_bytes))
+                for _, r in df_c.iterrows():
+                    line_v = " / ".join([f"{col}: {str(val).strip()}" for col, val in r.items() if pd.notna(val) and str(val).strip()])
+                    if len(line_v) >= 5:
+                        chunks.append(line_v)
+            elif ext == ".xlsx":
+                with pd.ExcelFile(io.BytesIO(raw_bytes)) as xl:
+                    for sname in xl.sheet_names:
+                        df_x = pd.read_excel(xl, sheet_name=sname)
+                        for _, r in df_x.iterrows():
+                            line_v = " / ".join([f"{col}: {str(val).strip()}" for col, val in r.items() if pd.notna(val) and str(val).strip()])
+                            if len(line_v) >= 5:
+                                chunks.append(f"[{sname}] {line_v}")
+            elif ext == ".docx":
+                from docx import Document
+                doc = Document(io.BytesIO(raw_bytes))
+                p_list = [p.text.strip() for p in doc.paragraphs if p.text and p.text.strip()]
+                if p_list:
+                    chunks.append("\n".join(p_list))
+                for t_idx, tbl in enumerate(doc.tables, start=1):
+                    for row in tbl.rows:
+                        cells_t = [c.text.strip().replace("\n", " ") for c in row.cells if c.text and c.text.strip()]
+                        if len(cells_t) >= 2:
+                            chunks.append(f"[표{t_idx}] " + " | ".join(dict.fromkeys(cells_t)))
+            elif ext == ".pdf":
+                from pypdf import PdfReader
+                reader = PdfReader(io.BytesIO(raw_bytes))
+                for p_idx, page in enumerate(reader.pages, start=1):
+                    p_txt = (page.extract_text() or "").strip()
+                    if len(p_txt) >= 10:
+                        chunks.append(f"[PDF {p_idx}쪽] {p_txt}")
+            elif ext == ".hwpx":
+                with zipfile.ZipFile(io.BytesIO(raw_bytes), "r") as zf:
+                    sec_names = sorted([n for n in zf.namelist() if n.startswith("Contents/section") and n.endswith(".xml")])
+                    h_lines = []
+                    for sn in sec_names:
+                        xml_s = zf.read(sn).decode("utf-8", errors="ignore")
+                        t_matches = re.findall(r"<hp:t[^>]*>(.*?)</hp:t>", xml_s)
+                        for tm in t_matches:
+                            tm_clean = re.sub(r"<[^>]+>", "", tm).strip()
+                            if tm_clean:
+                                h_lines.append(tm_clean)
+                    if h_lines:
+                        joined_h = " ".join(h_lines)
+                        for seg in re.split(r"(?=[□○●▪▶]\s*)", joined_h):
+                            if len(seg.strip()) >= 8:
+                                chunks.append(seg.strip())
+        except Exception:
+            return []
+        return chunks[:120]
+
+    def load_offline_kb():
         if os.path.exists(KB_FILE):
             try:
                 df_k = pd.read_csv(KB_FILE)
@@ -5049,6 +5186,12 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                 return df_clean
             except Exception:
                 pass
+        if "user_learned_kb_rows" in st.session_state and isinstance(st.session_state["user_learned_kb_rows"], list):
+            df_mem = pd.DataFrame(st.session_state["user_learned_kb_rows"])
+            for c in KB_COLS:
+                if c not in df_mem.columns:
+                    df_mem[c] = ""
+            return df_mem[KB_COLS].drop_duplicates(subset=["지식ID"], keep="last").reset_index(drop=True) if not df_mem.empty else pd.DataFrame(columns=KB_COLS)
         st.session_state["user_learned_kb_rows"] = []
         return pd.DataFrame(columns=KB_COLS)
 
@@ -5057,6 +5200,60 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         df_clean = df_clean.drop_duplicates(subset=["지식ID"], keep="last").reset_index(drop=True)
         st.session_state["user_learned_kb_rows"] = df_clean.to_dict("records")
         df_clean.to_csv(KB_FILE, index=False, encoding="utf-8-sig")
+
+    def load_media_records():
+        if os.path.exists(MEDIA_INDEX_DB):
+            try:
+                df_m = pd.read_csv(MEDIA_INDEX_DB)
+                for c in MEDIA_COLS:
+                    if c not in df_m.columns:
+                        df_m[c] = ""
+                return df_m[MEDIA_COLS].iloc[::-1].reset_index(drop=True)
+            except Exception:
+                pass
+        return pd.DataFrame(columns=MEDIA_COLS)
+
+    def append_media_record(rec_dict):
+        row_c = {c: rec_dict.get(c, "") for c in MEDIA_COLS}
+        df_new = pd.DataFrame([row_c])
+        if os.path.exists(MEDIA_INDEX_DB):
+            try:
+                df_old = pd.read_csv(MEDIA_INDEX_DB)
+                for c in MEDIA_COLS:
+                    if c not in df_old.columns:
+                        df_old[c] = ""
+                df_comb = pd.concat([df_old[MEDIA_COLS], df_new], ignore_index=True)
+            except Exception:
+                df_comb = df_new
+        else:
+            df_comb = df_new
+        df_comb.to_csv(MEDIA_INDEX_DB, index=False, encoding="utf-8-sig")
+
+    def save_media_file_to_disk(uploaded_file, date_str, fac_str, kind_str):
+        if uploaded_file is None:
+            return "", "", 0.0
+        raw_b = uploaded_file.getvalue() if hasattr(uploaded_file, "getvalue") else uploaded_file.read()
+        if not raw_b:
+            return "", "", 0.0
+        orig_name = getattr(uploaded_file, "name", "media_file")
+        ext = os.path.splitext(orig_name)[1].lower()
+        img_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+        vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+        if ext in img_exts:
+            m_type = "고장/현장 사진"
+        elif ext in vid_exts:
+            m_type = "점검 영상"
+        else:
+            m_type = "기타 미디어"
+        safe_dt = re.sub(r"[^0-9\-]", "", str(date_str)) or datetime.datetime.now(KST).strftime("%Y-%m-%d")
+        safe_fac = re.sub(r"[^가-힣a-zA-Z0-9_]", "", str(fac_str)) or "단월"
+        safe_k = "사진" if m_type == "고장/현장 사진" else ("영상" if m_type == "점검 영상" else "미디어")
+        fname = sanitize_filename(f"{safe_dt}_{safe_fac}_{safe_k}_{uuid.uuid4().hex[:6]}{ext}")
+        fpath = os.path.join(MEDIA_RECORD_DIR, fname)
+        with open(fpath, "wb") as f_out:
+            f_out.write(raw_b)
+        size_mb = round(len(raw_b) / (1024 * 1024), 2)
+        return fname, m_type, size_mb
 
     def _score_row_against_query(query_text, row_dict):
         q_norm = str(query_text).lower().strip()
@@ -5109,20 +5306,41 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
         scored.sort(key=lambda x: (x["_score"], -(x["_years_ago"] if x["_years_ago"] is not None else 0)), reverse=True)
         return scored
 
-    df_kb_cur = load_offline_kb()
+    def find_matching_media(query_text, df_m):
+        if df_m is None or df_m.empty:
+            return []
+        q_norm = str(query_text).lower().strip()
+        q_tokens = [t for t in re.findall(r"[가-힣a-zA-Z0-9]+", q_norm) if len(t) >= 2]
+        matched = []
+        for _, r in df_m.iterrows():
+            blob = " ".join([
+                str(r.get("시설명", "")), str(r.get("설비명", "")), str(r.get("구분", "")),
+                str(r.get("제목_증상", "")), str(r.get("조치_점검메모", "")), str(r.get("연계키워드", ""))
+            ]).lower()
+            sc = sum(2 for tok in q_tokens if tok in blob)
+            if sc >= 2:
+                m_d = r.to_dict()
+                m_d["_m_score"] = sc
+                matched.append(m_d)
+        matched.sort(key=lambda x: x["_m_score"], reverse=True)
+        return matched[:3]
 
-    tab_chat_main, tab_kb_teach, tab_kb_manage = st.tabs([
+    df_kb_cur = load_offline_kb()
+    df_media_cur = load_media_records()
+
+    tab_chat_main, tab_kb_teach, tab_media_vault, tab_kb_manage = st.tabs([
         "💬 1. 오프라인 공정 Q&A & 과거 유사사례 추천",
-        "🎓 2. 현장 노하우·SOP·문서 직접 학습시키기 (최고관리자 전용)",
-        "📚 3. 학습된 지식 DB 열람·수정·백업 (최고관리자 전용)"
+        "🎓 2. 현장 노하우·다양한 문서 학습시키기 (최고관리자 전용)",
+        "📸 3. 고장 사진·점검 영상 기록 보관함",
+        "📚 4. 학습된 지식 DB 열람·수정·백업 (최고관리자 전용)"
     ])
 
     with tab_chat_main:
-        st.caption(f"💡 현재 영구 학습된 현장 지식 항목: **{len(df_kb_cur)}건** (학습된 지식과 과거 유사사례(예: 3년 전 기록)를 자동 분석하여 답변 및 추천합니다.)")
+        st.caption(f"💡 현재 영구 학습된 현장 지식: **{len(df_kb_cur)}건** | 보관된 고장 사진·점검 영상: **{len(df_media_cur)}건** (학습된 내용을 그대로 복붙하지 않고 **현장 조치 SOP 형태로 다듬어** 안내하며, 과거 유사사례 및 연계 현장 사진·영상 기록도 함께 추천합니다.)")
         if "messages" not in st.session_state:
             st.session_state.messages = [{
                 "role": "assistant",
-                "content": "안녕하세요! 단월공공하수처리시설(KNR+IPR) 및 소규모 6개소 자율운전 제어 도우미입니다. 학습된 현장 노하우·SOP와 과거 유사 사례(예: 3년 전 사건)를 바탕으로 답변 및 대응방안을 안내해 드립니다."
+                "content": "안녕하세요! 단월공공하수처리시설(KNR+IPR) 및 소규모 6개소 자율운전 제어 도우미입니다. 학습된 현장 지식과 과거 유사 사례(예: 3년 전 기록)를 **현장 조치 SOP로 정제**하여 안내해 드립니다."
             }]
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
@@ -5135,47 +5353,61 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                 st.markdown(prompt)
 
             hits = analyze_and_recommend_from_kb(prompt, df_kb_cur)
+            media_hits = find_matching_media(prompt, df_media_cur)
+
             if hits:
                 top_hit = hits[0]
                 top_ago_str = f" (약 {top_hit['_years_ago']}년 전 · {top_hit['_ev_date']})" if top_hit.get("_years_ago") is not None and top_hit["_years_ago"] >= 1 else (f" ({top_hit['_ev_date']})" if top_hit.get("_ev_date") else "")
+                refined_main_sop = _refine_to_sop_text(
+                    top_hit.get("학습답변_SOP", ""),
+                    category=top_hit.get("카테고리", "현장노하우"),
+                    ev_date=top_hit.get("_ev_date", ""),
+                    title_hint=top_hit.get("질문예시", "")
+                )
+                is_new_q = any(w in str(prompt) for w in ["신입", "인사발령", "전입", "처음", "초보", "야간", "당직", "모르", "어떻게"])
+                friendly_main_sop = build_friendly_night_guide(prompt, refined_main_sop, is_newcomer=is_new_q)
                 ans_parts = [
-                    f"🎓 **[온프레미스 학습 지식 답변 · {top_hit.get('카테고리', '현장노하우')}{top_ago_str}]**\n\n"
-                    f"{top_hit.get('학습답변_SOP', '')}\n\n"
-                    f"*(매칭 키워드: `{top_hit.get('핵심키워드', '-')}` | 로컬 지식DB `{top_hit.get('지식ID', '')}` 기반)*"
+                    f"🎓 **[온프레미스 정제 SOP 안내 · {top_hit.get('카테고리', '현장노하우')}{top_ago_str}]**\n\n"
+                    f"{friendly_main_sop}\n\n"
+                    f"*(매칭 키워드: `{top_hit.get('핵심키워드', '-')}` | 로컬 지식DB `{top_hit.get('지식ID', '')}` 정제 반영)*"
                 ]
 
                 old_cases = [h for h in hits if h.get("_years_ago") is not None and h["_years_ago"] >= 2]
                 if old_cases:
-                    rec_lines = ["\n\n---\n🔎 **과거 유사 사건 자동 분석 및 추천 대응방안**"]
+                    rec_lines = ["\n\n---\n🔎 **과거 유사 사건 자동 분석 및 정제 추천 대응방안**"]
                     for oc in old_cases[:3]:
                         y_diff = oc["_years_ago"]
                         d_lbl = oc["_ev_date"] or "연도 미상"
                         q_lbl = oc.get("질문예시", "")
-                        sop_lbl = oc.get("학습답변_SOP", "")
-                        rec_lines.append(
-                            f"• **[{y_diff}년 전 유사 사례 · {d_lbl}]** {q_lbl}\n"
-                            f"  ➔ **추천 조치**: {sop_lbl}"
-                        )
+                        refined_oc = _refine_to_sop_text(oc.get("학습답변_SOP", ""), category=oc.get("카테고리", ""), ev_date=d_lbl, title_hint=q_lbl)
+                        rec_lines.append(f"• **[{y_diff}년 전 유사 사례 · {d_lbl}]** {q_lbl}\n{refined_oc}")
                     ans_parts.append("\n".join(rec_lines))
                 elif len(hits) > 1:
-                    extra_lines = ["\n\n---\n📌 **함께 참고할 관련 내 학습 기록**"]
+                    extra_lines = ["\n\n---\n📌 **함께 참고할 관련 정제 SOP**"]
                     for eh in hits[1:3]:
                         d_lbl = f" ({eh['_ev_date']})" if eh.get("_ev_date") else ""
-                        extra_lines.append(f"• **[{eh.get('카테고리', '학습')}{d_lbl}]** {eh.get('학습답변_SOP', '')}")
+                        refined_eh = _refine_to_sop_text(eh.get("학습답변_SOP", ""), category=eh.get("카테고리", ""), ev_date=eh.get("_ev_date", ""), title_hint=eh.get("질문예시", ""))
+                        extra_lines.append(f"• **[{eh.get('카테고리', '학습')}{d_lbl}]**\n{refined_eh}")
                     ans_parts.append("\n".join(extra_lines))
+
+                if media_hits:
+                    m_lines = ["\n\n---\n📸 **연계된 고장 사진·점검 영상 기록**"]
+                    for mh in media_hits:
+                        m_lines.append(f"• **[{mh.get('발생일','')} | {mh.get('시설명','')} · {mh.get('설비명','')}]** {mh.get('제목_증상','')} — 파일: `{mh.get('파일명','')}` ({mh.get('파일유형','')})")
+                    ans_parts.append("\n".join(m_lines))
 
                 ans = "".join(ans_parts)
             elif df_kb_cur.empty:
                 ans = (
                     "📭 **아직 학습된 데이터가 없습니다.**\n\n"
-                    "회원님께서 직접 학습시킨 데이터만 알려드리도록 설정되어 있습니다. "
-                    "**최고관리자** 계정으로 로그인한 뒤 **[2. 현장 노하우·SOP·문서 직접 학습시키기]** 탭에서 내용을 등록해 주세요."
+                    "직접 학습시킨 데이터만 바탕으로 정제된 SOP를 안내해 드립니다. "
+                    "**최고관리자** 계정으로 로그인한 뒤 **[2. 현장 노하우·다양한 문서 학습시키기]** 탭에서 내용을 등록해 주세요."
                 )
             else:
                 ans = (
                     f"🔍 **({prompt})에 일치하는 내 학습 데이터가 아직 없습니다.**\n\n"
-                    "임의 답변을 생성하지 않으며, 등록된 내 학습 데이터 중에서만 안내합니다. "
-                    "**최고관리자** 권한으로 **[2. 현장 노하우·SOP·문서 직접 학습시키기]** 탭에서 해당 내용을 추가해 주세요."
+                    "임의 추측 답변을 생성하지 않으며, 등록된 내 학습 데이터 중에서만 정제하여 안내합니다. "
+                    "**최고관리자** 권한으로 **[2. 현장 노하우·다양한 문서 학습시키기]** 탭에서 해당 내용을 추가해 주세요."
                 )
 
             with st.chat_message("assistant"):
@@ -5184,10 +5416,10 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
 
     with tab_kb_teach:
         if not is_super_admin:
-            st.warning("🔒 **최고관리자 전용 기능**: AI 교육(1:1 현장 노하우·SOP 입력 및 문서 일괄 학습)은 **오직 최고관리자**만 수행할 수 있습니다. 현재 접속 계정에서는 열람 및 질의만 가능합니다.")
+            st.warning("🔒 **최고관리자 전용 기능**: AI 교육(1:1 현장 노하우·SOP 입력 및 다양한 문서 일괄 학습)은 **오직 최고관리자**만 수행할 수 있습니다. 현재 접속 계정에서는 열람 및 질의만 가능합니다.")
         else:
-            st.subheader("🎓 1:1 현장 노하우·SOP·과거사례 직접 입력 학습 (최고관리자 전용)")
-            st.caption("자주 묻는 질문, 설비 트러블슈팅 방법, 과거 유사사례(예: 3년 전 기록)를 입력하면 `danwol_offline_knowledge_base.csv`에 영구 저장되어 다음 질문부터 즉시 반영됩니다.")
+            st.subheader("🎓 1:1 현장 노하우·과거사례 직접 입력 학습 (입력 즉시 SOP 형태로 다듬어 저장 · 최고관리자 전용)")
+            st.caption("원본 메모를 그대로 두지 않고 핵심 요약과 현장 조치 절차(SOP) 형태로 정제하여 `danwol_offline_knowledge_base.csv`에 영구 저장합니다.")
             with st.form("offline_kb_teach_form"):
                 kc1, kc2, kc3 = st.columns([1.1, 1.5, 1.1])
                 with kc1:
@@ -5197,90 +5429,196 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                 with kc3:
                     kb_ev_date = st.date_input("사건/기록 발생일 (3년 전 등)", value=datetime.date(2023, 11, 27), key="kb_ev_date_in")
                 kb_q = st.text_input("대표 질문 예시 / 사건명", placeholder="예: IPR 메디아 여과 차압이 높을 때 어떻게 조치해?")
-                kb_a = st.text_area("학습시킬 답변 / 현장 조치 SOP / 추천 대응방안", height=130, placeholder="예: 1. 역세척(Backwash) 주기 단축 및 공기압축기 압력 확인\n2. 워시박스·에어렌서·에어벤트 배관 막힘 점검\n3. 차압 35 kPa 이상 지속 시 메디아 오염 상태 정밀 점검")
-                if st.form_submit_button("💾 이 내용으로 AI 학습시키기 (영구 저장)", type="primary", use_container_width=True):
+                kb_a = st.text_area("원본 메모 / 현장 조치 내용 (입력 시 SOP 형태로 자동 정제됨)", height=130, placeholder="예: 역세척 주기 단축, 공기압축기 압력 확인, 워시박스·에어렌서 배관 막힘 점검, 35kPa 이상 시 메디아 점검")
+                if st.form_submit_button("💾 SOP로 다듬어 AI 학습시키기 (영구 저장)", type="primary", use_container_width=True):
                     if kb_kw.strip() and kb_a.strip():
                         new_kid = f"KB-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
                         now_str = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
                         ev_s = kb_ev_date.strftime("%Y-%m-%d")
-                        full_ans = f"[발생일: {ev_s}] {kb_a.strip()}" if ev_s not in kb_a else kb_a.strip()
+                        refined_sop = _refine_to_sop_text(kb_a.strip(), category=kb_cat, ev_date=ev_s, title_hint=kb_q.strip())
                         df_new_k = pd.DataFrame([{
                             "지식ID": new_kid,
                             "카테고리": kb_cat,
                             "핵심키워드": f"{kb_kw.strip()}, {ev_s[:4]}년",
                             "질문예시": kb_q.strip() if kb_q.strip() else kb_kw.strip(),
-                            "학습답변_SOP": full_ans,
+                            "학습답변_SOP": refined_sop,
                             "등록일시": now_str
                         }])
                         df_updated_k = pd.concat([df_kb_cur, df_new_k], ignore_index=True)
                         save_offline_kb(df_updated_k)
-                        st.success(f"✅ 학습 완료! (`{kb_kw.strip()}` 키워드로 저장되었으며, 챗봇 탭에서 바로 질문할 수 있습니다.)")
+                        st.success(f"✅ SOP 정제 학습 완료! (`{kb_kw.strip()}` 키워드로 저장되었습니다.)")
                         st.rerun()
                     else:
-                        st.warning("⚠️ 핵심 키워드와 학습시킬 답변 내용을 모두 입력해 주세요.")
+                        st.warning("⚠️ 핵심 키워드와 학습시킬 내용을 모두 입력해 주세요.")
 
             st.divider()
-            st.subheader("📄 2: TXT / MD / CSV / XLSX 문서 업로드로 일괄 학습 (최고관리자 전용)")
-            kb_files = st.file_uploader("현장 매뉴얼·점검기준·Q&A 문서 선택 (.txt, .md, .csv, .xlsx)", type=["txt", "md", "csv", "xlsx"], accept_multiple_files=True, key="kb_doc_uploader")
-            if kb_files and st.button("📥 업로드 문서 내용 지식 DB에 학습 반영", type="primary", use_container_width=True):
+            st.subheader("📄 2: 다양한 문서 업로드로 일괄 학습 (TXT · MD · CSV · XLSX · DOCX · PDF · HWPX 지원)")
+            st.caption("업로드된 문서의 텍스트를 추출한 뒤 **현장 조치 SOP 형태로 다듬어** 지식 DB에 반영합니다. (스캔 이미지 위주 PDF는 텍스트 추출이 제한될 수 있습니다.)")
+            kb_files = st.file_uploader(
+                "현장 매뉴얼·보고서·점검기준 문서 선택 (.txt, .md, .csv, .xlsx, .docx, .pdf, .hwpx)",
+                type=["txt", "md", "csv", "xlsx", "docx", "pdf", "hwpx"],
+                accept_multiple_files=True,
+                key="kb_doc_uploader_v2"
+            )
+            if kb_files and st.button("📥 업로드 문서 내용 SOP로 다듬어 학습 반영", type="primary", use_container_width=True):
                 added_cnt = 0
+                skipped_files = []
                 now_str = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
                 rows_to_add = []
                 for kf in kb_files:
                     fname_k = getattr(kf, "name", "doc")
-                    try:
-                        if fname_k.lower().endswith((".txt", ".md")):
-                            raw_txt = (kf.getvalue() if hasattr(kf, "getvalue") else kf.read()).decode("utf-8", errors="ignore")
-                            chunks = [c.strip() for c in re.split(r"\n\s*\n", raw_txt) if len(c.strip()) >= 5]
-                            for ch in chunks[:100]:
-                                first_line = ch.splitlines()[0][:30]
-                                rows_to_add.append({
-                                    "지식ID": f"DOC-{uuid.uuid4().hex[:8]}",
-                                    "카테고리": "문서학습",
-                                    "핵심키워드": f"{fname_k}, {first_line}",
-                                    "질문예시": first_line,
-                                    "학습답변_SOP": ch,
-                                    "등록일시": now_str
-                                })
-                                added_cnt += 1
-                        elif fname_k.lower().endswith(".csv"):
-                            df_up_k = pd.read_csv(kf)
-                            for _, r in df_up_k.iterrows():
-                                ans_v = str(r.get("학습답변_SOP", r.get("답변", r.get("내용", "")))).strip()
-                                if ans_v:
-                                    kw_v = str(r.get("핵심키워드", r.get("키워드", fname_k))).strip()
-                                    q_v = str(r.get("질문예시", r.get("질문", kw_v))).strip()
-                                    rows_to_add.append({
-                                        "지식ID": f"CSV-{uuid.uuid4().hex[:8]}",
-                                        "카테고리": str(r.get("카테고리", "문서학습")),
-                                        "핵심키워드": kw_v,
-                                        "질문예시": q_v,
-                                        "학습답변_SOP": ans_v,
-                                        "등록일시": now_str
-                                    })
-                                    added_cnt += 1
-                        elif fname_k.lower().endswith(".xlsx"):
-                            df_up_x = pd.read_excel(kf)
-                            for _, r in df_up_x.iterrows():
-                                joined_v = " | ".join([f"{col}: {val}" for col, val in r.items() if pd.notna(val) and str(val).strip()])
-                                if joined_v:
-                                    rows_to_add.append({
-                                        "지식ID": f"XLS-{uuid.uuid4().hex[:8]}",
-                                        "카테고리": "문서학습",
-                                        "핵심키워드": f"{fname_k}, {str(r.iloc[0])[:20]}",
-                                        "질문예시": f"{fname_k} - {str(r.iloc[0])[:25]}",
-                                        "학습답변_SOP": joined_v,
-                                        "등록일시": now_str
-                                    })
-                                    added_cnt += 1
-                    except Exception:
-                        pass
+                    extracted_chunks = _extract_text_from_misc_doc(kf)
+                    if not extracted_chunks:
+                        skipped_files.append(fname_k)
+                        continue
+                    for idx_c, ch in enumerate(extracted_chunks, start=1):
+                        first_line = ch.splitlines()[0][:32]
+                        refined_ch = _refine_to_sop_text(ch, category="문서학습", ev_date="", title_hint=f"{fname_k} #{idx_c}")
+                        rows_to_add.append({
+                            "지식ID": f"DOC-{uuid.uuid4().hex[:8]}",
+                            "카테고리": "문서학습",
+                            "핵심키워드": f"{fname_k}, {first_line}",
+                            "질문예시": f"{fname_k} - {first_line}",
+                            "학습답변_SOP": refined_ch,
+                            "등록일시": now_str
+                        })
+                        added_cnt += 1
                 if rows_to_add:
                     save_offline_kb(pd.concat([df_kb_cur, pd.DataFrame(rows_to_add)], ignore_index=True))
-                    st.success(f"✅ 문서에서 총 {added_cnt}건의 지식을 학습 DB에 반영했습니다!")
+                    msg_ok = f"✅ 총 {added_cnt}건의 문항을 SOP 형태로 정제하여 학습 DB에 반영했습니다!"
+                    if skipped_files:
+                        msg_ok += f" (텍스트 미추출 파일: {', '.join(skipped_files)})"
+                    st.success(msg_ok)
                     st.rerun()
                 else:
-                    st.warning("⚠️ 문서에서 학습할 텍스트/행을 추출하지 못했습니다.")
+                    st.warning("⚠️ 선택한 문서에서 추출 가능한 텍스트가 없습니다. (스캔 이미지 PDF거나 빈 파일인지 확인해 주세요.)")
+
+    with tab_media_vault:
+        st.subheader("📸 고장 사진 · 점검 영상 기록 보관함 (현장 증빙 및 이력 관리)")
+        st.caption("고장 사진과 점검 영상은 `media_records` 폴더에 안전하게 보관하고, 날짜·시설·설비·증상·조치 메모와 함께 검색·재생·열람할 수 있습니다.")
+
+        if not is_super_admin:
+            st.info("ℹ️ 사진·영상 업로드는 **최고관리자** 권한이 필요하며, 보관된 기록 열람 및 영상 재생은 가능합니다.")
+        else:
+            with st.form("media_vault_upload_form"):
+                mv1, mv2, mv3, mv4 = st.columns([1.0, 1.2, 1.3, 1.0])
+                with mv1:
+                    mv_date = st.date_input("발생/점검일", datetime.date.today(), key="mv_dt_in")
+                with mv2:
+                    mv_fac = st.selectbox("대상 시설", [MAIN_PLANT] + SMALL_PLANTS + PRIVATE_PLANTS, key="mv_fac_in")
+                with mv3:
+                    mv_equip = st.text_input("대상 설비명", placeholder="예: 총인처리 #A 공기압축기, 산음 중계펌프A", key="mv_eq_in")
+                with mv4:
+                    mv_kind = st.selectbox("기록 구분", ["고장 증빙", "정기 점검", "교체·정비 전후", "기타 현장기록"], key="mv_kind_in")
+
+                mv_title = st.text_input("증상 / 점검 제목", placeholder="예: 공기압축기 헤드 압력 저하 및 오일 누유 징후", key="mv_title_in")
+                mv_note = st.text_area("조치 및 점검 메모 (SOP 형태로 다듬어 보관)", height=85, placeholder="예: 전원 차단 후 헤드 압력 게이지 점검, 패킹 교체 예정, 이상 소음 없음", key="mv_note_in")
+                mv_kw = st.text_input("검색 키워드 (쉼표 구분)", placeholder="예: 공기압축기, 헤드, 누유, 압력", key="mv_kw_in")
+                mv_files = st.file_uploader(
+                    "고장 사진 또는 점검 영상 선택 (JPG, PNG, WEBP, MP4, MOV, AVI)",
+                    type=["png", "jpg", "jpeg", "webp", "mp4", "mov", "avi", "mkv", "webm"],
+                    accept_multiple_files=True,
+                    key="mv_files_up"
+                )
+                also_learn_sop = st.checkbox("이 고장·점검 메모도 챗봇 SOP 지식 DB에 함께 학습시키기", value=True, key="mv_also_kb")
+
+                if st.form_submit_button("💾 고장 사진·점검 영상 기록 보관함에 영구 저장", type="primary", use_container_width=True):
+                    if mv_files:
+                        saved_cnt = 0
+                        now_s = datetime.datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+                        dt_s = mv_date.strftime("%Y-%m-%d")
+                        refined_memo = _refine_to_sop_text(mv_note or mv_title, category=mv_kind, ev_date=dt_s, title_hint=f"{mv_fac} {mv_equip}".strip())
+                        for uf in mv_files:
+                            saved_fn, m_type, sz_mb = save_media_file_to_disk(uf, dt_s, mv_fac, mv_kind)
+                            if saved_fn:
+                                append_media_record({
+                                    "기록ID": f"MED-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}",
+                                    "발생일": dt_s,
+                                    "시설명": mv_fac,
+                                    "설비명": mv_equip.strip() or "공정설비",
+                                    "구분": mv_kind,
+                                    "제목_증상": mv_title.strip() or getattr(uf, "name", saved_fn),
+                                    "조치_점검메모": refined_memo,
+                                    "연계키워드": f"{mv_kw.strip()}, {mv_fac}, {mv_equip.strip()}".strip(", "),
+                                    "파일명": saved_fn,
+                                    "파일유형": m_type,
+                                    "용량_MB": sz_mb,
+                                    "등록일시": now_s
+                                })
+                                saved_cnt += 1
+
+                        if also_learn_sop and (mv_note.strip() or mv_title.strip()):
+                            new_kid = f"KB-{datetime.datetime.now(KST).strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4]}"
+                            kb_body = f"{mv_title.strip()}. {mv_note.strip()}".strip()
+                            sop_body = _refine_to_sop_text(kb_body, category=mv_kind, ev_date=dt_s, title_hint=f"{mv_fac} {mv_equip}".strip())
+                            df_new_k = pd.DataFrame([{
+                                "지식ID": new_kid,
+                                "카테고리": mv_kind,
+                                "핵심키워드": f"{mv_kw.strip()}, {mv_fac}, {mv_equip.strip()}, {dt_s[:4]}년".strip(", "),
+                                "질문예시": mv_title.strip() or f"{mv_fac} {mv_equip} {mv_kind}",
+                                "학습답변_SOP": sop_body,
+                                "등록일시": now_s
+                            }])
+                            save_offline_kb(pd.concat([df_kb_cur, df_new_k], ignore_index=True))
+
+                        st.success(f"✅ 고장 사진·점검 영상 {saved_cnt}건이 `media_records` 보관함에 저장되었습니다!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ 저장할 사진 또는 영상 파일을 먼저 선택해 주세요.")
+
+        st.divider()
+        st.markdown("##### 🔍 보관된 고장 사진 · 점검 영상 조회 및 재생")
+        df_m_list = load_media_records()
+        if not df_m_list.empty:
+            fc1, fc2, fc3 = st.columns([1.2, 1.2, 1.6])
+            with fc1:
+                flt_fac = st.selectbox("시설 필터", ["전체"] + sorted(df_m_list["시설명"].dropna().unique().tolist()), key="mv_flt_fac")
+            with fc2:
+                flt_type = st.selectbox("유형 필터", ["전체", "고장/현장 사진", "점검 영상", "기타 미디어"], key="mv_flt_type")
+            with fc3:
+                flt_kw = st.text_input("설비·증상·키워드 검색", placeholder="예: 펌프, 압축기, 누수", key="mv_flt_kw")
+
+            df_m_show = df_m_list.copy()
+            if flt_fac != "전체":
+                df_m_show = df_m_show[df_m_show["시설명"] == flt_fac]
+            if flt_type != "전체":
+                df_m_show = df_m_show[df_m_show["파일유형"] == flt_type]
+            if flt_kw.strip():
+                kw_l = flt_kw.strip().lower()
+                mask_s = df_m_show.apply(lambda row: kw_l in " ".join([str(v) for v in row.values]).lower(), axis=1)
+                df_m_show = df_m_show[mask_s]
+
+            st.dataframe(df_m_show[["기록ID", "발생일", "시설명", "설비명", "구분", "제목_증상", "파일유형", "용량_MB", "파일명"]], use_container_width=True, hide_index=True)
+
+            if not df_m_show.empty:
+                sel_m_fn = st.selectbox("미리보기/재생할 파일 선택", df_m_show["파일명"].tolist(), key="mv_sel_preview")
+                sel_m_path = os.path.join(MEDIA_RECORD_DIR, sanitize_filename(sel_m_fn))
+                sel_row_info = df_m_show[df_m_show["파일명"] == sel_m_fn].iloc[0]
+                st.markdown(f"**📌 [{sel_row_info.get('발생일','')} | {sel_row_info.get('시설명','')} · {sel_row_info.get('설비명','')}] {sel_row_info.get('제목_증상','')}**")
+                if sel_row_info.get("조치_점검메모"):
+                    st.markdown(str(sel_row_info["조치_점검메모"]))
+
+                if os.path.exists(sel_m_path):
+                    low_fn = sel_m_fn.lower()
+                    if low_fn.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
+                        st.image(sel_m_path, caption=sel_m_fn, use_container_width=True)
+                    elif low_fn.endswith((".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v")):
+                        st.video(sel_m_path)
+                    with open(sel_m_path, "rb") as f_dl:
+                        st.download_button("📥 원본 사진/영상 다운로드", f_dl.read(), file_name=sel_m_fn, use_container_width=True, key="mv_dl_btn")
+
+                    if is_super_admin and st.button("🗑️ 선택 사진/영상 기록 삭제", key="mv_del_btn"):
+                        try:
+                            os.remove(sel_m_path)
+                        except Exception:
+                            pass
+                        df_rem = pd.read_csv(MEDIA_INDEX_DB)
+                        df_rem = df_rem[df_rem["파일명"] != sel_m_fn]
+                        df_rem.to_csv(MEDIA_INDEX_DB, index=False, encoding="utf-8-sig")
+                        st.success("✅ 기록이 삭제되었습니다.")
+                        st.rerun()
+        else:
+            st.info("💡 아직 보관된 고장 사진 또는 점검 영상이 없습니다.")
 
     with tab_kb_manage:
         if not is_super_admin:
@@ -5289,13 +5627,26 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
             st.subheader("📚 영구 저장된 오프라인 학습 지식 DB 열람·수정·백업 (최고관리자 전용)")
             if not df_kb_cur.empty:
                 ed_kb = st.data_editor(df_kb_cur, num_rows="dynamic", use_container_width=True, hide_index=True, key="ed_offline_kb_tbl")
-                c_kb1, c_kb2 = st.columns(2)
+                c_kb1, c_kb2, c_kb3 = st.columns(3)
                 with c_kb1:
                     if st.button("💾 수정·삭제 내역 저장", type="primary", use_container_width=True):
                         save_offline_kb(ed_kb)
                         st.success("✅ 지식 DB가 업데이트되었습니다!")
                         st.rerun()
                 with c_kb2:
+                    if st.button("✨ 전체 항목 SOP 형태로 일괄 다듬기", use_container_width=True):
+                        df_ref = ed_kb.copy()
+                        for idx_r in df_ref.index:
+                            df_ref.at[idx_r, "학습답변_SOP"] = _refine_to_sop_text(
+                                df_ref.at[idx_r, "학습답변_SOP"],
+                                category=df_ref.at[idx_r, "카테고리"],
+                                ev_date=_normalize_date_str(df_ref.at[idx_r, "등록일시"]),
+                                title_hint=df_ref.at[idx_r, "질문예시"]
+                            )
+                        save_offline_kb(df_ref)
+                        st.success("✅ 기존 학습 항목도 모두 SOP 형태로 다듬었습니다!")
+                        st.rerun()
+                with c_kb3:
                     st.download_button(
                         "📥 학습 지식 DB 백업 다운로드 (CSV)",
                         data=ed_kb.to_csv(index=False, encoding="utf-8-sig"),
@@ -5304,11 +5655,8 @@ elif menu == "🤖 6. 단월 AI 지능형 공정 Q&A 챗봇 (오프라인 온프
                         use_container_width=True
                     )
             else:
-                st.info("💡 아직 직접 학습시킨 항목이 없습니다. [2. 현장 노하우·SOP·문서 직접 학습시키기] 탭에서 추가해 보세요.")
+                st.info("💡 아직 직접 학습시킨 항목이 없습니다. [2. 현장 노하우·다양한 문서 학습시키기] 탭에서 추가해 보세요.")
 
-# -------------------------------------------------------------
-# 7. TBM 표준회의록 AI 자동작성/출력 & 실행 체크리스트 (신규 추가)
-# -------------------------------------------------------------
 elif menu == "📝 7. TBM 표준회의록 AI 자동작성/출력 & 보관함":
     st.title("📝 단월처리시설 TBM(작업 전 안전점검회의) AI 자동작성기 & 실행 체크리스트")
     tab_tbm_write, tab_tbm_chk, tab_tbm_archive = st.tabs(["✍️ [작성] TBM AI 자동작성 및 서명", "☑️ [실행 체크리스트] 안전보건 점검표", "🗂️ [보관함] 영구 저장된 TBM 회의록 열람"])
